@@ -1,0 +1,24 @@
+namespace: mlopsv2 #Note: A namespace with many characters will cause storage account creation to fail due to storage account names having a limit of 24 characters.  
+postfix: 0001  
+location: eastus  
+environment: dev  
+enable_aml_computecluster: true  
+enable_monitoring: false
+
+# REQUIRED: GitHub Actions service principal object ID for CI/CD permissions
+# Get this value from Step 5.3a above:
+# az ad sp show --id <app_id> --query id -o tsv
+github_actions_service_principal_id = "your-service-principal-object-id"
+
+# VNet and Private Endpoints Configuration
+# Set to true to enable network isolation with private endpoints
+enable_private_endpoints = true
+
+# VNet address space (only used if enable_private_endpoints = true)
+# Ensure the address space is large enough for your needs:
+# - Private endpoints: ~20 IPs (one per service per subnet)
+# - Compute instances/cluster nodes: 1 IP per node
+# Example: 10.0.0.0/16 provides 65,536 addresses
+vnet_address_space               = "10.0.0.0/16"
+training_subnet_address_prefix   = "10.0.0.0/24"    # For compute cluster nodes (254 hosts)
+endpoints_subnet_address_prefix  = "10.0.1.0/24"    # For private endpoints (254 hosts)

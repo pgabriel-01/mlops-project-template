@@ -12,7 +12,7 @@ github_actions_service_principal_id = "your-service-principal-object-id"
 
 # VNet and Private Endpoints Configuration
 # Set to true to enable network isolation with private endpoints
-enable_private_endpoints = true
+enable_private_endpoints = false
 
 # VNet address space (only used if enable_private_endpoints = true)
 # Ensure the address space is large enough for your needs:

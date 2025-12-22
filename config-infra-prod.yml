@@ -4,7 +4,7 @@
 # Prod environment
 variables:
   # Global
-  ap_vm_image: ubuntu-22.04
+  ap_vm_image: ubuntu-latest
 
   namespace: taxi #Note: A namespace with many characters will cause storage account creation to fail due to storage account names having a limit of 24 characters.
   postfix: 10007
@@ -33,7 +33,7 @@ variables:
   vnet_name: vnet-$(namespace)-$(postfix)$(environment)
 
   # For terraform reference
-  terraform_version: 1.10.0
+  terraform_version: 1.14.3
   terraform_workingdir: infrastructure/terraform
   terraform_st_location: $(location)
   terraform_st_resource_group: rg-$(namespace)-$(postfix)$(environment)-tf

@@ -17,7 +17,7 @@ import os
 import numpy as np
 import pandas as pd
 
-import mlflow
+import mlflow # type: ignore
 
 TARGET_COL = "cost"
 
@@ -98,7 +98,7 @@ def parse_args():
     return args
 
 def log_training_data(df, table_name):
-    from obs.collector import Online_Collector
+    from obs.collector import Online_Collector # type: ignore
     collector = Online_Collector(table_name)
     collector.batch_collect(df)
 

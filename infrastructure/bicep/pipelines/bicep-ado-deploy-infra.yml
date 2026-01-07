@@ -25,7 +25,7 @@ stages:
         steps:
           - checkout: self
           - script: |
-              az bicep build --file ./infrastructure/main.bicep
+              az bicep build --file ./infrastructure/bicep/main.bicep
             name: LintBicepCode
             displayName: Run Bicep Linter
 
@@ -52,13 +52,13 @@ stages:
                 
                 az deployment sub validate \
                   --name $(Build.DefinitionName) \
-                  --template-file ./infrastructure/main.bicep \
+                  --template-file ./infrastructure/bicep/main.bicep \
                   --location $(location) \
                   --parameters location=$(location) prefix=$(namespace) postfix=$(postfix) env=$(environment) adoServicePrincipalId=$SP_OBJECT_ID
                 
                 az deployment sub validate \
                   --name $(Build.DefinitionName) \
-                  --template-file ./infrastructure/main.bicep \
+                  --template-file ./infrastructure/bicep/main.bicep \
                   --location $(location) \
                   --parameters location=$(location) prefix=$(namespace) postfix=$(postfix) env=$(environment) adoServicePrincipalId=$SP_OBJECT_ID
 
@@ -96,5 +96,4 @@ stages:
                       az deployment sub create \
                         --name $(Build.DefinitionName) \
                         --location $(location) \
-                        --template-file ./infrastructure/main.bicep \
-                        --parameters location=$(location) prefix=$(namespace) postfix=$(postfix) env=$(environment) adoServicePrincipalId=$SP_OBJECT_ID
+                  --template-file ./infrastructure/bicep/main.bicep \

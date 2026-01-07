@@ -96,4 +96,6 @@ stages:
                       az deployment sub create \
                         --name $(Build.DefinitionName) \
                         --location $(location) \
-                  --template-file ./infrastructure/bicep/main.bicep \
+                        --template-file ./infrastructure/bicep/main.bicep \
+                        --parameters location=$(location) prefix=$(namespace) postfix=$(postfix) env=$(environment) adoServicePrincipalId=$SP_OBJECT_ID
+

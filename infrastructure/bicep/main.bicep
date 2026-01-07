@@ -3,7 +3,8 @@ targetScope = 'subscription'
 param location string = 'westus2'
 param prefix string
 param postfix string
-param env string 
+param env string
+param adoServicePrincipalId string = ''
 
 param tags object = {
   Owner: 'mlops-v2'
@@ -21,6 +22,17 @@ resource rg 'Microsoft.Resources/resourceGroups@2020-06-01' = {
   location: location
 
   tags: tags
+}
+
+// Managed Identity for AML workspace
+module mi './modules/managed_identity.bicep' = {
+  name: 'mi'
+  scope: resourceGroup(rg.name)
+  params: {
+    location: location
+    managedIdentityName: 'id-${baseName}'
+    tags: tags
+  }
 }
 
 // Storage Account
@@ -67,7 +79,7 @@ module cr './modules/container_registry.bicep' = {
   }
 }
 
-// AML workspace
+// AML workspace with user-assigned identity and RBAC
 module mlw './modules/aml_workspace.bicep' = {
   name: 'mlw'
   scope: resourceGroup(rg.name)
@@ -78,6 +90,9 @@ module mlw './modules/aml_workspace.bicep' = {
     kvid: kv.outputs.kvOut
     appinsightid: appi.outputs.appinsightOut
     crid: cr.outputs.crOut
+    managedIdentityId: mi.outputs.managedIdentityId
+    managedIdentityPrincipalId: mi.outputs.managedIdentityPrincipalId
+    adoServicePrincipalId: adoServicePrincipalId
     tags: tags
   }
 }

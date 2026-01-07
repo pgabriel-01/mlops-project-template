@@ -46,7 +46,7 @@ stages:
                   --name $(Build.DefinitionName) \
                   --template-file ./infrastructure/main.bicep \
                   --location $(location) \
-                  --parameters location=$(location) prefix=$(namespace) postfix=$(postfix) env=$(environment)
+                  --parameters location=$(location) prefix=$(namespace) postfix=$(postfix) env=$(environment) adoServicePrincipalId=$(ado_service_principal_id)
 
   - stage: CheckOutBicepAndDeploy
     displayName: Deploy AML Workspace
@@ -74,4 +74,4 @@ stages:
                         --name $(Build.DefinitionName) \
                         --location $(location) \
                         --template-file ./infrastructure/main.bicep \
-                        --parameters location=$(location) prefix=$(namespace) postfix=$(postfix) env=$(environment)
+                        --parameters location=$(location) prefix=$(namespace) postfix=$(postfix) env=$(environment) adoServicePrincipalId=$(ado_service_principal_id)

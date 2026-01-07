@@ -12,7 +12,6 @@ variables:
   environment: prod
   enable_aml_computecluster: true
   enable_monitoring: false
-  ado_service_principal_id: '' # Object ID of the Azure DevOps service principal (Enterprise App) for RBAC assignments. Required for data/model registration.
   
   # Endpoints
   oep: online-endpoint

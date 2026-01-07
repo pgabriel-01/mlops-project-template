@@ -41,15 +41,32 @@ stages:
               azureSubscription: $(ado_service_connection_rg)
               scriptType: "bash"
               scriptLocation: "inlineScript"
+              addSpnToEnvironment: true
               inlineScript: |
+                # Get the Object ID of the service principal from the service connection
+                # $servicePrincipalId is automatically populated when addSpnToEnvironment: true
+                SP_OBJECT_ID=$(az ad sp show --id $servicePrincipalId --query id -o tsv)
+                echo "Service Principal App ID: $servicePrincipalId"
+                echo "Service Principal Object ID: $SP_OBJECT_ID"
+                echo "##vso[task.setvariable variable=spObjectId;isOutput=true]$SP_OBJECT_ID"
+                
                 az deployment sub validate \
                   --name $(Build.DefinitionName) \
                   --template-file ./infrastructure/main.bicep \
                   --location $(location) \
-                  --parameters location=$(location) prefix=$(namespace) postfix=$(postfix) env=$(environment) adoServicePrincipalId=$(ado_service_principal_id)
+                  --parameters location=$(location) prefix=$(namespace) postfix=$(postfix) env=$(environment) adoServicePrincipalId=$SP_OBJECT_ID
+                
+                az deployment sub validate \
+                  --name $(Build.DefinitionName) \
+                  --template-file ./infrastructure/main.bicep \
+                  --location $(location) \
+                  --parameters location=$(location) prefix=$(namespace) postfix=$(postfix) env=$(environment) adoServicePrincipalId=$SP_OBJECT_ID
 
   - stage: CheckOutBicepAndDeploy
     displayName: Deploy AML Workspace
+    dependsOn: PreflightValidation
+    variables:
+      spObjectId: $[stageDependencies.PreflightValidation.ValidateBicepCode.outputs['RunPreflightValidateion.spObjectId']]
     jobs:
       - deployment: DevDeployBicep
         displayName: Deploy Bicep
@@ -67,11 +84,17 @@ stages:
                     azureSubscription: $(ado_service_connection_rg)
                     scriptType: bash
                     scriptLocation: inlineScript
+                    addSpnToEnvironment: true
                     inlineScript: |
                       az --version
+                      # Get the Object ID dynamically from service connection
+                      SP_OBJECT_ID=$(az ad sp show --id $servicePrincipalId --query id -o tsv)
+                      echo "Service Principal App ID: $servicePrincipalId"
+                      echo "Service Principal Object ID: $SP_OBJECT_ID"
                       echo "deploying bicep..."
+                      
                       az deployment sub create \
                         --name $(Build.DefinitionName) \
                         --location $(location) \
                         --template-file ./infrastructure/main.bicep \
-                        --parameters location=$(location) prefix=$(namespace) postfix=$(postfix) env=$(environment) adoServicePrincipalId=$(ado_service_principal_id)
+                        --parameters location=$(location) prefix=$(namespace) postfix=$(postfix) env=$(environment) adoServicePrincipalId=$SP_OBJECT_ID

@@ -1,0 +1,207 @@
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the MIT License.
+
+name: Bicep - Deploy Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform (deploy or destroy)'
+        required: true
+        default: 'deploy'
+        type: choice
+        options:
+          - deploy
+          - destroy
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'infrastructure/bicep/**'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'infrastructure/bicep/**'
+
+env:
+  config_env: "none"
+
+jobs:
+  set-env-branch:
+    runs-on: ubuntu-latest
+    outputs:
+      config-file: ${{ steps.set-output-defaults.outputs.config-file }}
+      environment: ${{ steps.set-output-defaults.outputs.environment }}
+    steps:
+      - id: set-prod-branch
+        name: set-prod-branch
+        if: ${{ github.ref == 'refs/heads/main'}}
+        run: |
+          echo "config_env=config-infra-prod.yml" >> $GITHUB_ENV
+          echo "env_name=prod" >> $GITHUB_ENV
+      - id: set-dev-branch
+        name: setdevbranch
+        if: ${{ github.ref != 'refs/heads/main'}}
+        run: |
+          echo "config_env=config-infra-dev.yml" >> $GITHUB_ENV
+          echo "env_name=dev" >> $GITHUB_ENV
+      - id: set-output-defaults
+        name: set-output-defaults
+        run: |
+          echo "config-file=$config_env" >> $GITHUB_OUTPUT
+          echo "environment=$env_name" >> $GITHUB_OUTPUT
+
+  get-config:
+    needs: set-env-branch
+    permissions:
+      contents: read
+    uses: pgabriel-01/mlops-templates/.github/workflows/read-yaml.yml@main
+    with:
+      file_name: ${{ needs.set-env-branch.outputs.config-file}}
+
+  lint:
+    name: Lint Bicep Code
+    needs: [get-config, set-env-branch]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Install Bicep
+        run: |
+          az bicep install
+          az bicep version
+
+      - name: Lint Bicep
+        run: |
+          BICEP_DIR="${{ needs.get-config.outputs.bicep_workingdir }}"
+          BICEP_FILE="${{ needs.get-config.outputs.bicep_template_file }}"
+          az bicep build --file $BICEP_DIR/$BICEP_FILE
+
+  validate:
+    name: Validate Bicep Deployment
+    runs-on: ubuntu-latest
+    needs: [get-config, set-env-branch, lint]
+    if: github.event_name != 'pull_request'
+    outputs:
+      sp_object_id: ${{ steps.get_sp_info.outputs.sp_object_id }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Get Service Principal Object ID
+        id: get_sp_info
+        run: |
+          # Extract service principal info from AZURE_CREDENTIALS secret
+          SP_APP_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.clientId')
+          SP_OBJECT_ID=$(az ad sp show --id $SP_APP_ID --query id -o tsv)
+          
+          echo "Service Principal App ID: $SP_APP_ID"
+          echo "Service Principal Object ID: $SP_OBJECT_ID"
+          echo "sp_object_id=$SP_OBJECT_ID" >> $GITHUB_OUTPUT
+
+      - name: Validate Bicep Deployment
+        run: |
+          BICEP_DIR="${{ needs.get-config.outputs.bicep_workingdir }}"
+          BICEP_FILE="${{ needs.get-config.outputs.bicep_template_file }}"
+          
+          az deployment sub validate \
+            --name "bicep-gha-${{ github.run_number }}" \
+            --location ${{ needs.get-config.outputs.bicep_location }} \
+            --template-file $BICEP_DIR/$BICEP_FILE \
+            --parameters \
+              location=${{ needs.get-config.outputs.bicep_location }} \
+              prefix=${{ needs.get-config.outputs.bicep_prefix }} \
+              postfix=${{ needs.get-config.outputs.bicep_postfix }} \
+              env=${{ needs.get-config.outputs.bicep_env }} \
+              adoServicePrincipalId=${{ steps.get_sp_info.outputs.sp_object_id }}
+
+  deploy:
+    name: Deploy Infrastructure
+    runs-on: ubuntu-latest
+    needs: [get-config, set-env-branch, lint, validate]
+    if: github.event_name != 'pull_request' && github.event.inputs.action != 'destroy'
+    environment: ${{ needs.set-env-branch.outputs.environment }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Get Service Principal Object ID
+        id: get_sp_info
+        run: |
+          SP_APP_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.clientId')
+          SP_OBJECT_ID=$(az ad sp show --id $SP_APP_ID --query id -o tsv)
+          
+          echo "Service Principal App ID: $SP_APP_ID"
+          echo "Service Principal Object ID: $SP_OBJECT_ID"
+          echo "sp_object_id=$SP_OBJECT_ID" >> $GITHUB_OUTPUT
+
+      - name: Deploy Bicep Template
+        run: |
+          echo "Deploying to ${{ needs.set-env-branch.outputs.environment }} environment..."
+          
+          BICEP_DIR="${{ needs.get-config.outputs.bicep_workingdir }}"
+          BICEP_FILE="${{ needs.get-config.outputs.bicep_template_file }}"
+          
+          az deployment sub create \
+            --name "bicep-gha-${{ github.run_number }}" \
+            --location ${{ needs.get-config.outputs.bicep_location }} \
+            --template-file $BICEP_DIR/$BICEP_FILE \
+            --parameters \
+              location=${{ needs.get-config.outputs.bicep_location }} \
+              prefix=${{ needs.get-config.outputs.bicep_prefix }} \
+              postfix=${{ needs.get-config.outputs.bicep_postfix }} \
+              env=${{ needs.get-config.outputs.bicep_env }} \
+              adoServicePrincipalId=${{ steps.get_sp_info.outputs.sp_object_id }}
+
+      - name: Output Deployment Results
+        run: |
+          echo "Deployment completed successfully!"
+          az deployment sub show \
+            --name "bicep-gha-${{ github.run_number }}" \
+            --query properties.outputs
+
+  destroy:
+    name: Destroy Infrastructure
+    runs-on: ubuntu-latest
+    needs: [get-config, set-env-branch]
+    if: github.event.inputs.action == 'destroy'
+    environment: ${{ needs.set-env-branch.outputs.environment }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Delete Resource Group
+        run: |
+          echo "Destroying ${{ needs.set-env-branch.outputs.environment }} environment..."
+          
+          RG_NAME="rg-${{ needs.get-config.outputs.namespace }}-${{ needs.get-config.outputs.postfix }}${{ needs.get-config.outputs.environment }}"
+          
+          echo "Deleting resource group: $RG_NAME"
+          az group delete --name $RG_NAME --yes --no-wait
+          
+          echo "Resource group deletion initiated!"

@@ -1,0 +1,184 @@
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the MIT License.
+
+name: Bicep - Deploy Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy (dev/prod)'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - prod
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'infrastructure/bicep/**'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'infrastructure/bicep/**'
+
+env:
+  BICEP_FILE: './infrastructure/bicep/main.bicep'
+
+jobs:
+  lint:
+    name: Lint Bicep Code
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Azure CLI
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Install Bicep
+        run: |
+          az bicep install
+          az bicep version
+
+      - name: Lint Bicep
+        run: |
+          az bicep build --file ${{ env.BICEP_FILE }}
+
+  validate:
+    name: Validate Bicep Deployment
+    runs-on: ubuntu-latest
+    needs: lint
+    if: github.event_name != 'pull_request'
+    outputs:
+      sp_object_id: ${{ steps.get_sp_info.outputs.sp_object_id }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Load Configuration
+        id: config
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]] || [[ "${{ github.event.inputs.environment }}" == "prod" ]]; then
+            echo "Loading production configuration"
+            CONFIG_FILE="config-infra-prod.yml"
+          else
+            echo "Loading dev configuration"
+            CONFIG_FILE="config-infra-dev.yml"
+          fi
+          
+          # Parse YAML config (simple example - adjust based on your config structure)
+          LOCATION=$(yq eval '.variables.location' $CONFIG_FILE)
+          PREFIX=$(yq eval '.variables.namespace' $CONFIG_FILE)
+          POSTFIX=$(yq eval '.variables.postfix' $CONFIG_FILE)
+          ENV=$(yq eval '.variables.environment' $CONFIG_FILE)
+          
+          echo "location=$LOCATION" >> $GITHUB_OUTPUT
+          echo "prefix=$PREFIX" >> $GITHUB_OUTPUT
+          echo "postfix=$POSTFIX" >> $GITHUB_OUTPUT
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
+
+      - name: Get Service Principal Object ID
+        id: get_sp_info
+        run: |
+          # Extract service principal info from AZURE_CREDENTIALS secret
+          SP_APP_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.clientId')
+          SP_OBJECT_ID=$(az ad sp show --id $SP_APP_ID --query id -o tsv)
+          
+          echo "Service Principal App ID: $SP_APP_ID"
+          echo "Service Principal Object ID: $SP_OBJECT_ID"
+          echo "sp_object_id=$SP_OBJECT_ID" >> $GITHUB_OUTPUT
+
+      - name: Validate Bicep Deployment
+        run: |
+          az deployment sub validate \
+            --name "bicep-gha-${{ github.run_number }}" \
+            --location ${{ steps.config.outputs.location }} \
+            --template-file ${{ env.BICEP_FILE }} \
+            --parameters \
+              location=${{ steps.config.outputs.location }} \
+              prefix=${{ steps.config.outputs.prefix }} \
+              postfix=${{ steps.config.outputs.postfix }} \
+              env=${{ steps.config.outputs.environment }} \
+              adoServicePrincipalId=${{ steps.get_sp_info.outputs.sp_object_id }}
+
+  deploy:
+    name: Deploy Infrastructure
+    runs-on: ubuntu-latest
+    needs: [lint, validate]
+    if: github.event_name != 'pull_request'
+    environment: ${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Load Configuration
+        id: config
+        run: |
+          if [[ "${{ github.ref }}" == "refs/heads/main" ]] || [[ "${{ github.event.inputs.environment }}" == "prod" ]]; then
+            echo "Loading production configuration"
+            CONFIG_FILE="config-infra-prod.yml"
+          else
+            echo "Loading dev configuration"
+            CONFIG_FILE="config-infra-dev.yml"
+          fi
+          
+          # Parse YAML config
+          LOCATION=$(yq eval '.variables.location' $CONFIG_FILE)
+          PREFIX=$(yq eval '.variables.namespace' $CONFIG_FILE)
+          POSTFIX=$(yq eval '.variables.postfix' $CONFIG_FILE)
+          ENV=$(yq eval '.variables.environment' $CONFIG_FILE)
+          
+          echo "location=$LOCATION" >> $GITHUB_OUTPUT
+          echo "prefix=$PREFIX" >> $GITHUB_OUTPUT
+          echo "postfix=$POSTFIX" >> $GITHUB_OUTPUT
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
+
+      - name: Get Service Principal Object ID
+        id: get_sp_info
+        run: |
+          SP_APP_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.clientId')
+          SP_OBJECT_ID=$(az ad sp show --id $SP_APP_ID --query id -o tsv)
+          
+          echo "Service Principal App ID: $SP_APP_ID"
+          echo "Service Principal Object ID: $SP_OBJECT_ID"
+          echo "sp_object_id=$SP_OBJECT_ID" >> $GITHUB_OUTPUT
+
+      - name: Deploy Bicep Template
+        run: |
+          echo "Deploying to ${{ steps.config.outputs.environment }} environment..."
+          
+          az deployment sub create \
+            --name "bicep-gha-${{ github.run_number }}" \
+            --location ${{ steps.config.outputs.location }} \
+            --template-file ${{ env.BICEP_FILE }} \
+            --parameters \
+              location=${{ steps.config.outputs.location }} \
+              prefix=${{ steps.config.outputs.prefix }} \
+              postfix=${{ steps.config.outputs.postfix }} \
+              env=${{ steps.config.outputs.environment }} \
+              adoServicePrincipalId=${{ steps.get_sp_info.outputs.sp_object_id }}
+
+      - name: Output Deployment Results
+        run: |
+          echo "Deployment completed successfully!"
+          az deployment sub show \
+            --name "bicep-gha-${{ github.run_number }}" \
+            --query properties.outputs

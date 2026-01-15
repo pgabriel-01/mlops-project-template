@@ -17,7 +17,7 @@ param tags object = {
 var baseName  = '${prefix}-${postfix}${env}'
 var resourceGroupName = 'rg-${baseName}'
 
-resource rg 'Microsoft.Resources/resourceGroups@2020-06-01' = {
+resource rg 'Microsoft.Resources/resourceGroups@2025-04-01' = {
   name: resourceGroupName
   location: location
 

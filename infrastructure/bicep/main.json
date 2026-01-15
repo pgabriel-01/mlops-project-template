@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.38.33.27573",
-      "templateHash": "17687846407624863223"
+      "version": "0.35.1.17967",
+      "templateHash": "8829933041152457195"
     }
   },
   "parameters": {
@@ -54,7 +54,7 @@
     },
     {
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
+      "apiVersion": "2022-09-01",
       "name": "mi",
       "resourceGroup": "[variables('resourceGroupName')]",
       "properties": {
@@ -79,8 +79,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.38.33.27573",
-              "templateHash": "8841779129992762469"
+              "version": "0.35.1.17967",
+              "templateHash": "8091943169116595479"
             }
           },
           "parameters": {
@@ -137,7 +137,7 @@
     },
     {
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
+      "apiVersion": "2022-09-01",
       "name": "st",
       "resourceGroup": "[variables('resourceGroupName')]",
       "properties": {
@@ -162,8 +162,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.38.33.27573",
-              "templateHash": "13902738519946189967"
+              "version": "0.35.1.17967",
+              "templateHash": "967813539551723829"
             }
           },
           "parameters": {
@@ -218,7 +218,7 @@
     },
     {
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
+      "apiVersion": "2022-09-01",
       "name": "kv",
       "resourceGroup": "[variables('resourceGroupName')]",
       "properties": {
@@ -243,8 +243,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.38.33.27573",
-              "templateHash": "12621979413305918088"
+              "version": "0.35.1.17967",
+              "templateHash": "10190645094463729957"
             }
           },
           "parameters": {
@@ -289,7 +289,7 @@
     },
     {
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
+      "apiVersion": "2022-09-01",
       "name": "appi",
       "resourceGroup": "[variables('resourceGroupName')]",
       "properties": {
@@ -314,8 +314,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.38.33.27573",
-              "templateHash": "15315955327773824233"
+              "version": "0.35.1.17967",
+              "templateHash": "4260206127357631401"
             }
           },
           "parameters": {
@@ -356,7 +356,7 @@
     },
     {
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
+      "apiVersion": "2022-09-01",
       "name": "cr",
       "resourceGroup": "[variables('resourceGroupName')]",
       "properties": {
@@ -381,8 +381,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.38.33.27573",
-              "templateHash": "16223373526034733257"
+              "version": "0.35.1.17967",
+              "templateHash": "5342091636699630805"
             }
           },
           "parameters": {
@@ -425,7 +425,7 @@
     },
     {
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
+      "apiVersion": "2022-09-01",
       "name": "mlw",
       "resourceGroup": "[variables('resourceGroupName')]",
       "properties": {
@@ -441,22 +441,22 @@
             "value": "[parameters('location')]"
           },
           "stoacctid": {
-            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'st'), '2025-04-01').outputs.stoacctOut.value]"
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'st'), '2022-09-01').outputs.stoacctOut.value]"
           },
           "kvid": {
-            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'kv'), '2025-04-01').outputs.kvOut.value]"
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'kv'), '2022-09-01').outputs.kvOut.value]"
           },
           "appinsightid": {
-            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'appi'), '2025-04-01').outputs.appinsightOut.value]"
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'appi'), '2022-09-01').outputs.appinsightOut.value]"
           },
           "crid": {
-            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'cr'), '2025-04-01').outputs.crOut.value]"
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'cr'), '2022-09-01').outputs.crOut.value]"
           },
           "managedIdentityId": {
-            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'mi'), '2025-04-01').outputs.managedIdentityId.value]"
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'mi'), '2022-09-01').outputs.managedIdentityId.value]"
           },
           "managedIdentityPrincipalId": {
-            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'mi'), '2025-04-01').outputs.managedIdentityPrincipalId.value]"
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'mi'), '2022-09-01').outputs.managedIdentityPrincipalId.value]"
           },
           "adoServicePrincipalId": {
             "value": "[parameters('adoServicePrincipalId')]"
@@ -471,8 +471,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.38.33.27573",
-              "templateHash": "2558228403824633798"
+              "version": "0.35.1.17967",
+              "templateHash": "5494824745039126972"
             }
           },
           "parameters": {
@@ -655,7 +655,7 @@
     },
     {
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2025-04-01",
+      "apiVersion": "2022-09-01",
       "name": "mlwcc",
       "resourceGroup": "[variables('resourceGroupName')]",
       "properties": {
@@ -668,7 +668,7 @@
             "value": "[parameters('location')]"
           },
           "workspaceName": {
-            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'mlw'), '2025-04-01').outputs.amlsName.value]"
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'mlw'), '2022-09-01').outputs.amlsName.value]"
           }
         },
         "template": {
@@ -677,8 +677,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.38.33.27573",
-              "templateHash": "13784810752827215062"
+              "version": "0.35.1.17967",
+              "templateHash": "15168659114083950127"
             }
           },
           "parameters": {
@@ -702,7 +702,7 @@
               "properties": {
                 "computeType": "AmlCompute",
                 "properties": {
-                  "vmSize": "STANDARD_D4S_V5",
+                  "vmSize": "STANDARD_D16S_V3",
                   "subnet": "[json('null')]",
                   "osType": "Linux",
                   "scaleSettings": {

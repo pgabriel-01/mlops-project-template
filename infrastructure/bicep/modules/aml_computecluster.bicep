@@ -8,7 +8,7 @@ resource amlci 'Microsoft.MachineLearningServices/workspaces/computes@2025-09-01
   properties: {
     computeType: 'AmlCompute'
     properties: {
-      vmSize: 'STANDARD_D4S_V5'
+      vmSize: 'STANDARD_DS12_V2'
       subnet: json('null')
       osType: 'Linux'
       scaleSettings: {

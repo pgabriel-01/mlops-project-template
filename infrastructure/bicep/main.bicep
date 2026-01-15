@@ -1,9 +1,9 @@
 targetScope = 'subscription'
 
 param location string = 'westus2'
-param prefix string
-param postfix string
-param env string
+param prefix string = 'mlops'
+param postfix string = 'demo'
+param env string = 'dev'
 param adoServicePrincipalId string = ''
 
 param tags object = {

@@ -1,6 +1,6 @@
 targetScope = 'subscription'
 
-param location string = 'westus2'
+param location string = 'eastus2'
 param prefix string = 'mlops'
 param postfix string = 'demo'
 param env string = 'dev'

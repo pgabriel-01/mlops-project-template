@@ -4,59 +4,73 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.5.6.12127",
-      "templateHash": "11208633954998583577"
+      "version": "0.38.33.27573",
+      "templateHash": "17687846407624863223"
     }
   },
   "parameters": {
     "location": {
       "type": "string",
-      "defaultValue": "westus2"
+      "defaultValue": "eastus2"
+    },
+    "prefix": {
+      "type": "string",
+      "defaultValue": "mlops"
+    },
+    "postfix": {
+      "type": "string",
+      "defaultValue": "demo"
     },
     "env": {
       "type": "string",
       "defaultValue": "dev"
     },
-    "prefix": {
-      "type": "string"
-    },
-    "postfix": {
-      "type": "string"
-    },
-    "resourceGroupName": {
+    "adoServicePrincipalId": {
       "type": "string",
-      "defaultValue": "rg-wus-test"
+      "defaultValue": ""
+    },
+    "tags": {
+      "type": "object",
+      "defaultValue": {
+        "Owner": "mlops-v2",
+        "Project": "mlops-v2",
+        "Environment": "[parameters('env')]",
+        "Toolkit": "bicep",
+        "Name": "[parameters('prefix')]"
+      }
     }
   },
   "variables": {
-    "baseName": "[format('{0}{1}', parameters('prefix'), parameters('postfix'))]"
+    "baseName": "[format('{0}-{1}{2}', parameters('prefix'), parameters('postfix'), parameters('env'))]",
+    "resourceGroupName": "[format('rg-{0}', variables('baseName'))]"
   },
   "resources": [
     {
       "type": "Microsoft.Resources/resourceGroups",
-      "apiVersion": "2020-06-01",
-      "name": "[parameters('resourceGroupName')]",
-      "location": "[parameters('location')]"
+      "apiVersion": "2025-04-01",
+      "name": "[variables('resourceGroupName')]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]"
     },
     {
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2020-10-01",
-      "name": "stoacct",
-      "resourceGroup": "[parameters('resourceGroupName')]",
+      "apiVersion": "2025-04-01",
+      "name": "mi",
+      "resourceGroup": "[variables('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
         },
         "mode": "Incremental",
         "parameters": {
-          "env": {
-            "value": "[parameters('env')]"
-          },
-          "baseName": {
-            "value": "[variables('baseName')]"
-          },
           "location": {
             "value": "[parameters('location')]"
+          },
+          "managedIdentityName": {
+            "value": "[format('id-{0}', variables('baseName'))]"
+          },
+          "tags": {
+            "value": "[parameters('tags')]"
           }
         },
         "template": {
@@ -65,26 +79,109 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.5.6.12127",
-              "templateHash": "13854706444404712543"
+              "version": "0.38.33.27573",
+              "templateHash": "8841779129992762469"
             }
           },
           "parameters": {
-            "env": {
-              "type": "string"
+            "location": {
+              "type": "string",
+              "metadata": {
+                "description": "Azure region of the deployment"
+              }
             },
+            "tags": {
+              "type": "object",
+              "metadata": {
+                "description": "Tags to add to the resources"
+              }
+            },
+            "managedIdentityName": {
+              "type": "string",
+              "metadata": {
+                "description": "Name of the managed identity"
+              }
+            }
+          },
+          "resources": [
+            {
+              "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+              "apiVersion": "2024-11-30",
+              "name": "[parameters('managedIdentityName')]",
+              "location": "[parameters('location')]",
+              "properties": {
+                "isolationScope": "None"
+              },
+              "tags": "[parameters('tags')]"
+            }
+          ],
+          "outputs": {
+            "managedIdentityId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('managedIdentityName'))]"
+            },
+            "managedIdentityPrincipalId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('managedIdentityName')), '2024-11-30').principalId]"
+            },
+            "managedIdentityClientId": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', parameters('managedIdentityName')), '2024-11-30').clientId]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('resourceGroupName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "st",
+      "resourceGroup": "[variables('resourceGroupName')]",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "baseName": {
+            "value": "[format('{0}{1}', uniqueString(subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('resourceGroupName'))), parameters('env'))]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[parameters('tags')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.38.33.27573",
+              "templateHash": "13902738519946189967"
+            }
+          },
+          "parameters": {
             "baseName": {
               "type": "string"
             },
             "location": {
               "type": "string"
+            },
+            "tags": {
+              "type": "object"
             }
           },
           "resources": [
             {
               "type": "Microsoft.Storage/storageAccounts",
-              "apiVersion": "2019-04-01",
-              "name": "[format('{0}{1}sa', parameters('env'), parameters('baseName'))]",
+              "apiVersion": "2025-06-01",
+              "name": "[format('st{0}', parameters('baseName'))]",
               "location": "[parameters('location')]",
               "sku": {
                 "name": "Standard_LRS"
@@ -103,40 +200,41 @@
                   "keySource": "Microsoft.Storage"
                 },
                 "supportsHttpsTrafficOnly": true
-              }
+              },
+              "tags": "[parameters('tags')]"
             }
           ],
           "outputs": {
             "stoacctOut": {
               "type": "string",
-              "value": "[resourceId('Microsoft.Storage/storageAccounts', format('{0}{1}sa', parameters('env'), parameters('baseName')))]"
+              "value": "[resourceId('Microsoft.Storage/storageAccounts', format('st{0}', parameters('baseName')))]"
             }
           }
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('resourceGroupName'))]"
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('resourceGroupName'))]"
       ]
     },
     {
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2020-10-01",
+      "apiVersion": "2025-04-01",
       "name": "kv",
-      "resourceGroup": "[parameters('resourceGroupName')]",
+      "resourceGroup": "[variables('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
         },
         "mode": "Incremental",
         "parameters": {
-          "env": {
-            "value": "[parameters('env')]"
+          "baseName": {
+            "value": "[variables('baseName')]"
           },
           "location": {
             "value": "[parameters('location')]"
           },
-          "baseName": {
-            "value": "[variables('baseName')]"
+          "tags": {
+            "value": "[parameters('tags')]"
           }
         },
         "template": {
@@ -145,26 +243,26 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.5.6.12127",
-              "templateHash": "3960831692549416869"
+              "version": "0.38.33.27573",
+              "templateHash": "12621979413305918088"
             }
           },
           "parameters": {
             "baseName": {
               "type": "string"
             },
-            "env": {
-              "type": "string"
-            },
             "location": {
               "type": "string"
+            },
+            "tags": {
+              "type": "object"
             }
           },
           "resources": [
             {
               "type": "Microsoft.KeyVault/vaults",
-              "apiVersion": "2019-09-01",
-              "name": "[format('{0}-{1}-kv', parameters('env'), parameters('baseName'))]",
+              "apiVersion": "2025-05-01",
+              "name": "[format('kv-{0}', parameters('baseName'))]",
               "location": "[parameters('location')]",
               "properties": {
                 "tenantId": "[subscription().tenantId]",
@@ -173,26 +271,27 @@
                   "family": "A"
                 },
                 "accessPolicies": []
-              }
+              },
+              "tags": "[parameters('tags')]"
             }
           ],
           "outputs": {
             "kvOut": {
               "type": "string",
-              "value": "[resourceId('Microsoft.KeyVault/vaults', format('{0}-{1}-kv', parameters('env'), parameters('baseName')))]"
+              "value": "[resourceId('Microsoft.KeyVault/vaults', format('kv-{0}', parameters('baseName')))]"
             }
           }
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('resourceGroupName'))]"
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('resourceGroupName'))]"
       ]
     },
     {
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2020-10-01",
-      "name": "appinsight",
-      "resourceGroup": "[parameters('resourceGroupName')]",
+      "apiVersion": "2025-04-01",
+      "name": "appi",
+      "resourceGroup": "[variables('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -202,11 +301,11 @@
           "baseName": {
             "value": "[variables('baseName')]"
           },
-          "env": {
-            "value": "[parameters('env')]"
-          },
           "location": {
             "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[parameters('tags')]"
           }
         },
         "template": {
@@ -215,50 +314,51 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.5.6.12127",
-              "templateHash": "2591061638125956638"
+              "version": "0.38.33.27573",
+              "templateHash": "15315955327773824233"
             }
           },
           "parameters": {
             "baseName": {
               "type": "string"
             },
-            "env": {
-              "type": "string"
-            },
             "location": {
               "type": "string"
+            },
+            "tags": {
+              "type": "object"
             }
           },
           "resources": [
             {
               "type": "Microsoft.Insights/components",
-              "apiVersion": "2020-02-02-preview",
-              "name": "[format('{0}{1}-appin', parameters('env'), parameters('baseName'))]",
+              "apiVersion": "2020-02-02",
+              "name": "[format('appi-{0}', parameters('baseName'))]",
               "location": "[parameters('location')]",
               "kind": "web",
               "properties": {
                 "Application_Type": "web"
-              }
+              },
+              "tags": "[parameters('tags')]"
             }
           ],
           "outputs": {
             "appinsightOut": {
               "type": "string",
-              "value": "[resourceId('Microsoft.Insights/components', format('{0}{1}-appin', parameters('env'), parameters('baseName')))]"
+              "value": "[resourceId('Microsoft.Insights/components', format('appi-{0}', parameters('baseName')))]"
             }
           }
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('resourceGroupName'))]"
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('resourceGroupName'))]"
       ]
     },
     {
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2020-10-01",
+      "apiVersion": "2025-04-01",
       "name": "cr",
-      "resourceGroup": "[parameters('resourceGroupName')]",
+      "resourceGroup": "[variables('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -266,13 +366,13 @@
         "mode": "Incremental",
         "parameters": {
           "baseName": {
-            "value": "[variables('baseName')]"
-          },
-          "env": {
-            "value": "[parameters('env')]"
+            "value": "[format('{0}{1}', uniqueString(subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('resourceGroupName'))), parameters('env'))]"
           },
           "location": {
             "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[parameters('tags')]"
           }
         },
         "template": {
@@ -281,52 +381,53 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.5.6.12127",
-              "templateHash": "12155558635582316098"
+              "version": "0.38.33.27573",
+              "templateHash": "16223373526034733257"
             }
           },
           "parameters": {
-            "env": {
-              "type": "string"
-            },
             "baseName": {
               "type": "string"
             },
             "location": {
               "type": "string"
+            },
+            "tags": {
+              "type": "object"
             }
           },
           "resources": [
             {
               "type": "Microsoft.ContainerRegistry/registries",
-              "apiVersion": "2020-11-01-preview",
-              "name": "[format('{0}{1}cr', parameters('env'), parameters('baseName'))]",
+              "apiVersion": "2025-11-01",
+              "name": "[format('cr{0}', parameters('baseName'))]",
               "location": "[parameters('location')]",
               "sku": {
                 "name": "Standard"
               },
               "properties": {
                 "adminUserEnabled": true
-              }
+              },
+              "tags": "[parameters('tags')]"
             }
           ],
           "outputs": {
             "crOut": {
               "type": "string",
-              "value": "[resourceId('Microsoft.ContainerRegistry/registries', format('{0}{1}cr', parameters('env'), parameters('baseName')))]"
+              "value": "[resourceId('Microsoft.ContainerRegistry/registries', format('cr{0}', parameters('baseName')))]"
             }
           }
         }
       },
       "dependsOn": [
-        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('resourceGroupName'))]"
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('resourceGroupName'))]"
       ]
     },
     {
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2020-10-01",
-      "name": "amls",
-      "resourceGroup": "[parameters('resourceGroupName')]",
+      "apiVersion": "2025-04-01",
+      "name": "mlw",
+      "resourceGroup": "[variables('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
@@ -336,23 +437,32 @@
           "baseName": {
             "value": "[variables('baseName')]"
           },
-          "env": {
-            "value": "[parameters('env')]"
-          },
           "location": {
             "value": "[parameters('location')]"
           },
           "stoacctid": {
-            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'stoacct')).outputs.stoacctOut.value]"
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'st'), '2025-04-01').outputs.stoacctOut.value]"
           },
           "kvid": {
-            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'kv')).outputs.kvOut.value]"
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'kv'), '2025-04-01').outputs.kvOut.value]"
           },
           "appinsightid": {
-            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'appinsight')).outputs.appinsightOut.value]"
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'appi'), '2025-04-01').outputs.appinsightOut.value]"
           },
           "crid": {
-            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'cr')).outputs.crOut.value]"
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'cr'), '2025-04-01').outputs.crOut.value]"
+          },
+          "managedIdentityId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'mi'), '2025-04-01').outputs.managedIdentityId.value]"
+          },
+          "managedIdentityPrincipalId": {
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'mi'), '2025-04-01').outputs.managedIdentityPrincipalId.value]"
+          },
+          "adoServicePrincipalId": {
+            "value": "[parameters('adoServicePrincipalId')]"
+          },
+          "tags": {
+            "value": "[parameters('tags')]"
           }
         },
         "template": {
@@ -361,18 +471,15 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.5.6.12127",
-              "templateHash": "18023230433604735324"
+              "version": "0.38.33.27573",
+              "templateHash": "2558228403824633798"
             }
           },
           "parameters": {
-            "location": {
-              "type": "string"
-            },
             "baseName": {
               "type": "string"
             },
-            "env": {
+            "location": {
               "type": "string"
             },
             "stoacctid": {
@@ -386,27 +493,51 @@
             },
             "crid": {
               "type": "string"
+            },
+            "tags": {
+              "type": "object"
+            },
+            "managedIdentityId": {
+              "type": "string"
+            },
+            "managedIdentityPrincipalId": {
+              "type": "string"
+            },
+            "adoServicePrincipalId": {
+              "type": "string",
+              "defaultValue": ""
             }
+          },
+          "variables": {
+            "storageAccountName": "[split(parameters('stoacctid'), '/')[8]]",
+            "keyVaultName": "[split(parameters('kvid'), '/')[8]]",
+            "containerRegistryName": "[split(parameters('crid'), '/')[8]]"
           },
           "resources": [
             {
               "type": "Microsoft.MachineLearningServices/workspaces",
-              "apiVersion": "2020-09-01-preview",
-              "name": "[format('{0}{1}-ws', parameters('env'), parameters('baseName'))]",
+              "apiVersion": "2024-04-01",
+              "name": "[format('mlw-{0}', parameters('baseName'))]",
               "location": "[parameters('location')]",
               "identity": {
-                "type": "SystemAssigned"
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', parameters('managedIdentityId'))]": {}
+                }
               },
               "sku": {
                 "tier": "basic",
                 "name": "basic"
               },
               "properties": {
-                "friendlyName": "[format('{0}{1}-ws', parameters('env'), parameters('baseName'))]",
                 "storageAccount": "[parameters('stoacctid')]",
                 "keyVault": "[parameters('kvid')]",
                 "applicationInsights": "[parameters('appinsightid')]",
                 "containerRegistry": "[parameters('crid')]",
+                "primaryUserAssignedIdentity": "[parameters('managedIdentityId')]",
+                "publicNetworkAccess": "Enabled",
+                "imageBuildCompute": "cpu-cluster",
+                "v1LegacyMode": false,
                 "encryption": {
                   "status": "Disabled",
                   "keyVaultProperties": {
@@ -414,47 +545,130 @@
                     "keyVaultArmId": ""
                   }
                 }
+              },
+              "tags": "[parameters('tags')]"
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[format('Microsoft.Storage/storageAccounts/{0}', variables('storageAccountName'))]",
+              "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), parameters('managedIdentityPrincipalId'), 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]",
+                "principalId": "[parameters('managedIdentityPrincipalId')]",
+                "principalType": "ServicePrincipal"
               }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[format('Microsoft.Storage/storageAccounts/{0}', variables('storageAccountName'))]",
+              "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), parameters('managedIdentityPrincipalId'), '17d1049b-9a84-46fb-8f53-869881c3d3ab')]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '17d1049b-9a84-46fb-8f53-869881c3d3ab')]",
+                "principalId": "[parameters('managedIdentityPrincipalId')]",
+                "principalType": "ServicePrincipal"
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[format('Microsoft.KeyVault/vaults/{0}', variables('keyVaultName'))]",
+              "name": "[guid(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), parameters('managedIdentityPrincipalId'), '00482a5a-887f-4fb3-b363-3b7fe8e74483')]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '00482a5a-887f-4fb3-b363-3b7fe8e74483')]",
+                "principalId": "[parameters('managedIdentityPrincipalId')]",
+                "principalType": "ServicePrincipal"
+              }
+            },
+            {
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[format('Microsoft.ContainerRegistry/registries/{0}', variables('containerRegistryName'))]",
+              "name": "[guid(resourceId('Microsoft.ContainerRegistry/registries', variables('containerRegistryName')), parameters('managedIdentityPrincipalId'), '7f951dda-4ed3-4680-a7ca-43fe172d538d')]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')]",
+                "principalId": "[parameters('managedIdentityPrincipalId')]",
+                "principalType": "ServicePrincipal"
+              }
+            },
+            {
+              "condition": "[not(empty(parameters('adoServicePrincipalId')))]",
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[format('Microsoft.Storage/storageAccounts/{0}', variables('storageAccountName'))]",
+              "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), parameters('adoServicePrincipalId'), '2a2b9908-6ea1-4ae2-8e65-a410df84e7d1')]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '2a2b9908-6ea1-4ae2-8e65-a410df84e7d1')]",
+                "principalId": "[parameters('adoServicePrincipalId')]",
+                "principalType": "ServicePrincipal"
+              }
+            },
+            {
+              "condition": "[not(empty(parameters('adoServicePrincipalId')))]",
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[format('Microsoft.Storage/storageAccounts/{0}', variables('storageAccountName'))]",
+              "name": "[guid(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), parameters('adoServicePrincipalId'), 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]",
+                "principalId": "[parameters('adoServicePrincipalId')]",
+                "principalType": "ServicePrincipal"
+              }
+            },
+            {
+              "condition": "[not(empty(parameters('adoServicePrincipalId')))]",
+              "type": "Microsoft.Authorization/roleAssignments",
+              "apiVersion": "2022-04-01",
+              "scope": "[format('Microsoft.MachineLearningServices/workspaces/{0}', format('mlw-{0}', parameters('baseName')))]",
+              "name": "[guid(resourceId('Microsoft.MachineLearningServices/workspaces', format('mlw-{0}', parameters('baseName'))), parameters('adoServicePrincipalId'), 'f6c7c914-8db3-469d-8ca1-694a8f32e121')]",
+              "properties": {
+                "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'f6c7c914-8db3-469d-8ca1-694a8f32e121')]",
+                "principalId": "[parameters('adoServicePrincipalId')]",
+                "principalType": "ServicePrincipal"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.MachineLearningServices/workspaces', format('mlw-{0}', parameters('baseName')))]"
+              ]
             }
           ],
           "outputs": {
             "amlsName": {
               "type": "string",
-              "value": "[format('{0}{1}-ws', parameters('env'), parameters('baseName'))]"
+              "value": "[format('mlw-{0}', parameters('baseName'))]"
+            },
+            "amlsId": {
+              "type": "string",
+              "value": "[resourceId('Microsoft.MachineLearningServices/workspaces', format('mlw-{0}', parameters('baseName')))]"
             }
           }
         }
       },
       "dependsOn": [
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'appinsight')]",
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'cr')]",
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'kv')]",
-        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('resourceGroupName'))]",
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'stoacct')]"
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'appi')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'cr')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'kv')]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'mi')]",
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('resourceGroupName'))]",
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'st')]"
       ]
     },
     {
       "type": "Microsoft.Resources/deployments",
-      "apiVersion": "2020-10-01",
-      "name": "amlci",
-      "resourceGroup": "[parameters('resourceGroupName')]",
+      "apiVersion": "2025-04-01",
+      "name": "mlwcc",
+      "resourceGroup": "[variables('resourceGroupName')]",
       "properties": {
         "expressionEvaluationOptions": {
           "scope": "inner"
         },
         "mode": "Incremental",
         "parameters": {
-          "baseName": {
-            "value": "[variables('baseName')]"
-          },
-          "env": {
-            "value": "[parameters('env')]"
-          },
           "location": {
             "value": "[parameters('location')]"
           },
           "workspaceName": {
-            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'amls')).outputs.amlsName.value]"
+            "value": "[reference(extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'mlw'), '2025-04-01').outputs.amlsName.value]"
           }
         },
         "template": {
@@ -463,23 +677,17 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.5.6.12127",
-              "templateHash": "2016431671585526523"
+              "version": "0.38.33.27573",
+              "templateHash": "13784810752827215062"
             }
           },
           "parameters": {
             "location": {
               "type": "string"
             },
-            "baseName": {
-              "type": "string"
-            },
-            "env": {
-              "type": "string"
-            },
-            "computeInstanceName": {
+            "computeClusterName": {
               "type": "string",
-              "defaultValue": "[format('{0}-{1}-ci', parameters('env'), parameters('baseName'))]"
+              "defaultValue": "cpu-cluster"
             },
             "workspaceName": {
               "type": "string"
@@ -488,13 +696,13 @@
           "resources": [
             {
               "type": "Microsoft.MachineLearningServices/workspaces/computes",
-              "apiVersion": "2020-09-01-preview",
-              "name": "[format('{0}/{1}', parameters('workspaceName'), parameters('computeInstanceName'))]",
+              "apiVersion": "2025-09-01",
+              "name": "[format('{0}/{1}', parameters('workspaceName'), parameters('computeClusterName'))]",
               "location": "[parameters('location')]",
               "properties": {
                 "computeType": "AmlCompute",
                 "properties": {
-                  "vmSize": "Standard_DS3_v2",
+                  "vmSize": "STANDARD_D4S_V5",
                   "subnet": "[json('null')]",
                   "osType": "Linux",
                   "scaleSettings": {
@@ -508,8 +716,8 @@
         }
       },
       "dependsOn": [
-        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, parameters('resourceGroupName')), 'Microsoft.Resources/deployments', 'amls')]",
-        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', parameters('resourceGroupName'))]"
+        "[extensionResourceId(format('/subscriptions/{0}/resourceGroups/{1}', subscription().subscriptionId, variables('resourceGroupName')), 'Microsoft.Resources/deployments', 'mlw')]",
+        "[subscriptionResourceId('Microsoft.Resources/resourceGroups', variables('resourceGroupName'))]"
       ]
     }
   ]

@@ -15,7 +15,7 @@ var keyVaultName = split(kvid, '/')[8]
 var containerRegistryName = split(crid, '/')[8]
 
 // AML workspace with user-assigned managed identity
-resource amls 'Microsoft.MachineLearningServices/workspaces@2023-04-01' = {
+resource amls 'Microsoft.MachineLearningServices/workspaces@2024-04-01' = {
   name: 'mlw-${baseName}'
   location: location
   identity: {
@@ -50,17 +50,17 @@ resource amls 'Microsoft.MachineLearningServices/workspaces@2023-04-01' = {
 }
 
 // Get existing storage account for RBAC assignments
-resource storageAccount 'Microsoft.Storage/storageAccounts@2023-01-01' existing = {
+resource storageAccount 'Microsoft.Storage/storageAccounts@2025-06-01' existing = {
   name: storageAccountName
 }
 
 // Get existing key vault for RBAC assignments
-resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' existing = {
+resource keyVault 'Microsoft.KeyVault/vaults@2025-05-01' existing = {
   name: keyVaultName
 }
 
 // Get existing container registry for RBAC assignments
-resource containerRegistry 'Microsoft.ContainerRegistry/registries@2023-11-01-preview' existing = {
+resource containerRegistry 'Microsoft.ContainerRegistry/registries@2025-11-01' existing = {
   name: containerRegistryName
 }
 

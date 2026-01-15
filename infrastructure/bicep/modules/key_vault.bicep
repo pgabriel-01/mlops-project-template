@@ -3,7 +3,7 @@ param location string
 param tags object
 
 // Key Vault
-resource kv 'Microsoft.KeyVault/vaults@2019-09-01' = {
+resource kv 'Microsoft.KeyVault/vaults@2025-05-01' = {
   name: 'kv-${baseName}'
   location: location
   properties: {

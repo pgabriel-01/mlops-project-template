@@ -14,6 +14,11 @@ on:
         options:
           - deploy
           - destroy
+      wait_for_destroy:
+        description: 'Wait for resource group deletion to complete'
+        required: false
+        default: true
+        type: boolean
   push:
     branches:
       - main
@@ -235,6 +240,13 @@ jobs:
           RG_NAME="rg-${{ needs.get-config.outputs.namespace }}-${{ needs.get-config.outputs.postfix }}${{ needs.get-config.outputs.environment }}"
           
           echo "Deleting resource group: $RG_NAME"
-          az group delete --name $RG_NAME --yes --no-wait
           
-          echo "Resource group deletion initiated!"
+          # Check if we should wait for deletion to complete
+          if [ "${{ github.event.inputs.wait_for_destroy }}" == "true" ]; then
+            echo "Waiting for resource group deletion to complete..."
+            az group delete --name $RG_NAME --yes
+            echo "Resource group $RG_NAME has been deleted!"
+          else
+            az group delete --name $RG_NAME --yes --no-wait
+            echo "Resource group deletion initiated (async)!"
+          fi

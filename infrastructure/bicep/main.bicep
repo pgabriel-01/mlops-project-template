@@ -51,7 +51,7 @@ module kv './modules/key_vault.bicep' = {
   name: 'kv'
   scope: resourceGroup(rg.name)
   params: {
-    baseName: baseName
+    baseName: '${prefix}${uniqueString(rg.id)}${env}'
     location: location
     tags: tags
   }

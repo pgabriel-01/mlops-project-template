@@ -2,13 +2,13 @@ param location string
 param computeClusterName string = 'cpu-cluster'
 param workspaceName string
 
-resource amlci 'Microsoft.MachineLearningServices/workspaces/computes@2020-09-01-preview' = {
+resource amlci 'Microsoft.MachineLearningServices/workspaces/computes@2025-09-01' = {
   name: '${workspaceName}/${computeClusterName}'
   location: location
   properties: {
     computeType: 'AmlCompute'
     properties: {
-      vmSize: 'Standard_DS3_v2'
+      vmSize: 'STANDARD_D16S_V3'
       subnet: json('null')
       osType: 'Linux'
       scaleSettings: {

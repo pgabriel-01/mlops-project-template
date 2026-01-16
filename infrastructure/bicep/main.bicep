@@ -1,9 +1,9 @@
 targetScope = 'subscription'
 
-param location string = 'westus2'
-param prefix string
-param postfix string
-param env string
+param location string = 'eastus2'
+param prefix string = 'mlops'
+param postfix string = 'demo'
+param env string = 'dev'
 param adoServicePrincipalId string = ''
 
 param tags object = {
@@ -17,7 +17,7 @@ param tags object = {
 var baseName  = '${prefix}-${postfix}${env}'
 var resourceGroupName = 'rg-${baseName}'
 
-resource rg 'Microsoft.Resources/resourceGroups@2020-06-01' = {
+resource rg 'Microsoft.Resources/resourceGroups@2025-04-01' = {
   name: resourceGroupName
   location: location
 

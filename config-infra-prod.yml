@@ -32,6 +32,15 @@ variables:
   storage_account: st$(namespace)$(postfix)$(environment)
   vnet_name: vnet-$(namespace)-$(postfix)$(environment)
 
+  # For bicep reference
+  bicep_workingdir: infrastructure/bicep
+  bicep_template_file: main.bicep
+  bicep_prefix: $(namespace)
+  bicep_postfix: $(postfix)
+  bicep_env: $(environment)
+  bicep_location: $(location)
+  bicep_ado_service_principal_id: '' # Set via pipeline variable or secret
+
   # For terraform reference
   terraform_version: 1.14.3
   terraform_workingdir: infrastructure/terraform

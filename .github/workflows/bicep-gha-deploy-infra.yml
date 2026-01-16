@@ -71,21 +71,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Azure Login
-        uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Install Bicep
+      - name: Install Bicep CLI
         run: |
-          az bicep install
-          az bicep version
+          # Install Bicep CLI directly (no Azure login needed for linting)
+          curl -Lo bicep https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64
+          chmod +x ./bicep
+          sudo mv ./bicep /usr/local/bin/bicep
+          bicep --version
 
       - name: Lint Bicep
         run: |
           BICEP_DIR="${{ needs.get-config.outputs.bicep_workingdir }}"
           BICEP_FILE="${{ needs.get-config.outputs.bicep_template_file }}"
-          az bicep build --file $BICEP_DIR/$BICEP_FILE
+          bicep build $BICEP_DIR/$BICEP_FILE
 
   validate:
     name: Validate Bicep Deployment

@@ -246,6 +246,15 @@ jobs:
             echo "Waiting for resource group deletion to complete..."
             az group delete --name $RG_NAME --yes
             echo "Resource group $RG_NAME has been deleted!"
+            
+            # Purge any soft-deleted Key Vaults to allow redeployment
+            echo "Purging soft-deleted Key Vaults..."
+            DELETED_KVS=$(az keyvault list-deleted --query "[?contains(properties.vaultId, '$RG_NAME')].name" -o tsv 2>/dev/null || true)
+            for KV_NAME in $DELETED_KVS; do
+              echo "Purging Key Vault: $KV_NAME"
+              az keyvault purge --name $KV_NAME --location ${{ needs.get-config.outputs.location }} --no-wait || true
+            done
+            echo "Cleanup complete!"
           else
             az group delete --name $RG_NAME --yes --no-wait
             echo "Resource group deletion initiated (async)!"

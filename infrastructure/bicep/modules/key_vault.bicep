@@ -13,6 +13,9 @@ resource kv 'Microsoft.KeyVault/vaults@2025-05-01' = {
       family: 'A'
     }
     accessPolicies: []
+    enableSoftDelete: true
+    softDeleteRetentionInDays: 7  // Minimum retention for easier cleanup
+    enablePurgeProtection: false  // Allow purging for destroy workflow
   }
 
   tags: tags

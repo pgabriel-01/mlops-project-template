@@ -67,6 +67,9 @@ jobs:
     name: Lint Bicep Code
     needs: [get-config, set-env-branch]
     runs-on: ubuntu-latest
+    env:
+      BICEP_DIR: infrastructure/bicep
+      BICEP_FILE: main.bicep
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -81,8 +84,6 @@ jobs:
 
       - name: Lint Bicep
         run: |
-          BICEP_DIR="${{ needs.get-config.outputs.bicep_workingdir }}"
-          BICEP_FILE="${{ needs.get-config.outputs.bicep_template_file }}"
           bicep build $BICEP_DIR/$BICEP_FILE
 
   validate:
@@ -90,6 +91,9 @@ jobs:
     runs-on: ubuntu-latest
     needs: [get-config, set-env-branch, lint]
     if: github.event_name != 'pull_request'
+    env:
+      BICEP_DIR: infrastructure/bicep
+      BICEP_FILE: main.bicep
     outputs:
       sp_object_id: ${{ steps.get_sp_info.outputs.sp_object_id }}
     steps:
@@ -112,21 +116,31 @@ jobs:
           echo "Service Principal Object ID: $SP_OBJECT_ID"
           echo "sp_object_id=$SP_OBJECT_ID" >> $GITHUB_OUTPUT
 
+      - name: Generate Parameters File
+        run: |
+          cat > $BICEP_DIR/parameters.json << EOF
+          {
+            "\$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+            "contentVersion": "1.0.0.0",
+            "parameters": {
+              "prefix": { "value": "${{ needs.get-config.outputs.namespace }}" },
+              "postfix": { "value": "${{ needs.get-config.outputs.postfix }}" },
+              "env": { "value": "${{ needs.get-config.outputs.environment }}" },
+              "location": { "value": "${{ needs.get-config.outputs.location }}" },
+              "adoServicePrincipalId": { "value": "${{ steps.get_sp_info.outputs.sp_object_id }}" }
+            }
+          }
+          EOF
+          echo "Generated parameters.json:"
+          cat $BICEP_DIR/parameters.json
+
       - name: Validate Bicep Deployment
         run: |
-          BICEP_DIR="${{ needs.get-config.outputs.bicep_workingdir }}"
-          BICEP_FILE="${{ needs.get-config.outputs.bicep_template_file }}"
-          
           az deployment sub validate \
             --name "bicep-gha-${{ github.run_number }}" \
-            --location ${{ needs.get-config.outputs.bicep_location }} \
+            --location ${{ needs.get-config.outputs.location }} \
             --template-file $BICEP_DIR/$BICEP_FILE \
-            --parameters \
-              location=${{ needs.get-config.outputs.bicep_location }} \
-              prefix=${{ needs.get-config.outputs.bicep_prefix }} \
-              postfix=${{ needs.get-config.outputs.bicep_postfix }} \
-              env=${{ needs.get-config.outputs.bicep_env }} \
-              adoServicePrincipalId=${{ steps.get_sp_info.outputs.sp_object_id }}
+            --parameters @$BICEP_DIR/parameters.json
 
   deploy:
     name: Deploy Infrastructure
@@ -134,6 +148,9 @@ jobs:
     needs: [get-config, set-env-branch, lint, validate]
     if: github.event_name != 'pull_request' && github.event.inputs.action != 'destroy'
     environment: ${{ needs.set-env-branch.outputs.environment }}
+    env:
+      BICEP_DIR: infrastructure/bicep
+      BICEP_FILE: main.bicep
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -153,23 +170,33 @@ jobs:
           echo "Service Principal Object ID: $SP_OBJECT_ID"
           echo "sp_object_id=$SP_OBJECT_ID" >> $GITHUB_OUTPUT
 
+      - name: Generate Parameters File
+        run: |
+          cat > $BICEP_DIR/parameters.json << EOF
+          {
+            "\$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+            "contentVersion": "1.0.0.0",
+            "parameters": {
+              "prefix": { "value": "${{ needs.get-config.outputs.namespace }}" },
+              "postfix": { "value": "${{ needs.get-config.outputs.postfix }}" },
+              "env": { "value": "${{ needs.get-config.outputs.environment }}" },
+              "location": { "value": "${{ needs.get-config.outputs.location }}" },
+              "adoServicePrincipalId": { "value": "${{ steps.get_sp_info.outputs.sp_object_id }}" }
+            }
+          }
+          EOF
+          echo "Generated parameters.json:"
+          cat $BICEP_DIR/parameters.json
+
       - name: Deploy Bicep Template
         run: |
           echo "Deploying to ${{ needs.set-env-branch.outputs.environment }} environment..."
           
-          BICEP_DIR="${{ needs.get-config.outputs.bicep_workingdir }}"
-          BICEP_FILE="${{ needs.get-config.outputs.bicep_template_file }}"
-          
           az deployment sub create \
             --name "bicep-gha-${{ github.run_number }}" \
-            --location ${{ needs.get-config.outputs.bicep_location }} \
+            --location ${{ needs.get-config.outputs.location }} \
             --template-file $BICEP_DIR/$BICEP_FILE \
-            --parameters \
-              location=${{ needs.get-config.outputs.bicep_location }} \
-              prefix=${{ needs.get-config.outputs.bicep_prefix }} \
-              postfix=${{ needs.get-config.outputs.bicep_postfix }} \
-              env=${{ needs.get-config.outputs.bicep_env }} \
-              adoServicePrincipalId=${{ steps.get_sp_info.outputs.sp_object_id }}
+            --parameters @$BICEP_DIR/parameters.json
 
       - name: Output Deployment Results
         run: |

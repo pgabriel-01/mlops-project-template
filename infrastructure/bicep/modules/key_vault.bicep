@@ -3,6 +3,7 @@ param location string
 param tags object
 
 // Key Vault
+// Note: enablePurgeProtection defaults to false but cannot be toggled after initial creation
 resource kv 'Microsoft.KeyVault/vaults@2025-05-01' = {
   name: 'kv-${baseName}'
   location: location
@@ -14,7 +15,6 @@ resource kv 'Microsoft.KeyVault/vaults@2025-05-01' = {
     }
     accessPolicies: []
     enableSoftDelete: true
-    enablePurgeProtection: false  // Allow purging for destroy workflow
   }
 
   tags: tags

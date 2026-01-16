@@ -1,6 +1,7 @@
 param location string
 param computeClusterName string = 'cpu-cluster'
 param workspaceName string
+param vmSku string = 'STANDARD_D16S_V3'
 
 resource amlci 'Microsoft.MachineLearningServices/workspaces/computes@2025-09-01' = {
   name: '${workspaceName}/${computeClusterName}'
@@ -8,7 +9,7 @@ resource amlci 'Microsoft.MachineLearningServices/workspaces/computes@2025-09-01
   properties: {
     computeType: 'AmlCompute'
     properties: {
-      vmSize: 'STANDARD_D16S_V3'
+      vmSize: vmSku
       osType: 'Linux'
       scaleSettings: {
         maxNodeCount: 4

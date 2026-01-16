@@ -137,7 +137,8 @@ jobs:
               "postfix": { "value": "${{ needs.get-config.outputs.postfix }}" },
               "env": { "value": "${{ needs.get-config.outputs.environment }}" },
               "location": { "value": "${{ needs.get-config.outputs.location }}" },
-              "adoServicePrincipalId": { "value": "${{ steps.get_sp_info.outputs.sp_object_id }}" }
+              "adoServicePrincipalId": { "value": "${{ steps.get_sp_info.outputs.sp_object_id }}" },
+              "amlComputeSku": { "value": "${{ needs.get-config.outputs.aml_compute_sku }}" }
             }
           }
           EOF
@@ -192,7 +193,8 @@ jobs:
               "postfix": { "value": "${{ needs.get-config.outputs.postfix }}" },
               "env": { "value": "${{ needs.get-config.outputs.environment }}" },
               "location": { "value": "${{ needs.get-config.outputs.location }}" },
-              "adoServicePrincipalId": { "value": "${{ steps.get_sp_info.outputs.sp_object_id }}" }
+              "adoServicePrincipalId": { "value": "${{ steps.get_sp_info.outputs.sp_object_id }}" },
+              "amlComputeSku": { "value": "${{ needs.get-config.outputs.aml_compute_sku }}" }
             }
           }
           EOF

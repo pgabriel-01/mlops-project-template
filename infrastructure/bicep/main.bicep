@@ -5,6 +5,7 @@ param prefix string = 'mlops'
 param postfix string = 'demo'
 param env string = 'dev'
 param adoServicePrincipalId string = ''
+param amlComputeSku string = 'STANDARD_D16S_V3'
 
 param tags object = {
   Owner: 'mlops-v2'
@@ -104,5 +105,6 @@ module mlwcc './modules/aml_computecluster.bicep' = {
   params: {
     location: location
     workspaceName: mlw.outputs.amlsName
+    vmSku: amlComputeSku
   }
 }

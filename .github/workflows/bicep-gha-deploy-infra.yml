@@ -68,7 +68,7 @@ jobs:
     needs: set-env-branch
     permissions:
       contents: read
-    uses: pgabriel-01/mlops-templates/.github/workflows/read-yaml.yml@main
+    uses: pgabriel-01/mlops-templates/.github/workflows/read-yaml.yml@feature/bicep-ado-rbac-support
     with:
       file_name: ${{ needs.set-env-branch.outputs.config-file}}
 

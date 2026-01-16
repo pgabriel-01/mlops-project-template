@@ -50,6 +50,7 @@ module "aml_workspace" {
   container_registry_id   = module.container_registry.id
 
   enable_aml_computecluster = var.enable_aml_computecluster
+  aml_compute_sku           = var.aml_compute_sku
   storage_account_name      = module.storage_account_aml.name
   
   github_actions_service_principal_id = var.github_actions_service_principal_id

@@ -54,6 +54,12 @@ variable "enable_aml_computecluster" {
   default     = false
 }
 
+variable "aml_compute_sku" {
+  type        = string
+  description = "VM SKU for the AML compute cluster"
+  default     = "STANDARD_D16S_V3"
+}
+
 variable "storage_account_name" {
   type        = string
   description = "The Name of the Storage Account linked to AML workspace"

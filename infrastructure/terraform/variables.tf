@@ -22,6 +22,12 @@ variable "enable_aml_computecluster" {
   description = "Variable to enable or disable AML compute cluster"
 }
 
+variable "aml_compute_sku" {
+  type        = string
+  description = "VM SKU for the AML compute cluster"
+  default     = "STANDARD_D16S_V3"
+}
+
 variable "enable_monitoring" {
   description = "Variable to enable or disable Monitoring"
   type        = bool

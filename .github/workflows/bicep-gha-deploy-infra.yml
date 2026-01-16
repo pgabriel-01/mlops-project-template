@@ -238,6 +238,7 @@ jobs:
           echo "Destroying ${{ needs.set-env-branch.outputs.environment }} environment..."
           
           RG_NAME="rg-${{ needs.get-config.outputs.namespace }}-${{ needs.get-config.outputs.postfix }}${{ needs.get-config.outputs.environment }}"
+          MLW_NAME="mlw-${{ needs.get-config.outputs.namespace }}-${{ needs.get-config.outputs.postfix }}${{ needs.get-config.outputs.environment }}"
           
           echo "Deleting resource group: $RG_NAME"
           
@@ -246,6 +247,10 @@ jobs:
             echo "Waiting for resource group deletion to complete..."
             az group delete --name $RG_NAME --yes
             echo "Resource group $RG_NAME has been deleted!"
+            
+            # Purge soft-deleted ML Workspace
+            echo "Purging soft-deleted ML Workspace..."
+            az ml workspace delete --name $MLW_NAME --resource-group $RG_NAME --permanently-delete --yes 2>/dev/null || true
             
             # Purge any soft-deleted Key Vaults to allow redeployment
             echo "Purging soft-deleted Key Vaults..."

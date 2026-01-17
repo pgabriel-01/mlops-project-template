@@ -106,5 +106,6 @@ module mlwcc './modules/aml_computecluster.bicep' = {
     location: location
     workspaceName: mlw.outputs.amlsName
     vmSku: amlComputeSku
+    managedIdentityId: mi.outputs.managedIdentityId
   }
 }

@@ -2,10 +2,17 @@ param location string
 param computeClusterName string = 'cpu-cluster'
 param workspaceName string
 param vmSku string = 'STANDARD_D16S_V3'
+param managedIdentityId string
 
 resource amlci 'Microsoft.MachineLearningServices/workspaces/computes@2025-09-01' = {
   name: '${workspaceName}/${computeClusterName}'
   location: location
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${managedIdentityId}': {}
+    }
+  }
   properties: {
     computeType: 'AmlCompute'
     properties: {

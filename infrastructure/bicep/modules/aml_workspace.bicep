@@ -34,6 +34,7 @@ resource amls 'Microsoft.MachineLearningServices/workspaces@2024-04-01' = {
     applicationInsights: appinsightid
     containerRegistry: crid
     primaryUserAssignedIdentity: managedIdentityId
+    systemDatastoresAuthMode: 'identity'  // Use managed identity for datastore auth instead of access keys
     publicNetworkAccess: 'Enabled'
     imageBuildCompute: 'cpu-cluster'
     v1LegacyMode: false

@@ -1,6 +1,10 @@
-azureml-mlflow==1.38.0
-pyarrow==10.0.0
-scikit-learn==0.24.1
-pandas==1.2.1
-joblib==1.2.0
-matplotlib==3.3.3
+# RAI Training Requirements - Updated January 2026
+# Azure ML SDK v2 (replaces deprecated azureml-mlflow)
+mlflow==2.22.4
+azure-ai-ml==1.31.0
+pyarrow==18.1.0
+scikit-learn==1.7.2
+pandas==2.3.3
+joblib==1.4.2
+matplotlib==3.10.0
+numpy==2.2.6

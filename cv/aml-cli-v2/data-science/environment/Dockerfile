@@ -1,21 +1,22 @@
 # CV Training Environment - Updated January 2026
 # Check release notes https://docs.nvidia.com/deeplearning/frameworks/pytorch-release-notes/index.html
-# Using 24.01 container with PyTorch 2.2.0, CUDA 12.3, cuDNN 8.9
-FROM nvcr.io/nvidia/pytorch:24.01-py3
+# Using 25.01 container with PyTorch 2.6.0, CUDA 12.8, Ubuntu 24.04
+# NOTE: Volta (V100) support discontinued in 25.x - only Ampere (A100), Hopper (H100), Blackwell supported
+FROM nvcr.io/nvidia/pytorch:25.01-py3
 
 ##############################################################################
 # NCCL TESTS
 ##############################################################################
 ENV NCCL_TESTS_TAG=v2.13.9
 
-# NOTE: adding gencodes to support V100, A100, H100
+# NOTE: gencodes for A100 (sm_80), H100 (sm_90), Blackwell (sm_100)
 RUN mkdir /tmp/nccltests && \
     cd /tmp/nccltests && \
     git clone -b ${NCCL_TESTS_TAG} https://github.com/NVIDIA/nccl-tests.git && \
     cd nccl-tests && \
     make \
     MPI=1 MPI_HOME=/opt/hpcx/ompi \
-    NVCC_GENCODE="-gencode=arch=compute_70,code=sm_70 -gencode=arch=compute_80,code=sm_80 -gencode=arch=compute_90,code=sm_90" \
+    NVCC_GENCODE="-gencode=arch=compute_80,code=sm_80 -gencode=arch=compute_90,code=sm_90 -gencode=arch=compute_100,code=sm_100" \
     CUDA_HOME=/usr/local/cuda && \
     cp ./build/* /usr/local/bin && \
     rm -rf /tmp/nccltests

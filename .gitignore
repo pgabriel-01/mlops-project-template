@@ -10,3 +10,4 @@ mlruns/
 # Generated images
 *.png
 __pycache__/
+infrastructure/bicep/main.json

@@ -60,11 +60,11 @@ def parse_args():
     # classifier specific arguments
     parser.add_argument('--regressor__n_estimators', type=int, default=500,
                         help='Number of trees')
-    parser.add_argument('--regressor__bootstrap', type=int, default=1,
+    parser.add_argument('--regressor__bootstrap', type=lambda x: str(x).lower() in ['true', '1', 'yes'], default=True,
                         help='Method of selecting samples for training each tree')
     parser.add_argument('--regressor__max_depth', type=int, default=10,
                         help=' Maximum number of levels in tree')
-    parser.add_argument('--regressor__max_features', type=str, default='auto',
+    parser.add_argument('--regressor__max_features', type=str, default='sqrt',
                         help='Number of features to consider at every split')
     parser.add_argument('--regressor__min_samples_leaf', type=int, default=4,
                         help='Minimum number of samples required at each leaf node')

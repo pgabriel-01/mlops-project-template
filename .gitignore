@@ -2,3 +2,10 @@
 *.bak
 infrastructure/terraform/.terraform/
 infrastructure/terraform/terraform.tfvars
+
+# MLflow artifacts
+mlflow.db
+mlruns/
+
+# Generated images
+*.png

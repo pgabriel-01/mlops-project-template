@@ -47,12 +47,12 @@ def main(args):
         # Include pyarrow and scipy with compatible wheel versions to avoid source build
         # NOTE: These are the ONLY packages needed for inference - no Azure ML training packages
         pip_reqs = [
-            "mlflow==2.9.2",
-            "scikit-learn==1.5.2",
-            "numpy==1.26.4",
-            "cloudpickle==3.1.0",
-            "pyarrow==14.0.2",  # Include pyarrow to prevent MLflow from auto-detecting incompatible version
-            "scipy==1.14.0",  # Include scipy to prevent pip from trying to build older versions from source
+            "mlflow==2.22.4",
+            "scikit-learn==1.7.2",
+            "numpy==2.2.6",
+            "cloudpickle==3.1.1",
+            "pyarrow==18.1.0",  # Include pyarrow to prevent MLflow from auto-detecting incompatible version
+            "scipy==1.15.1",  # Include scipy to prevent pip from trying to build older versions from source
         ]
 
         # log model using mlflow with explicit pip requirements

@@ -4,12 +4,15 @@
 # NOTE: Volta (V100) support discontinued in 25.x - only Ampere (A100), Hopper (H100), Blackwell supported
 FROM nvcr.io/nvidia/pytorch:25.01-py3
 
+WORKDIR /workspace
+
 ##############################################################################
 # NCCL TESTS
 ##############################################################################
 ENV NCCL_TESTS_TAG=v2.13.9
 
 # NOTE: gencodes for A100 (sm_80), H100 (sm_90), Blackwell (sm_100)
+# hadolint ignore=DL3003
 RUN mkdir /tmp/nccltests && \
     cd /tmp/nccltests && \
     git clone -b ${NCCL_TESTS_TAG} https://github.com/NVIDIA/nccl-tests.git && \
@@ -22,12 +25,11 @@ RUN mkdir /tmp/nccltests && \
     rm -rf /tmp/nccltests
 
 # Install dependencies missing in this container
-COPY requirements.txt ./
-RUN pip install -r requirements.txt
+COPY requirements.txt /workspace/
+RUN pip install --no-cache-dir -r requirements.txt
 
 # add ndv4-topo.xml for Azure NDv4 (A100) topology
-RUN mkdir -p /opt/microsoft/
-ADD ./ndv4-topo.xml /opt/microsoft
+COPY ./ndv4-topo.xml /opt/microsoft/
 
 # to use on A100, enable env var below in your job
 # ENV NCCL_TOPO_FILE="/opt/microsoft/ndv4-topo.xml"

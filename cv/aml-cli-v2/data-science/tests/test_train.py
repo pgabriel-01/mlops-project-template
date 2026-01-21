@@ -90,7 +90,7 @@ def test_components_pytorch_image_classifier_single_node(
         "--model_output", model_dir,
         "--checkpoints", checkpoints_dir,
         "--register_model_as", "foo",
-        "--enable_profiling", "True",
+        "--enable_profiling", "False",  # Disabled to avoid profiler conflicts between tests
     ]
     # fmt: on
 

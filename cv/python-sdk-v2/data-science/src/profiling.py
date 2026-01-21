@@ -287,7 +287,11 @@ class LogDiskIOBlock(object):
             import psutil
 
             self.start_time = time.time()
-            self.start_disk_counters = psutil.Process(self.process_id).io_counters()
+            # io_counters() is only available on Linux, not macOS or Windows
+            try:
+                self.start_disk_counters = psutil.Process(self.process_id).io_counters()
+            except (AttributeError, NotImplementedError):
+                self.start_disk_counters = None
 
         except ModuleNotFoundError:
             self.logger.critical("import psutil failed, cannot display disk stats.")
@@ -310,20 +314,25 @@ class LogDiskIOBlock(object):
         run_time = time.time() - self.start_time
 
         disk_io_metrics = {}
-        end_disk_counters = psutil.Process(self.process_id).io_counters()
-        disk_io_metrics[f"{self.name}.disk.read"] = (
-            end_disk_counters.read_bytes - self.start_disk_counters.read_bytes
-        ) / (1024 * 1024)
-        disk_io_metrics[f"{self.name}.disk.write"] = (
-            end_disk_counters.write_bytes - self.start_disk_counters.write_bytes
-        ) / (1024 * 1024)
+        # io_counters() is only available on Linux, not macOS or Windows
+        if self.start_disk_counters is not None:
+            try:
+                end_disk_counters = psutil.Process(self.process_id).io_counters()
+                disk_io_metrics[f"{self.name}.disk.read"] = (
+                    end_disk_counters.read_bytes - self.start_disk_counters.read_bytes
+                ) / (1024 * 1024)
+                disk_io_metrics[f"{self.name}.disk.write"] = (
+                    end_disk_counters.write_bytes - self.start_disk_counters.write_bytes
+                ) / (1024 * 1024)
+            except (AttributeError, NotImplementedError):
+                pass
 
         self._logger.info(
             f"--- time elapsed: {self.name} = {run_time:2f} s [step={self.step}]"
         )
-        self._logger.info(f"--- disk_io_metrics: {disk_io_metrics}s [step={self.step}]")
-
-        mlflow.log_metrics(disk_io_metrics)
+        if disk_io_metrics:
+            self._logger.info(f"--- disk_io_metrics: {disk_io_metrics}s [step={self.step}]")
+            mlflow.log_metrics(disk_io_metrics)
 
 
 class LogTimeOfIterator:  # lgtm [py/iter-returns-non-self]

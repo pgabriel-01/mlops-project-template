@@ -85,7 +85,8 @@ resource "azurerm_machine_learning_workspace" "mlw" {
   public_network_access_enabled     = true
   image_build_compute_name          = "cpu-cluster"
   v1_legacy_mode_enabled            = false
-  system_datastores_auth_mode       = "identity"  # Use managed identity for datastore auth instead of access keys
+  # Note: system_datastores_auth_mode was removed from azurerm provider
+  # Configure datastore auth via azurerm_machine_learning_datastore_blobstorage instead
 
   identity {
     type         = "SystemAssigned, UserAssigned"

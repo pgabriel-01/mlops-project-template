@@ -9,3 +9,4 @@ mlruns/
 
 # Generated images
 *.png
+__pycache__/

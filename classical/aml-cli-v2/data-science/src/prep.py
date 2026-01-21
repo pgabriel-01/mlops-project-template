@@ -98,9 +98,14 @@ def parse_args():
     return args
 
 def log_training_data(df, table_name):
-    from obs.collector import Online_Collector # type: ignore
-    collector = Online_Collector(table_name)
-    collector.batch_collect(df)
+    try:
+        from obs.collector import Online_Collector  # type: ignore
+        collector = Online_Collector(table_name)
+        collector.batch_collect(df)
+    except ImportError:
+        print("Warning: obs.collector module not found. Monitoring data will not be logged to ADX.")
+    except Exception as e:
+        print(f"Warning: Failed to log monitoring data: {e}")
 
 def main(args):
     '''Read, split, and save datasets'''

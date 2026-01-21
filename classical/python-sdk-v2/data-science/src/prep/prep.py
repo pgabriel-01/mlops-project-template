@@ -46,9 +46,14 @@ def parse_args():
     return args
 
 def log_training_data(df, table_name):
-    from obs.collector import Online_Collector
-    collector = Online_Collector(table_name)
-    collector.batch_collect(df)
+    try:
+        from obs.collector import Online_Collector  # type: ignore
+        collector = Online_Collector(table_name)
+        collector.batch_collect(df)
+    except ImportError:
+        print("Warning: obs.collector module not found. Monitoring data will not be logged to ADX.")
+    except Exception as e:
+        print(f"Warning: Failed to log monitoring data: {e}")
 
 def main(args):
     '''Read, split, and save datasets'''
@@ -82,7 +87,7 @@ def main(args):
     val.to_parquet((Path(args.val_data) / "val.parquet"))
     test.to_parquet((Path(args.test_data) / "test.parquet"))
 
-    if (args.enable_monitoring.lower == 'true' or args.enable_monitoring == '1' or args.enable_monitoring.lower == 'yes'):
+    if args.enable_monitoring and (args.enable_monitoring.lower() == 'true' or args.enable_monitoring == '1' or args.enable_monitoring.lower() == 'yes'):
         log_training_data(data, args.table_name)
 
 

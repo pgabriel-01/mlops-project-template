@@ -1,17 +1,19 @@
+# CV Training Environment - Updated January 2026
+# Note: SDK v1 is deprecated, recommend migrating to SDK v2
 name: pytorch_manual
 channels:
+- pytorch
 - conda-forge
 dependencies:
-- python=3.7
-- pip=20.2.4
+- python=3.12
+- pip
 - pip:
-  - pandas==1.3.5
-  - scikit-learn==1.0.2
-  - matplotlib==3.5.2
-  - msrest==0.6.21
-  - mlflow==1.27.0
-  - azureml-core==1.43.0
-  - azureml-defaults==1.43.0
-  - azureml-mlflow==1.43.0
-  - torch==1.11.0
-  - torchvision==0.12.0
+  - pandas==2.2.3
+  - scikit-learn==1.7.2
+  - matplotlib==3.10.0
+  - msrest==0.7.1
+  - mlflow==2.22.4
+  - azure-ai-ml==1.31.0
+  - torch==2.2.2
+  - torchvision==0.17.2
+  - numpy<2

@@ -1,25 +1,25 @@
-// For format details, see https://aka.ms/devcontainer.json. For config options, see the README at:
-// https://github.com/microsoft/vscode-dev-containers/tree/v0.222.0/containers/python-3-miniconda
+// For format details, see https://aka.ms/devcontainer.json
 {
 	"name": "Miniconda (Python 3)",
 	"build": {
 		"context": "..",
-		"dockerfile": "Dockerfile",
+		"dockerfile": "Dockerfile"
 	},
-	// Set *default* container specific settings.json values on container create.
-	"settings": {
-		"python.defaultInterpreterPath": "/opt/conda/bin/python",
+	"customizations": {
+		"vscode": {
+			"settings": {
+				"python.defaultInterpreterPath": "/opt/conda/bin/python"
+			},
+			"extensions": [
+				"ms-python.python",
+				"ms-python.vscode-pylance",
+				"ms-toolsai.jupyter"
+			]
+		}
 	},
-	// Add the IDs of extensions you want installed when the container is created.
-	"extensions": [
-		"ms-python.python",
-		"ms-python.vscode-pylance",
-		"ms-toolsai.vscode-ai",
-	],
-	// Comment out to connect as root instead. More info: https://aka.ms/vscode-remote/containers/non-root.
 	"remoteUser": "vscode",
 	"features": {
-		"azure-cli": "latest"
+		"ghcr.io/devcontainers/features/azure-cli:1": {}
 	},
 	"onCreateCommand": "az extension add -n ml -y"
 }

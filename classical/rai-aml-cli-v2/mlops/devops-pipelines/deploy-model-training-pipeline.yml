@@ -16,7 +16,7 @@ variables:
 trigger: none
 
 pool:
-  vmImage: ubuntu-20.04
+  vmImage: ubuntu-latest
 
 resources:
   repositories:
@@ -60,10 +60,10 @@ stages:
           - template: templates/${{ variables.version }}/create-compute.yml@mlops-templates
             parameters:
               cluster_name: cpu-cluster
-              size: Standard_D4s_v5
+              size: STANDARD_D16S_V3
               min_instances: 0
               max_instances: 4
-              cluster_tier: low_priority
+              cluster_tier: dedicated
           - template: templates/${{ variables.version }}/register-data.yml@mlops-templates
             parameters:
               data_type: uri_file

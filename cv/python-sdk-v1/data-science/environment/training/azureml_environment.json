@@ -11,7 +11,7 @@
     },
     "docker": {
         "enabled": true,
-        "baseImage": "mcr.microsoft.com/azureml/openmpi3.1.2-cuda10.1-cudnn7-ubuntu18.04",
+        "baseImage": "mcr.microsoft.com/azureml/openmpi4.1.0-cuda11.8-cudnn8-ubuntu22.04",
         "baseDockerfile": null,
         "sharedVolumes": true,
         "shmSize": "2g",

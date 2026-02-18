@@ -19,4 +19,4 @@ code_configuration:
 # custom scoring environment
 environment: 
   conda_file: ../../../../data-science/environments/inference/conda_env.yml
-  image: mcr.microsoft.com/azureml/minimal-ubuntu18.04-py37-cpu-inference:latest
+  image: mcr.microsoft.com/azureml/minimal-ubuntu22.04-py39-cpu-inference:latest

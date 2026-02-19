@@ -5,7 +5,7 @@ name: green
 endpoint_name: nlp-summarize-online
 
 # compute
-instance_type: STANDARD_DS5_V2
+instance_type: Standard_D16s_v5
 instance_count: 1
 
 # model

@@ -155,7 +155,7 @@ jobs:
       --reference_metric ${{inputs.reference_metric}} 
       --deploy_flag ${{outputs.deploy_flag}} 
       --force_comparison True
-    environment: azureml:AzureML-sklearn-1.0-ubuntu20.04-py38-cpu@latest
+    environment: azureml:AzureML-sklearn-1.5-ubuntu22.04-py39-cpu@latest
     compute: azureml:cpu-cluster
     inputs:
       baseline_metrics: ${{parent.jobs.evaluate_finetuned_model.outputs.metrics}}
@@ -173,7 +173,7 @@ jobs:
       --model_folder ${{inputs.model}} 
       --deploy_flag ${{inputs.deploy_flag}} 
       --register_as ${{inputs.model_registration_name}}
-    environment: azureml:AzureML-sklearn-1.0-ubuntu20.04-py38-cpu@latest
+    environment: azureml:AzureML-sklearn-1.5-ubuntu22.04-py39-cpu@latest
     compute: azureml:cpu-cluster
     inputs:
       model: ${{parent.jobs.finetune_model.outputs.finetuned_model}}

@@ -1,7 +1,7 @@
 $schema: https://azuremlschemas.azureedge.net/latest/amlCompute.schema.json
 name: batch-cluster
 type: amlcompute
-size: STANDARD_DS4_V2
+size: Standard_D8s_v5
 min_instances: 0
 max_instances: 10
 tier: dedicated

@@ -14,6 +14,6 @@ outputs:
     mode: upload
     path: azureml://datastores/workspaceblobstore/paths/azureml-vision-datasets/dogs/
 
-environment: azureml:AzureML-sklearn-1.0-ubuntu20.04-py38-cpu@latest
+environment: azureml:AzureML-sklearn-1.5-ubuntu22.04-py39-cpu@latest
 
 compute: azureml:cpu-cluster

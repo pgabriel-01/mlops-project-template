@@ -268,7 +268,7 @@ def build_components(args):
                     --deploy_flag ${{outputs.deploy_flag}} \
                     --force_comparison True\
                 """,
-        environment="AzureML-sklearn-1.0-ubuntu20.04-py38-cpu@latest",
+        environment="AzureML-sklearn-1.5-ubuntu22.04-py39-cpu@latest",
     )
 
     register_model = command(
@@ -285,7 +285,7 @@ def build_components(args):
                     --deploy_flag ${{inputs.deploy_flag}} \
                     --register_as ${{inputs.model_registration_name}} \
                 """,
-        environment="AzureML-sklearn-1.0-ubuntu20.04-py38-cpu@latest",
+        environment="AzureML-sklearn-1.5-ubuntu22.04-py39-cpu@latest",
     )
 
     return {

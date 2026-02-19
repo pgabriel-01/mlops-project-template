@@ -24,7 +24,7 @@ variables:
 
   # Compute target for pipeline
   training_target: gpu-cluster
-  training_target_sku: Standard_NC6
+  training_target_sku: Standard_NC4as_T4_v3
   training_target_min_nodes: 0
   training_target_max_nodes: 1
 

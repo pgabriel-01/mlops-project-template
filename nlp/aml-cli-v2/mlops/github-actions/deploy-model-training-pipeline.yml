@@ -18,7 +18,9 @@ jobs:
         resource_group: ${{ needs.get-config.outputs.resource_group }}
         workspace_name: ${{ needs.get-config.outputs.aml_workspace }}     
       secrets:
-          creds: ${{secrets.AZURE_CREDENTIALS}}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
   create-compute-large:
       needs: get-config
       uses: Azure/mlops-templates/.github/workflows/create-compute.yml@main
@@ -30,8 +32,10 @@ jobs:
         resource_group: ${{ needs.get-config.outputs.resource_group }}
         workspace_name: ${{ needs.get-config.outputs.aml_workspace }}     
       secrets:
-          creds: ${{secrets.AZURE_CREDENTIALS}}
-   create-compute-gpu:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  create-compute-gpu:
       needs: get-config
       uses: Azure/mlops-templates/.github/workflows/create-compute.yml@main
       with:
@@ -43,8 +47,10 @@ jobs:
         resource_group: ${{ needs.get-config.outputs.resource_group }}
         workspace_name: ${{ needs.get-config.outputs.aml_workspace }}     
       secrets:
-          creds: ${{secrets.AZURE_CREDENTIALS}}
-   register-environment:
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  register-environment:
       needs: [get-config,create-compute-standard,create-compute-large,create-compute-gpu]
       uses: Azure/mlops-templates/.github/workflows/register-environment.yml@main
       with:
@@ -52,8 +58,10 @@ jobs:
         workspace_name: ${{ needs.get-config.outputs.aml_workspace }}     
         environment_file: mlops/azureml/train/train-env.yaml 
       secrets:
-        creds: ${{secrets.AZURE_CREDENTIALS}}
-   run-pipeline:
+        AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  run-pipeline:
       needs: [get-config,create-compute-standard,create-compute-large,create-compute-gpu,register-environment]
       uses: Azure/mlops-templates/.github/workflows/run-pipeline.yml@main
       with:
@@ -62,4 +70,6 @@ jobs:
         parameters-file:  mlops/azureml/train/pipeline.yml
         job-name: nlp_summerization
       secrets:
-          creds: ${{secrets.AZURE_CREDENTIALS}}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}

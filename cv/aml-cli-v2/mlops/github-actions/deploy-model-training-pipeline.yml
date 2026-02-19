@@ -37,7 +37,9 @@ jobs:
       resource_group: ${{ needs.get-config.outputs.resource_group }}
       workspace_name: ${{ needs.get-config.outputs.aml_workspace }}
     secrets:
-      creds: ${{secrets.AZURE_CREDENTIALS}}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
   create-training-compute:
     needs: get-config
     uses: Azure/mlops-templates/.github/workflows/create-compute.yml@main
@@ -50,7 +52,9 @@ jobs:
       resource_group: ${{ needs.get-config.outputs.resource_group }}
       workspace_name: ${{ needs.get-config.outputs.aml_workspace }}
     secrets:
-      creds: ${{secrets.AZURE_CREDENTIALS}}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
   register-environment:
     needs: [get-config, create-dataprep-compute, create-training-compute]
     uses: Azure/mlops-templates/.github/workflows/register-environment.yml@main
@@ -59,7 +63,9 @@ jobs:
       workspace_name: ${{ needs.get-config.outputs.aml_workspace }}
       environment_file: mlops/azureml/train/train-env.yaml
     secrets:
-      creds: ${{secrets.AZURE_CREDENTIALS}}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
   register-dataset:
     needs: [get-config, register-environment]
     uses: Azure/mlops-templates/.github/workflows/register-dataset.yml@main
@@ -70,7 +76,9 @@ jobs:
       file_type: Training
       name: stanford_dogs
     secrets:
-      creds: ${{secrets.AZURE_CREDENTIALS}}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
   run-model-training-pipeline:
     needs:
       [
@@ -87,4 +95,6 @@ jobs:
       parameters-file: mlops/azureml/train/pipeline.yaml
       job-name: cv-train
     secrets:
-      creds: ${{secrets.AZURE_CREDENTIALS}}
+      AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}

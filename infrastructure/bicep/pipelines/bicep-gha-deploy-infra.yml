@@ -27,6 +27,10 @@ on:
     paths:
       - 'infrastructure/bicep/**'
 
+permissions:
+  id-token: write
+  contents: read
+
 env:
   BICEP_FILE: './infrastructure/bicep/main.bicep'
 
@@ -41,7 +45,9 @@ jobs:
       - name: Setup Azure CLI
         uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Install Bicep
         run: |
@@ -66,7 +72,9 @@ jobs:
       - name: Azure Login
         uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Load Configuration
         id: config
@@ -93,8 +101,8 @@ jobs:
       - name: Get Service Principal Object ID
         id: get_sp_info
         run: |
-          # Extract service principal info from AZURE_CREDENTIALS secret
-          SP_APP_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.clientId')
+          # Use AZURE_CLIENT_ID directly (OIDC authentication)
+          SP_APP_ID="${{ secrets.AZURE_CLIENT_ID }}"
           SP_OBJECT_ID=$(az ad sp show --id $SP_APP_ID --query id -o tsv)
           
           echo "Service Principal App ID: $SP_APP_ID"
@@ -127,7 +135,9 @@ jobs:
       - name: Azure Login
         uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Load Configuration
         id: config
@@ -154,7 +164,8 @@ jobs:
       - name: Get Service Principal Object ID
         id: get_sp_info
         run: |
-          SP_APP_ID=$(echo '${{ secrets.AZURE_CREDENTIALS }}' | jq -r '.clientId')
+          # Use AZURE_CLIENT_ID directly (OIDC authentication)
+          SP_APP_ID="${{ secrets.AZURE_CLIENT_ID }}"
           SP_OBJECT_ID=$(az ad sp show --id $SP_APP_ID --query id -o tsv)
           
           echo "Service Principal App ID: $SP_APP_ID"

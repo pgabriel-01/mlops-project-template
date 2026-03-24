@@ -1,7 +1,7 @@
 param location string
 param computeClusterName string = 'cpu-cluster'
 param workspaceName string
-param vmSku string = 'STANDARD_D16S_V3'
+param vmSku string = 'STANDARD_D2S_V3'
 param managedIdentityId string
 param subnetId string = ''
 

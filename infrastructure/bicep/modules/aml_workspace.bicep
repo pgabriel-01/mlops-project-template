@@ -12,7 +12,9 @@ param adoServicePrincipalId string = ''
 // Extract resource IDs for RBAC assignments
 var storageAccountName = split(stoacctid, '/')[8]
 var keyVaultName = split(kvid, '/')[8]
-var containerRegistryName = split(crid, '/')[8]
+var hasContainerRegistry = !empty(crid)
+var containerRegistryName = hasContainerRegistry ? split(crid, '/')[8] : 'none'
+var hasAppInsights = !empty(appinsightid)
 
 // AML workspace with user-assigned managed identity
 resource amls 'Microsoft.MachineLearningServices/workspaces@2024-04-01' = {
@@ -31,12 +33,12 @@ resource amls 'Microsoft.MachineLearningServices/workspaces@2024-04-01' = {
   properties: {
     storageAccount: stoacctid
     keyVault: kvid
-    applicationInsights: appinsightid
-    containerRegistry: crid
+    applicationInsights: hasAppInsights ? appinsightid : null
+    containerRegistry: hasContainerRegistry ? crid : null
     primaryUserAssignedIdentity: managedIdentityId
     systemDatastoresAuthMode: 'identity'  // Use managed identity for datastore auth instead of access keys
     publicNetworkAccess: 'Enabled'
-    imageBuildCompute: 'cpu-cluster'
+    imageBuildCompute: hasContainerRegistry ? 'cpu-cluster' : null
     v1LegacyMode: false
     encryption: {
       status: 'Disabled'
@@ -60,8 +62,8 @@ resource keyVault 'Microsoft.KeyVault/vaults@2025-05-01' existing = {
   name: keyVaultName
 }
 
-// Get existing container registry for RBAC assignments
-resource containerRegistry 'Microsoft.ContainerRegistry/registries@2025-11-01' existing = {
+// Get existing container registry for RBAC assignments (only when CR is deployed)
+resource containerRegistry 'Microsoft.ContainerRegistry/registries@2025-11-01' existing = if (hasContainerRegistry) {
   name: containerRegistryName
 }
 
@@ -98,8 +100,8 @@ resource workspaceMsiKeyVaultAdmin 'Microsoft.Authorization/roleAssignments@2022
   }
 }
 
-// RBAC: Workspace MSI -> ACR Pull
-resource workspaceMsiAcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+// RBAC: Workspace MSI -> ACR Pull (only when container registry is deployed)
+resource workspaceMsiAcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (hasContainerRegistry) {
   name: guid(containerRegistry.id, managedIdentityPrincipalId, '7f951dda-4ed3-4680-a7ca-43fe172d538d')
   scope: containerRegistry
   properties: {

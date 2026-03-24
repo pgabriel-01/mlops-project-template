@@ -88,15 +88,31 @@ jobs:
           fi
           
           # Parse YAML config (simple example - adjust based on your config structure)
-          LOCATION=$(yq eval '.variables.location' $CONFIG_FILE)
-          PREFIX=$(yq eval '.variables.namespace' $CONFIG_FILE)
-          POSTFIX=$(yq eval '.variables.postfix' $CONFIG_FILE)
-          ENV=$(yq eval '.variables.environment' $CONFIG_FILE)
+          # Read shared values from common config
+          COMMON_FILE="config-infra-common.yml"
+          PREFIX=$(yq eval '.variables.namespace' $COMMON_FILE)
+          AML_COMPUTE_SKU=$(yq eval '.variables.aml_compute_sku' $COMMON_FILE)
+          ENABLE_MONITORING=$(yq eval '.variables.enable_monitoring' $COMMON_FILE)
+          ENABLE_CR=$(yq eval '.variables.enable_container_registry' $COMMON_FILE)
+          ENABLE_COMPUTE=$(yq eval '.variables.enable_aml_computecluster' $COMMON_FILE)
+          TAG_COST_CENTER=$(yq eval '.variables.tag_cost_center' $COMMON_FILE)
+          TAG_MANAGED_BY=$(yq eval '.variables.tag_managed_by' $COMMON_FILE)
+          
+          # Read env-specific overrides (array format: - name: key / value: val)
+          LOCATION=$(yq eval '.variables[] | select(.name == "location") | .value' $CONFIG_FILE)
+          POSTFIX=$(yq eval '.variables[] | select(.name == "postfix") | .value' $CONFIG_FILE)
+          ENV=$(yq eval '.variables[] | select(.name == "environment") | .value' $CONFIG_FILE)
           
           echo "location=$LOCATION" >> $GITHUB_OUTPUT
           echo "prefix=$PREFIX" >> $GITHUB_OUTPUT
           echo "postfix=$POSTFIX" >> $GITHUB_OUTPUT
           echo "environment=$ENV" >> $GITHUB_OUTPUT
+          echo "aml_compute_sku=$AML_COMPUTE_SKU" >> $GITHUB_OUTPUT
+          echo "enable_monitoring=$ENABLE_MONITORING" >> $GITHUB_OUTPUT
+          echo "enable_container_registry=$ENABLE_CR" >> $GITHUB_OUTPUT
+          echo "enable_compute_cluster=$ENABLE_COMPUTE" >> $GITHUB_OUTPUT
+          echo "tag_cost_center=$TAG_COST_CENTER" >> $GITHUB_OUTPUT
+          echo "tag_managed_by=$TAG_MANAGED_BY" >> $GITHUB_OUTPUT
 
       - name: Get Service Principal Object ID
         id: get_sp_info
@@ -120,7 +136,13 @@ jobs:
               prefix=${{ steps.config.outputs.prefix }} \
               postfix=${{ steps.config.outputs.postfix }} \
               env=${{ steps.config.outputs.environment }} \
-              adoServicePrincipalId=${{ steps.get_sp_info.outputs.sp_object_id }}
+              adoServicePrincipalId=${{ steps.get_sp_info.outputs.sp_object_id }} \
+              amlComputeSku=${{ steps.config.outputs.aml_compute_sku }} \
+              enableMonitoring=${{ steps.config.outputs.enable_monitoring }} \
+              enableContainerRegistry=${{ steps.config.outputs.enable_container_registry }} \
+              enableComputeCluster=${{ steps.config.outputs.enable_compute_cluster }} \
+              tagCostCenter='${{ steps.config.outputs.tag_cost_center }}' \
+              tagManagedBy='${{ steps.config.outputs.tag_managed_by }}'
 
   deploy:
     name: Deploy Infrastructure
@@ -151,15 +173,31 @@ jobs:
           fi
           
           # Parse YAML config
-          LOCATION=$(yq eval '.variables.location' $CONFIG_FILE)
-          PREFIX=$(yq eval '.variables.namespace' $CONFIG_FILE)
-          POSTFIX=$(yq eval '.variables.postfix' $CONFIG_FILE)
-          ENV=$(yq eval '.variables.environment' $CONFIG_FILE)
+          # Read shared values from common config
+          COMMON_FILE="config-infra-common.yml"
+          PREFIX=$(yq eval '.variables.namespace' $COMMON_FILE)
+          AML_COMPUTE_SKU=$(yq eval '.variables.aml_compute_sku' $COMMON_FILE)
+          ENABLE_MONITORING=$(yq eval '.variables.enable_monitoring' $COMMON_FILE)
+          ENABLE_CR=$(yq eval '.variables.enable_container_registry' $COMMON_FILE)
+          ENABLE_COMPUTE=$(yq eval '.variables.enable_aml_computecluster' $COMMON_FILE)
+          TAG_COST_CENTER=$(yq eval '.variables.tag_cost_center' $COMMON_FILE)
+          TAG_MANAGED_BY=$(yq eval '.variables.tag_managed_by' $COMMON_FILE)
+          
+          # Read env-specific overrides (array format: - name: key / value: val)
+          LOCATION=$(yq eval '.variables[] | select(.name == "location") | .value' $CONFIG_FILE)
+          POSTFIX=$(yq eval '.variables[] | select(.name == "postfix") | .value' $CONFIG_FILE)
+          ENV=$(yq eval '.variables[] | select(.name == "environment") | .value' $CONFIG_FILE)
           
           echo "location=$LOCATION" >> $GITHUB_OUTPUT
           echo "prefix=$PREFIX" >> $GITHUB_OUTPUT
           echo "postfix=$POSTFIX" >> $GITHUB_OUTPUT
           echo "environment=$ENV" >> $GITHUB_OUTPUT
+          echo "aml_compute_sku=$AML_COMPUTE_SKU" >> $GITHUB_OUTPUT
+          echo "enable_monitoring=$ENABLE_MONITORING" >> $GITHUB_OUTPUT
+          echo "enable_container_registry=$ENABLE_CR" >> $GITHUB_OUTPUT
+          echo "enable_compute_cluster=$ENABLE_COMPUTE" >> $GITHUB_OUTPUT
+          echo "tag_cost_center=$TAG_COST_CENTER" >> $GITHUB_OUTPUT
+          echo "tag_managed_by=$TAG_MANAGED_BY" >> $GITHUB_OUTPUT
 
       - name: Get Service Principal Object ID
         id: get_sp_info
@@ -185,7 +223,13 @@ jobs:
               prefix=${{ steps.config.outputs.prefix }} \
               postfix=${{ steps.config.outputs.postfix }} \
               env=${{ steps.config.outputs.environment }} \
-              adoServicePrincipalId=${{ steps.get_sp_info.outputs.sp_object_id }}
+              adoServicePrincipalId=${{ steps.get_sp_info.outputs.sp_object_id }} \
+              amlComputeSku=${{ steps.config.outputs.aml_compute_sku }} \
+              enableMonitoring=${{ steps.config.outputs.enable_monitoring }} \
+              enableContainerRegistry=${{ steps.config.outputs.enable_container_registry }} \
+              enableComputeCluster=${{ steps.config.outputs.enable_compute_cluster }} \
+              tagCostCenter='${{ steps.config.outputs.tag_cost_center }}' \
+              tagManagedBy='${{ steps.config.outputs.tag_managed_by }}'
 
       - name: Output Deployment Results
         run: |

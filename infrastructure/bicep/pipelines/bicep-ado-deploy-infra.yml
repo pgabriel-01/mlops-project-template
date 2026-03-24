@@ -54,13 +54,18 @@ stages:
                   --name $(Build.DefinitionName) \
                   --template-file ./infrastructure/bicep/main.bicep \
                   --location $(location) \
-                  --parameters location=$(location) prefix=$(namespace) postfix=$(postfix) env=$(environment) adoServicePrincipalId=$SP_OBJECT_ID amlComputeSku=$(aml_compute_sku)
-                
-                az deployment sub validate \
-                  --name $(Build.DefinitionName) \
-                  --template-file ./infrastructure/bicep/main.bicep \
-                  --location $(location) \
-                  --parameters location=$(location) prefix=$(namespace) postfix=$(postfix) env=$(environment) adoServicePrincipalId=$SP_OBJECT_ID amlComputeSku=$(aml_compute_sku)
+                  --parameters \
+                    location=$(location) \
+                    prefix=$(namespace) \
+                    postfix=$(postfix) \
+                    env=$(environment) \
+                    adoServicePrincipalId=$SP_OBJECT_ID \
+                    amlComputeSku=$(aml_compute_sku) \
+                    enableMonitoring=$(enable_monitoring) \
+                    enableContainerRegistry=$(enable_container_registry) \
+                    enableComputeCluster=$(enable_aml_computecluster) \
+                    tagCostCenter='$(tag_cost_center)' \
+                    tagManagedBy='$(tag_managed_by)'
 
   - stage: CheckOutBicepAndDeploy
     displayName: Deploy AML Workspace
@@ -97,5 +102,16 @@ stages:
                         --name $(Build.DefinitionName) \
                         --location $(location) \
                         --template-file ./infrastructure/bicep/main.bicep \
-                        --parameters location=$(location) prefix=$(namespace) postfix=$(postfix) env=$(environment) adoServicePrincipalId=$SP_OBJECT_ID amlComputeSku=$(aml_compute_sku)
+                        --parameters \
+                          location=$(location) \
+                          prefix=$(namespace) \
+                          postfix=$(postfix) \
+                          env=$(environment) \
+                          adoServicePrincipalId=$SP_OBJECT_ID \
+                          amlComputeSku=$(aml_compute_sku) \
+                          enableMonitoring=$(enable_monitoring) \
+                          enableContainerRegistry=$(enable_container_registry) \
+                          enableComputeCluster=$(enable_aml_computecluster) \
+                          tagCostCenter='$(tag_cost_center)' \
+                          tagManagedBy='$(tag_managed_by)'
 

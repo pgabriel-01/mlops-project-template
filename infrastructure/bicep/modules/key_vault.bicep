@@ -1,9 +1,11 @@
 param baseName string
 param location string
 param tags object
+param enablePurgeProtection bool = false
+param softDeleteRetentionDays int = 7
 
-// Key Vault
-// Note: enablePurgeProtection defaults to false but cannot be toggled after initial creation
+// Key Vault — RBAC-authorized, idempotent with soft-delete handling
+// Note: enablePurgeProtection cannot be disabled once enabled
 resource kv 'Microsoft.KeyVault/vaults@2025-05-01' = {
   name: 'kv-${baseName}'
   location: location
@@ -13,8 +15,10 @@ resource kv 'Microsoft.KeyVault/vaults@2025-05-01' = {
       name: 'standard'
       family: 'A'
     }
-    accessPolicies: []
+    enableRbacAuthorization: true
     enableSoftDelete: true
+    softDeleteRetentionInDays: softDeleteRetentionDays
+    enablePurgeProtection: enablePurgeProtection ? true : null
   }
 
   tags: tags

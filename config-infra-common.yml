@@ -24,6 +24,15 @@ variables:
   tag_cost_center: ''
   tag_managed_by: bicep-ado
 
+  # Tier 3 — Governance
+  enable_cmek: false
+  enable_defender: false
+  project_number: '001'
+  # Persona RBAC — set to Entra ID group object IDs (leave empty to skip)
+  team_lead_group_id: ''
+  data_scientist_group_id: ''
+  ml_engineer_group_id: ''
+
   # Endpoints
   oep: online-endpoint
   bep: batch-endpoint

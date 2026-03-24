@@ -70,7 +70,13 @@ stages:
                     computeSubnetPrefix='$(compute_subnet_prefix)' \
                     peSubnetPrefix='$(pe_subnet_prefix)' \
                     tagCostCenter='$(tag_cost_center)' \
-                    tagManagedBy='$(tag_managed_by)'
+                    tagManagedBy='$(tag_managed_by)' \
+                    enableCMEK=$(enable_cmek) \
+                    enableDefender=$(enable_defender) \
+                    projectNumber='$(project_number)' \
+                    teamLeadGroupId='$(team_lead_group_id)' \
+                    dataScientistGroupId='$(data_scientist_group_id)' \
+                    mlEngineerGroupId='$(ml_engineer_group_id)'
 
   - stage: CheckOutBicepAndDeploy
     displayName: Deploy AML Workspace
@@ -123,5 +129,11 @@ stages:
                           computeSubnetPrefix='$(compute_subnet_prefix)' \
                           peSubnetPrefix='$(pe_subnet_prefix)' \
                           tagCostCenter='$(tag_cost_center)' \
-                          tagManagedBy='$(tag_managed_by)'
+                          tagManagedBy='$(tag_managed_by)' \
+                          enableCMEK=$(enable_cmek) \
+                          enableDefender=$(enable_defender) \
+                          projectNumber='$(project_number)' \
+                          teamLeadGroupId='$(team_lead_group_id)' \
+                          dataScientistGroupId='$(data_scientist_group_id)' \
+                          mlEngineerGroupId='$(ml_engineer_group_id)'
 

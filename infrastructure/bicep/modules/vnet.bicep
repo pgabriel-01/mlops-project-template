@@ -20,12 +20,21 @@ resource vnet 'Microsoft.Network/virtualNetworks@2024-05-01' = {
         name: 'default'
         properties: {
           addressPrefix: defaultSubnetPrefix
+          serviceEndpoints: [
+            { service: 'Microsoft.KeyVault' }
+            { service: 'Microsoft.Storage' }
+          ]
         }
       }
       {
         name: 'aml-compute'
         properties: {
           addressPrefix: computeSubnetPrefix
+          serviceEndpoints: [
+            { service: 'Microsoft.KeyVault' }
+            { service: 'Microsoft.Storage' }
+            { service: 'Microsoft.ContainerRegistry' }
+          ]
         }
       }
       {

@@ -111,6 +111,11 @@ jobs:
           echo "enable_monitoring=$ENABLE_MONITORING" >> $GITHUB_OUTPUT
           echo "enable_container_registry=$ENABLE_CR" >> $GITHUB_OUTPUT
           echo "enable_compute_cluster=$ENABLE_COMPUTE" >> $GITHUB_OUTPUT
+          echo "enable_vnet=$ENABLE_VNET" >> $GITHUB_OUTPUT
+          echo "vnet_address_prefix=$VNET_PREFIX" >> $GITHUB_OUTPUT
+          echo "default_subnet_prefix=$DEFAULT_SUBNET" >> $GITHUB_OUTPUT
+          echo "compute_subnet_prefix=$COMPUTE_SUBNET" >> $GITHUB_OUTPUT
+          echo "pe_subnet_prefix=$PE_SUBNET" >> $GITHUB_OUTPUT
           echo "tag_cost_center=$TAG_COST_CENTER" >> $GITHUB_OUTPUT
           echo "tag_managed_by=$TAG_MANAGED_BY" >> $GITHUB_OUTPUT
 
@@ -141,6 +146,11 @@ jobs:
               enableMonitoring=${{ steps.config.outputs.enable_monitoring }} \
               enableContainerRegistry=${{ steps.config.outputs.enable_container_registry }} \
               enableComputeCluster=${{ steps.config.outputs.enable_compute_cluster }} \
+              enableVNet=${{ steps.config.outputs.enable_vnet }} \
+              vnetAddressPrefix='${{ steps.config.outputs.vnet_address_prefix }}' \
+              defaultSubnetPrefix='${{ steps.config.outputs.default_subnet_prefix }}' \
+              computeSubnetPrefix='${{ steps.config.outputs.compute_subnet_prefix }}' \
+              peSubnetPrefix='${{ steps.config.outputs.pe_subnet_prefix }}' \
               tagCostCenter='${{ steps.config.outputs.tag_cost_center }}' \
               tagManagedBy='${{ steps.config.outputs.tag_managed_by }}'
 
@@ -180,6 +190,11 @@ jobs:
           ENABLE_MONITORING=$(yq eval '.variables.enable_monitoring' $COMMON_FILE)
           ENABLE_CR=$(yq eval '.variables.enable_container_registry' $COMMON_FILE)
           ENABLE_COMPUTE=$(yq eval '.variables.enable_aml_computecluster' $COMMON_FILE)
+          ENABLE_VNET=$(yq eval '.variables.enable_vnet' $COMMON_FILE)
+          VNET_PREFIX=$(yq eval '.variables.vnet_address_prefix' $COMMON_FILE)
+          DEFAULT_SUBNET=$(yq eval '.variables.default_subnet_prefix' $COMMON_FILE)
+          COMPUTE_SUBNET=$(yq eval '.variables.compute_subnet_prefix' $COMMON_FILE)
+          PE_SUBNET=$(yq eval '.variables.pe_subnet_prefix' $COMMON_FILE)
           TAG_COST_CENTER=$(yq eval '.variables.tag_cost_center' $COMMON_FILE)
           TAG_MANAGED_BY=$(yq eval '.variables.tag_managed_by' $COMMON_FILE)
           
@@ -196,6 +211,11 @@ jobs:
           echo "enable_monitoring=$ENABLE_MONITORING" >> $GITHUB_OUTPUT
           echo "enable_container_registry=$ENABLE_CR" >> $GITHUB_OUTPUT
           echo "enable_compute_cluster=$ENABLE_COMPUTE" >> $GITHUB_OUTPUT
+          echo "enable_vnet=$ENABLE_VNET" >> $GITHUB_OUTPUT
+          echo "vnet_address_prefix=$VNET_PREFIX" >> $GITHUB_OUTPUT
+          echo "default_subnet_prefix=$DEFAULT_SUBNET" >> $GITHUB_OUTPUT
+          echo "compute_subnet_prefix=$COMPUTE_SUBNET" >> $GITHUB_OUTPUT
+          echo "pe_subnet_prefix=$PE_SUBNET" >> $GITHUB_OUTPUT
           echo "tag_cost_center=$TAG_COST_CENTER" >> $GITHUB_OUTPUT
           echo "tag_managed_by=$TAG_MANAGED_BY" >> $GITHUB_OUTPUT
 
@@ -228,6 +248,11 @@ jobs:
               enableMonitoring=${{ steps.config.outputs.enable_monitoring }} \
               enableContainerRegistry=${{ steps.config.outputs.enable_container_registry }} \
               enableComputeCluster=${{ steps.config.outputs.enable_compute_cluster }} \
+              enableVNet=${{ steps.config.outputs.enable_vnet }} \
+              vnetAddressPrefix='${{ steps.config.outputs.vnet_address_prefix }}' \
+              defaultSubnetPrefix='${{ steps.config.outputs.default_subnet_prefix }}' \
+              computeSubnetPrefix='${{ steps.config.outputs.compute_subnet_prefix }}' \
+              peSubnetPrefix='${{ steps.config.outputs.pe_subnet_prefix }}' \
               tagCostCenter='${{ steps.config.outputs.tag_cost_center }}' \
               tagManagedBy='${{ steps.config.outputs.tag_managed_by }}'
 

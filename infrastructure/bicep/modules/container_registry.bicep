@@ -10,7 +10,7 @@ resource cr 'Microsoft.ContainerRegistry/registries@2025-11-01' = {
   }
 
   properties: {
-    adminUserEnabled: true
+    adminUserEnabled: false
   }
 
   tags: tags

@@ -92,11 +92,23 @@ jobs:
           PREFIX=$(yq eval '.variables.namespace' $CONFIG_FILE)
           POSTFIX=$(yq eval '.variables.postfix' $CONFIG_FILE)
           ENV=$(yq eval '.variables.environment' $CONFIG_FILE)
+          AML_COMPUTE_SKU=$(yq eval '.variables.aml_compute_sku' $CONFIG_FILE)
+          ENABLE_MONITORING=$(yq eval '.variables.enable_monitoring' $CONFIG_FILE)
+          ENABLE_CR=$(yq eval '.variables.enable_container_registry' $CONFIG_FILE)
+          ENABLE_COMPUTE=$(yq eval '.variables.enable_aml_computecluster' $CONFIG_FILE)
+          TAG_COST_CENTER=$(yq eval '.variables.tag_cost_center' $CONFIG_FILE)
+          TAG_MANAGED_BY=$(yq eval '.variables.tag_managed_by' $CONFIG_FILE)
           
           echo "location=$LOCATION" >> $GITHUB_OUTPUT
           echo "prefix=$PREFIX" >> $GITHUB_OUTPUT
           echo "postfix=$POSTFIX" >> $GITHUB_OUTPUT
           echo "environment=$ENV" >> $GITHUB_OUTPUT
+          echo "aml_compute_sku=$AML_COMPUTE_SKU" >> $GITHUB_OUTPUT
+          echo "enable_monitoring=$ENABLE_MONITORING" >> $GITHUB_OUTPUT
+          echo "enable_container_registry=$ENABLE_CR" >> $GITHUB_OUTPUT
+          echo "enable_compute_cluster=$ENABLE_COMPUTE" >> $GITHUB_OUTPUT
+          echo "tag_cost_center=$TAG_COST_CENTER" >> $GITHUB_OUTPUT
+          echo "tag_managed_by=$TAG_MANAGED_BY" >> $GITHUB_OUTPUT
 
       - name: Get Service Principal Object ID
         id: get_sp_info
@@ -120,7 +132,13 @@ jobs:
               prefix=${{ steps.config.outputs.prefix }} \
               postfix=${{ steps.config.outputs.postfix }} \
               env=${{ steps.config.outputs.environment }} \
-              adoServicePrincipalId=${{ steps.get_sp_info.outputs.sp_object_id }}
+              adoServicePrincipalId=${{ steps.get_sp_info.outputs.sp_object_id }} \
+              amlComputeSku=${{ steps.config.outputs.aml_compute_sku }} \
+              enableMonitoring=${{ steps.config.outputs.enable_monitoring }} \
+              enableContainerRegistry=${{ steps.config.outputs.enable_container_registry }} \
+              enableComputeCluster=${{ steps.config.outputs.enable_compute_cluster }} \
+              tagCostCenter='${{ steps.config.outputs.tag_cost_center }}' \
+              tagManagedBy='${{ steps.config.outputs.tag_managed_by }}'
 
   deploy:
     name: Deploy Infrastructure
@@ -155,11 +173,23 @@ jobs:
           PREFIX=$(yq eval '.variables.namespace' $CONFIG_FILE)
           POSTFIX=$(yq eval '.variables.postfix' $CONFIG_FILE)
           ENV=$(yq eval '.variables.environment' $CONFIG_FILE)
+          AML_COMPUTE_SKU=$(yq eval '.variables.aml_compute_sku' $CONFIG_FILE)
+          ENABLE_MONITORING=$(yq eval '.variables.enable_monitoring' $CONFIG_FILE)
+          ENABLE_CR=$(yq eval '.variables.enable_container_registry' $CONFIG_FILE)
+          ENABLE_COMPUTE=$(yq eval '.variables.enable_aml_computecluster' $CONFIG_FILE)
+          TAG_COST_CENTER=$(yq eval '.variables.tag_cost_center' $CONFIG_FILE)
+          TAG_MANAGED_BY=$(yq eval '.variables.tag_managed_by' $CONFIG_FILE)
           
           echo "location=$LOCATION" >> $GITHUB_OUTPUT
           echo "prefix=$PREFIX" >> $GITHUB_OUTPUT
           echo "postfix=$POSTFIX" >> $GITHUB_OUTPUT
           echo "environment=$ENV" >> $GITHUB_OUTPUT
+          echo "aml_compute_sku=$AML_COMPUTE_SKU" >> $GITHUB_OUTPUT
+          echo "enable_monitoring=$ENABLE_MONITORING" >> $GITHUB_OUTPUT
+          echo "enable_container_registry=$ENABLE_CR" >> $GITHUB_OUTPUT
+          echo "enable_compute_cluster=$ENABLE_COMPUTE" >> $GITHUB_OUTPUT
+          echo "tag_cost_center=$TAG_COST_CENTER" >> $GITHUB_OUTPUT
+          echo "tag_managed_by=$TAG_MANAGED_BY" >> $GITHUB_OUTPUT
 
       - name: Get Service Principal Object ID
         id: get_sp_info
@@ -185,7 +215,13 @@ jobs:
               prefix=${{ steps.config.outputs.prefix }} \
               postfix=${{ steps.config.outputs.postfix }} \
               env=${{ steps.config.outputs.environment }} \
-              adoServicePrincipalId=${{ steps.get_sp_info.outputs.sp_object_id }}
+              adoServicePrincipalId=${{ steps.get_sp_info.outputs.sp_object_id }} \
+              amlComputeSku=${{ steps.config.outputs.aml_compute_sku }} \
+              enableMonitoring=${{ steps.config.outputs.enable_monitoring }} \
+              enableContainerRegistry=${{ steps.config.outputs.enable_container_registry }} \
+              enableComputeCluster=${{ steps.config.outputs.enable_compute_cluster }} \
+              tagCostCenter='${{ steps.config.outputs.tag_cost_center }}' \
+              tagManagedBy='${{ steps.config.outputs.tag_managed_by }}'
 
       - name: Output Deployment Results
         run: |

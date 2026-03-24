@@ -130,6 +130,10 @@ jobs:
           echo "team_lead_group_id=$TEAM_LEAD_GROUP" >> $GITHUB_OUTPUT
           echo "data_scientist_group_id=$DS_GROUP" >> $GITHUB_OUTPUT
           echo "ml_engineer_group_id=$MLE_GROUP" >> $GITHUB_OUTPUT
+          ENABLE_AI_FOUNDRY=$(yq eval '.variables.enable_ai_foundry' $COMMON_FILE)
+          ENABLE_APIM=$(yq eval '.variables.enable_api_management' $COMMON_FILE)
+          echo "enable_ai_foundry=$ENABLE_AI_FOUNDRY" >> $GITHUB_OUTPUT
+          echo "enable_api_management=$ENABLE_APIM" >> $GITHUB_OUTPUT
 
       - name: Get Service Principal Object ID
         id: get_sp_info
@@ -170,7 +174,9 @@ jobs:
               projectNumber='${{ steps.config.outputs.project_number }}' \
               teamLeadGroupId='${{ steps.config.outputs.team_lead_group_id }}' \
               dataScientistGroupId='${{ steps.config.outputs.data_scientist_group_id }}' \
-              mlEngineerGroupId='${{ steps.config.outputs.ml_engineer_group_id }}'
+              mlEngineerGroupId='${{ steps.config.outputs.ml_engineer_group_id }}' \
+              enableAIFoundry=${{ steps.config.outputs.enable_ai_foundry }} \
+              enableAPIManagement=${{ steps.config.outputs.enable_api_management }}
 
   deploy:
     name: Deploy Infrastructure
@@ -248,6 +254,10 @@ jobs:
           echo "team_lead_group_id=$TEAM_LEAD_GROUP" >> $GITHUB_OUTPUT
           echo "data_scientist_group_id=$DS_GROUP" >> $GITHUB_OUTPUT
           echo "ml_engineer_group_id=$MLE_GROUP" >> $GITHUB_OUTPUT
+          ENABLE_AI_FOUNDRY=$(yq eval '.variables.enable_ai_foundry' $COMMON_FILE)
+          ENABLE_APIM=$(yq eval '.variables.enable_api_management' $COMMON_FILE)
+          echo "enable_ai_foundry=$ENABLE_AI_FOUNDRY" >> $GITHUB_OUTPUT
+          echo "enable_api_management=$ENABLE_APIM" >> $GITHUB_OUTPUT
 
       - name: Get Service Principal Object ID
         id: get_sp_info
@@ -290,7 +300,9 @@ jobs:
               projectNumber='${{ steps.config.outputs.project_number }}' \
               teamLeadGroupId='${{ steps.config.outputs.team_lead_group_id }}' \
               dataScientistGroupId='${{ steps.config.outputs.data_scientist_group_id }}' \
-              mlEngineerGroupId='${{ steps.config.outputs.ml_engineer_group_id }}'
+              mlEngineerGroupId='${{ steps.config.outputs.ml_engineer_group_id }}' \
+              enableAIFoundry=${{ steps.config.outputs.enable_ai_foundry }} \
+              enableAPIManagement=${{ steps.config.outputs.enable_api_management }}
 
       - name: Output Deployment Results
         run: |

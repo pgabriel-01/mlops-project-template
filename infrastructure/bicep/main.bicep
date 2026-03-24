@@ -23,6 +23,10 @@ param teamLeadGroupId string = ''
 param dataScientistGroupId string = ''
 param mlEngineerGroupId string = ''
 
+// Tier 4 — GenAI / Agent feature flags
+param enableAIFoundry bool = false
+param enableAPIManagement bool = false
+
 // Key Vault settings
 param kvEnablePurgeProtection bool = false
 param kvSoftDeleteRetentionDays int = 7
@@ -318,5 +322,48 @@ module defender './modules/defender.bicep' = if (enableDefender) {
     workspaceId: mlw.outputs.amlsId
     storageAccountId: st.outputs.stoacctOut
     location: location
+  }
+}
+
+// ============================================================
+// Phase 5 — GenAI: AI Foundry Hub, Project, API Management
+// ============================================================
+
+// AI Foundry Hub — AI Services + Hub workspace for GenAI workloads
+module aiFoundryHub './modules/ai_foundry_hub.bicep' = if (enableAIFoundry) {
+  name: 'ai-foundry-hub'
+  scope: resourceGroup(rg.name)
+  params: {
+    baseName: baseName
+    location: location
+    tags: tags
+    storageAccountId: st.outputs.stoacctOut
+    keyVaultId: kv.outputs.kvOut
+    managedIdentityId: mi.outputs.managedIdentityId
+    enablePublicAccess: !enableVNet
+  }
+}
+
+// AI Foundry Project — default project under the Hub
+module aiFoundryProject './modules/ai_foundry_project.bicep' = if (enableAIFoundry) {
+  name: 'ai-foundry-project'
+  scope: resourceGroup(rg.name)
+  params: {
+    baseName: baseName
+    location: location
+    tags: tags
+    aiHubId: enableAIFoundry ? aiFoundryHub.outputs.aiHubId : ''
+    managedIdentityId: mi.outputs.managedIdentityId
+  }
+}
+
+// API Management — AI Gateway for rate limiting and load balancing model endpoints
+module apim './modules/apim.bicep' = if (enableAPIManagement) {
+  name: 'apim'
+  scope: resourceGroup(rg.name)
+  params: {
+    baseName: baseName
+    location: location
+    tags: tags
   }
 }

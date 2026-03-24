@@ -33,6 +33,10 @@ variables:
   data_scientist_group_id: ''
   ml_engineer_group_id: ''
 
+  # Tier 4 — GenAI / Agent patterns
+  enable_ai_foundry: false
+  enable_api_management: false
+
   # Endpoints
   oep: online-endpoint
   bep: batch-endpoint

@@ -24,6 +24,15 @@ variables:
   tag_cost_center: ''
   tag_managed_by: bicep-ado
 
+  # Tier 3 — Governance
+  enable_cmek: false
+  enable_defender: false
+  project_number: '001'
+  # Persona RBAC — set to Entra ID group object IDs (leave empty to skip)
+  team_lead_group_id: ''
+  data_scientist_group_id: ''
+  ml_engineer_group_id: ''
+
   # Endpoints
   oep: online-endpoint
   bep: batch-endpoint
@@ -31,13 +40,13 @@ variables:
   # DO NOT TOUCH
 
   # For pipeline reference (uses env-specific postfix and environment)
-  resource_group: rg-$(namespace)-$(postfix)$(environment)
-  aml_workspace: mlw-$(namespace)-$(postfix)$(environment)
-  application_insights: mlw-$(namespace)-$(postfix)$(environment)
-  key_vault: kv-$(namespace)-$(postfix)$(environment)
-  container_registry: cr$(namespace)$(postfix)$(environment)
-  storage_account: st$(namespace)$(postfix)$(environment)
-  vnet_name: vnet-$(namespace)-$(postfix)$(environment)
+  resource_group: rg-$(namespace)-$(postfix)$(project_number)$(environment)
+  aml_workspace: mlw-$(namespace)-$(postfix)$(project_number)$(environment)
+  application_insights: mlw-$(namespace)-$(postfix)$(project_number)$(environment)
+  key_vault: kv-$(namespace)-$(postfix)$(project_number)$(environment)
+  container_registry: cr$(namespace)$(postfix)$(project_number)$(environment)
+  storage_account: st$(namespace)$(postfix)$(project_number)$(environment)
+  vnet_name: vnet-$(namespace)-$(postfix)$(project_number)$(environment)
 
   # For bicep reference
   bicep_workingdir: infrastructure/bicep

@@ -13,6 +13,16 @@ param enableContainerRegistry bool = true
 param enableComputeCluster bool = true
 param enableVNet bool = false
 
+// Tier 3 — Governance feature flags
+param enableCMEK bool = false
+param enableDefender bool = false
+param projectNumber string = '001'
+
+// Persona RBAC — Entra ID security group object IDs (empty = skip)
+param teamLeadGroupId string = ''
+param dataScientistGroupId string = ''
+param mlEngineerGroupId string = ''
+
 // Key Vault settings
 param kvEnablePurgeProtection bool = false
 param kvSoftDeleteRetentionDays int = 7
@@ -35,9 +45,10 @@ param tags object = {
   Name: prefix
   CostCenter: tagCostCenter
   ManagedBy: tagManagedBy
+  ProjectNumber: projectNumber
 }
 
-var baseName  = '${prefix}-${postfix}${env}'
+var baseName  = '${prefix}-${postfix}${projectNumber}${env}'
 var resourceGroupName = 'rg-${baseName}'
 
 // ============================================================
@@ -238,5 +249,74 @@ module mlwcc './modules/aml_computecluster.bicep' = if (enableComputeCluster) {
     vmSku: amlComputeSku
     managedIdentityId: mi.outputs.managedIdentityId
     subnetId: enableVNet ? vnet.outputs.computeSubnetId : ''
+  }
+}
+
+// ============================================================
+// Phase 4 — Governance: Persona RBAC, CMEK, Defender
+// ============================================================
+
+// Persona RBAC: Team Lead (full access)
+module rbacTeamLead './modules/rbac_persona_team_lead.bicep' = if (!empty(teamLeadGroupId)) {
+  name: 'rbac-team-lead'
+  scope: resourceGroup(rg.name)
+  params: {
+    principalId: teamLeadGroupId
+    principalType: 'Group'
+    workspaceId: mlw.outputs.amlsId
+    storageAccountId: st.outputs.stoacctOut
+    keyVaultId: kv.outputs.kvOut
+    containerRegistryId: enableContainerRegistry ? cr.outputs.crOut : ''
+  }
+}
+
+// Persona RBAC: Data Scientist (workspace + storage read)
+module rbacDataScientist './modules/rbac_persona_data_scientist.bicep' = if (!empty(dataScientistGroupId)) {
+  name: 'rbac-data-scientist'
+  scope: resourceGroup(rg.name)
+  params: {
+    principalId: dataScientistGroupId
+    principalType: 'Group'
+    workspaceId: mlw.outputs.amlsId
+    storageAccountId: st.outputs.stoacctOut
+    keyVaultId: kv.outputs.kvOut
+  }
+}
+
+// Persona RBAC: ML Engineer (workspace + storage + ACR push)
+module rbacMlEngineer './modules/rbac_persona_ml_engineer.bicep' = if (!empty(mlEngineerGroupId)) {
+  name: 'rbac-ml-engineer'
+  scope: resourceGroup(rg.name)
+  params: {
+    principalId: mlEngineerGroupId
+    principalType: 'Group'
+    workspaceId: mlw.outputs.amlsId
+    storageAccountId: st.outputs.stoacctOut
+    keyVaultId: kv.outputs.kvOut
+    containerRegistryId: enableContainerRegistry ? cr.outputs.crOut : ''
+  }
+}
+
+// CMEK — Customer Managed Key encryption (requires purge-protected Key Vault)
+module cmk './modules/cmk.bicep' = if (enableCMEK) {
+  name: 'cmk'
+  scope: resourceGroup(rg.name)
+  params: {
+    baseName: baseName
+    location: location
+    tags: tags
+    keyVaultId: kv.outputs.kvOut
+    managedIdentityPrincipalId: mi.outputs.managedIdentityPrincipalId
+  }
+}
+
+// Defender for AI — subscription-level and resource-level protection
+module defender './modules/defender.bicep' = if (enableDefender) {
+  name: 'defender'
+  scope: resourceGroup(rg.name)
+  params: {
+    workspaceId: mlw.outputs.amlsId
+    storageAccountId: st.outputs.stoacctOut
+    location: location
   }
 }

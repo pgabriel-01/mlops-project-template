@@ -118,6 +118,18 @@ jobs:
           echo "pe_subnet_prefix=$PE_SUBNET" >> $GITHUB_OUTPUT
           echo "tag_cost_center=$TAG_COST_CENTER" >> $GITHUB_OUTPUT
           echo "tag_managed_by=$TAG_MANAGED_BY" >> $GITHUB_OUTPUT
+          ENABLE_CMEK=$(yq eval '.variables.enable_cmek' $COMMON_FILE)
+          ENABLE_DEFENDER=$(yq eval '.variables.enable_defender' $COMMON_FILE)
+          PROJECT_NUMBER=$(yq eval '.variables.project_number' $COMMON_FILE)
+          TEAM_LEAD_GROUP=$(yq eval '.variables.team_lead_group_id' $COMMON_FILE)
+          DS_GROUP=$(yq eval '.variables.data_scientist_group_id' $COMMON_FILE)
+          MLE_GROUP=$(yq eval '.variables.ml_engineer_group_id' $COMMON_FILE)
+          echo "enable_cmek=$ENABLE_CMEK" >> $GITHUB_OUTPUT
+          echo "enable_defender=$ENABLE_DEFENDER" >> $GITHUB_OUTPUT
+          echo "project_number=$PROJECT_NUMBER" >> $GITHUB_OUTPUT
+          echo "team_lead_group_id=$TEAM_LEAD_GROUP" >> $GITHUB_OUTPUT
+          echo "data_scientist_group_id=$DS_GROUP" >> $GITHUB_OUTPUT
+          echo "ml_engineer_group_id=$MLE_GROUP" >> $GITHUB_OUTPUT
 
       - name: Get Service Principal Object ID
         id: get_sp_info
@@ -152,7 +164,13 @@ jobs:
               computeSubnetPrefix='${{ steps.config.outputs.compute_subnet_prefix }}' \
               peSubnetPrefix='${{ steps.config.outputs.pe_subnet_prefix }}' \
               tagCostCenter='${{ steps.config.outputs.tag_cost_center }}' \
-              tagManagedBy='${{ steps.config.outputs.tag_managed_by }}'
+              tagManagedBy='${{ steps.config.outputs.tag_managed_by }}' \
+              enableCMEK=${{ steps.config.outputs.enable_cmek }} \
+              enableDefender=${{ steps.config.outputs.enable_defender }} \
+              projectNumber='${{ steps.config.outputs.project_number }}' \
+              teamLeadGroupId='${{ steps.config.outputs.team_lead_group_id }}' \
+              dataScientistGroupId='${{ steps.config.outputs.data_scientist_group_id }}' \
+              mlEngineerGroupId='${{ steps.config.outputs.ml_engineer_group_id }}'
 
   deploy:
     name: Deploy Infrastructure
@@ -218,6 +236,18 @@ jobs:
           echo "pe_subnet_prefix=$PE_SUBNET" >> $GITHUB_OUTPUT
           echo "tag_cost_center=$TAG_COST_CENTER" >> $GITHUB_OUTPUT
           echo "tag_managed_by=$TAG_MANAGED_BY" >> $GITHUB_OUTPUT
+          ENABLE_CMEK=$(yq eval '.variables.enable_cmek' $COMMON_FILE)
+          ENABLE_DEFENDER=$(yq eval '.variables.enable_defender' $COMMON_FILE)
+          PROJECT_NUMBER=$(yq eval '.variables.project_number' $COMMON_FILE)
+          TEAM_LEAD_GROUP=$(yq eval '.variables.team_lead_group_id' $COMMON_FILE)
+          DS_GROUP=$(yq eval '.variables.data_scientist_group_id' $COMMON_FILE)
+          MLE_GROUP=$(yq eval '.variables.ml_engineer_group_id' $COMMON_FILE)
+          echo "enable_cmek=$ENABLE_CMEK" >> $GITHUB_OUTPUT
+          echo "enable_defender=$ENABLE_DEFENDER" >> $GITHUB_OUTPUT
+          echo "project_number=$PROJECT_NUMBER" >> $GITHUB_OUTPUT
+          echo "team_lead_group_id=$TEAM_LEAD_GROUP" >> $GITHUB_OUTPUT
+          echo "data_scientist_group_id=$DS_GROUP" >> $GITHUB_OUTPUT
+          echo "ml_engineer_group_id=$MLE_GROUP" >> $GITHUB_OUTPUT
 
       - name: Get Service Principal Object ID
         id: get_sp_info
@@ -254,7 +284,13 @@ jobs:
               computeSubnetPrefix='${{ steps.config.outputs.compute_subnet_prefix }}' \
               peSubnetPrefix='${{ steps.config.outputs.pe_subnet_prefix }}' \
               tagCostCenter='${{ steps.config.outputs.tag_cost_center }}' \
-              tagManagedBy='${{ steps.config.outputs.tag_managed_by }}'
+              tagManagedBy='${{ steps.config.outputs.tag_managed_by }}' \
+              enableCMEK=${{ steps.config.outputs.enable_cmek }} \
+              enableDefender=${{ steps.config.outputs.enable_defender }} \
+              projectNumber='${{ steps.config.outputs.project_number }}' \
+              teamLeadGroupId='${{ steps.config.outputs.team_lead_group_id }}' \
+              dataScientistGroupId='${{ steps.config.outputs.data_scientist_group_id }}' \
+              mlEngineerGroupId='${{ steps.config.outputs.ml_engineer_group_id }}'
 
       - name: Output Deployment Results
         run: |

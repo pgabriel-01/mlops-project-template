@@ -112,6 +112,17 @@ resource workspaceMsiAcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01
   }
 }
 
+// RBAC: Workspace MSI -> ACR Push (for image_build_compute to push built images)
+resource workspaceMsiAcrPush 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (hasContainerRegistry) {
+  name: guid(containerRegistry.id, managedIdentityPrincipalId, '8311e382-0749-4cb8-b61a-304f252e45ec')
+  scope: containerRegistry
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '8311e382-0749-4cb8-b61a-304f252e45ec') // AcrPush
+    principalId: managedIdentityPrincipalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
 // RBAC: ADO Service Principal -> Storage Blob Data Reader (for data registration)
 resource adoSpStorageBlobReader 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(adoServicePrincipalId)) {
   name: guid(storageAccount.id, adoServicePrincipalId, '2a2b9908-6ea1-4ae2-8e65-a410df84e7d1')

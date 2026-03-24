@@ -13,6 +13,13 @@ variables:
   enable_aml_computecluster: true
   enable_monitoring: false
   enable_container_registry: true
+  enable_vnet: false
+
+  # VNet settings (only used when enable_vnet: true)
+  vnet_address_prefix: '10.0.0.0/16'
+  default_subnet_prefix: '10.0.0.0/24'
+  compute_subnet_prefix: '10.0.1.0/24'
+  pe_subnet_prefix: '10.0.2.0/24'
   
   # Tags
   tag_cost_center: ''

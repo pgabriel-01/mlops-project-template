@@ -14,7 +14,7 @@ variables:
 trigger: none
 
 pool:
-  name: Default
+  vmImage: $(ap_vm_image)
 
 stages:
   - stage: Lint
@@ -81,7 +81,7 @@ stages:
       - deployment: DevDeployBicep
         displayName: Deploy Bicep
         pool:
-          name: Default
+          vmImage: $(ap_vm_image)
         environment: $(environment)
         strategy:
           runOnce:

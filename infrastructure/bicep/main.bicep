@@ -11,10 +11,17 @@ param amlComputeSku string = 'STANDARD_D16S_V3'
 param enableMonitoring bool = true
 param enableContainerRegistry bool = true
 param enableComputeCluster bool = true
+param enableVNet bool = false
 
 // Key Vault settings
 param kvEnablePurgeProtection bool = false
 param kvSoftDeleteRetentionDays int = 7
+
+// VNet settings (only used when enableVNet = true)
+param vnetAddressPrefix string = '10.0.0.0/16'
+param defaultSubnetPrefix string = '10.0.0.0/24'
+param computeSubnetPrefix string = '10.0.1.0/24'
+param peSubnetPrefix string = '10.0.2.0/24'
 
 // Tag parameters
 param tagCostCenter string = ''
@@ -33,10 +40,13 @@ param tags object = {
 var baseName  = '${prefix}-${postfix}${env}'
 var resourceGroupName = 'rg-${baseName}'
 
+// ============================================================
+// Phase 1 — Foundation: Resource Group, Managed Identity, VNet
+// ============================================================
+
 resource rg 'Microsoft.Resources/resourceGroups@2025-04-01' = {
   name: resourceGroupName
   location: location
-
   tags: tags
 }
 
@@ -51,6 +61,35 @@ module mi './modules/managed_identity.bicep' = {
   }
 }
 
+// VNet — conditional on enableVNet
+module vnet './modules/vnet.bicep' = if (enableVNet) {
+  name: 'vnet'
+  scope: resourceGroup(rg.name)
+  params: {
+    baseName: baseName
+    location: location
+    tags: tags
+    vnetAddressPrefix: vnetAddressPrefix
+    defaultSubnetPrefix: defaultSubnetPrefix
+    computeSubnetPrefix: computeSubnetPrefix
+    privateEndpointSubnetPrefix: peSubnetPrefix
+  }
+}
+
+// Private DNS Zones — conditional on enableVNet
+module dnsZones './modules/private_dns_zones.bicep' = if (enableVNet) {
+  name: 'dnsZones'
+  scope: resourceGroup(rg.name)
+  params: {
+    tags: tags
+    vnetId: enableVNet ? vnet.outputs.vnetId : ''
+  }
+}
+
+// ============================================================
+// Phase 2 — Core Infrastructure: Storage, KV, ACR, App Insights
+// ============================================================
+
 // Storage Account
 module st './modules/storage_account.bicep' = {
   name: 'st'
@@ -59,6 +98,11 @@ module st './modules/storage_account.bicep' = {
     baseName: '${uniqueString(rg.id)}${env}'
     location: location
     tags: tags
+    enableNetworkIsolation: enableVNet
+    allowedSubnetIds: enableVNet ? [
+      vnet.outputs.defaultSubnetId
+      vnet.outputs.computeSubnetId
+    ] : []
   }
 }
 
@@ -72,6 +116,11 @@ module kv './modules/key_vault.bicep' = {
     tags: tags
     enablePurgeProtection: kvEnablePurgeProtection
     softDeleteRetentionDays: kvSoftDeleteRetentionDays
+    enableNetworkIsolation: enableVNet
+    allowedSubnetIds: enableVNet ? [
+      vnet.outputs.defaultSubnetId
+      vnet.outputs.computeSubnetId
+    ] : []
   }
 }
 
@@ -94,8 +143,56 @@ module cr './modules/container_registry.bicep' = if (enableContainerRegistry) {
     baseName: '${uniqueString(rg.id)}${env}'
     location: location
     tags: tags
+    enableNetworkIsolation: enableVNet
   }
 }
+
+// Private Endpoints — conditional on enableVNet
+module peStorage './modules/private_endpoint.bicep' = if (enableVNet) {
+  name: 'pe-storage'
+  scope: resourceGroup(rg.name)
+  params: {
+    location: location
+    tags: tags
+    privateEndpointName: 'pe-st-${baseName}'
+    targetResourceId: st.outputs.stoacctOut
+    groupId: 'blob'
+    subnetId: enableVNet ? vnet.outputs.privateEndpointSubnetId : ''
+    privateDnsZoneId: enableVNet ? dnsZones.outputs.blobDnsZoneId : ''
+  }
+}
+
+module peKeyVault './modules/private_endpoint.bicep' = if (enableVNet) {
+  name: 'pe-kv'
+  scope: resourceGroup(rg.name)
+  params: {
+    location: location
+    tags: tags
+    privateEndpointName: 'pe-kv-${baseName}'
+    targetResourceId: kv.outputs.kvOut
+    groupId: 'vault'
+    subnetId: enableVNet ? vnet.outputs.privateEndpointSubnetId : ''
+    privateDnsZoneId: enableVNet ? dnsZones.outputs.kvDnsZoneId : ''
+  }
+}
+
+module peCr './modules/private_endpoint.bicep' = if (enableVNet && enableContainerRegistry) {
+  name: 'pe-cr'
+  scope: resourceGroup(rg.name)
+  params: {
+    location: location
+    tags: tags
+    privateEndpointName: 'pe-cr-${baseName}'
+    targetResourceId: enableContainerRegistry ? cr.outputs.crOut : ''
+    groupId: 'registry'
+    subnetId: enableVNet ? vnet.outputs.privateEndpointSubnetId : ''
+    privateDnsZoneId: enableVNet ? dnsZones.outputs.acrDnsZoneId : ''
+  }
+}
+
+// ============================================================
+// Phase 3 — AI Platform: AML Workspace, Compute, RBAC
+// ============================================================
 
 // AML workspace with user-assigned identity and RBAC
 module mlw './modules/aml_workspace.bicep' = {
@@ -111,7 +208,23 @@ module mlw './modules/aml_workspace.bicep' = {
     managedIdentityId: mi.outputs.managedIdentityId
     managedIdentityPrincipalId: mi.outputs.managedIdentityPrincipalId
     adoServicePrincipalId: adoServicePrincipalId
+    enableNetworkIsolation: enableVNet
     tags: tags
+  }
+}
+
+// AML workspace private endpoint
+module peMlw './modules/private_endpoint.bicep' = if (enableVNet) {
+  name: 'pe-mlw'
+  scope: resourceGroup(rg.name)
+  params: {
+    location: location
+    tags: tags
+    privateEndpointName: 'pe-mlw-${baseName}'
+    targetResourceId: mlw.outputs.amlsId
+    groupId: 'amlworkspace'
+    subnetId: enableVNet ? vnet.outputs.privateEndpointSubnetId : ''
+    privateDnsZoneId: enableVNet ? dnsZones.outputs.amlDnsZoneId : ''
   }
 }
 
@@ -124,5 +237,6 @@ module mlwcc './modules/aml_computecluster.bicep' = if (enableComputeCluster) {
     workspaceName: mlw.outputs.amlsName
     vmSku: amlComputeSku
     managedIdentityId: mi.outputs.managedIdentityId
+    subnetId: enableVNet ? vnet.outputs.computeSubnetId : ''
   }
 }

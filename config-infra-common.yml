@@ -11,7 +11,14 @@ variables:
   enable_aml_computecluster: true
   enable_monitoring: true
   enable_container_registry: true
+  enable_vnet: false
   aml_compute_sku: STANDARD_D16S_V3
+
+  # VNet settings (only used when enable_vnet: true)
+  vnet_address_prefix: '10.0.0.0/16'
+  default_subnet_prefix: '10.0.0.0/24'
+  compute_subnet_prefix: '10.0.1.0/24'
+  pe_subnet_prefix: '10.0.2.0/24'
 
   # Tags
   tag_cost_center: ''

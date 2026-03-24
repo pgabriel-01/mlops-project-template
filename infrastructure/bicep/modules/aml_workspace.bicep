@@ -8,6 +8,7 @@ param tags object
 param managedIdentityId string
 param managedIdentityPrincipalId string
 param adoServicePrincipalId string = ''
+param enableNetworkIsolation bool = false
 
 // Extract resource IDs for RBAC assignments
 var storageAccountName = split(stoacctid, '/')[8]
@@ -37,7 +38,7 @@ resource amls 'Microsoft.MachineLearningServices/workspaces@2024-04-01' = {
     containerRegistry: hasContainerRegistry ? crid : null
     primaryUserAssignedIdentity: managedIdentityId
     systemDatastoresAuthMode: 'identity'  // Use managed identity for datastore auth instead of access keys
-    publicNetworkAccess: 'Enabled'
+    publicNetworkAccess: enableNetworkIsolation ? 'Disabled' : 'Enabled'
     imageBuildCompute: hasContainerRegistry ? 'cpu-cluster' : null
     v1LegacyMode: false
     encryption: {

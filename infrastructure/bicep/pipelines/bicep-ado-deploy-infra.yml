@@ -64,6 +64,11 @@ stages:
                     enableMonitoring=$(enable_monitoring) \
                     enableContainerRegistry=$(enable_container_registry) \
                     enableComputeCluster=$(enable_aml_computecluster) \
+                    enableVNet=$(enable_vnet) \
+                    vnetAddressPrefix='$(vnet_address_prefix)' \
+                    defaultSubnetPrefix='$(default_subnet_prefix)' \
+                    computeSubnetPrefix='$(compute_subnet_prefix)' \
+                    peSubnetPrefix='$(pe_subnet_prefix)' \
                     tagCostCenter='$(tag_cost_center)' \
                     tagManagedBy='$(tag_managed_by)'
 
@@ -112,6 +117,11 @@ stages:
                           enableMonitoring=$(enable_monitoring) \
                           enableContainerRegistry=$(enable_container_registry) \
                           enableComputeCluster=$(enable_aml_computecluster) \
+                          enableVNet=$(enable_vnet) \
+                          vnetAddressPrefix='$(vnet_address_prefix)' \
+                          defaultSubnetPrefix='$(default_subnet_prefix)' \
+                          computeSubnetPrefix='$(compute_subnet_prefix)' \
+                          peSubnetPrefix='$(pe_subnet_prefix)' \
                           tagCostCenter='$(tag_cost_center)' \
                           tagManagedBy='$(tag_managed_by)'
 

@@ -76,7 +76,7 @@ stages:
       - deployment: DevDeployBicep
         displayName: Deploy Bicep
         pool:
-          vmImage: $(ap_vm_image)
+          name: Default
         environment: $(environment)
         strategy:
           runOnce:

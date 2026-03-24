@@ -14,7 +14,7 @@ variables:
 trigger: none
 
 pool:
-  name: Default
+  vmImage: $(ap_vm_image)
 
 stages:
   - stage: Lint

@@ -88,16 +88,20 @@ jobs:
           fi
           
           # Parse YAML config (simple example - adjust based on your config structure)
-          LOCATION=$(yq eval '.variables.location' $CONFIG_FILE)
-          PREFIX=$(yq eval '.variables.namespace' $CONFIG_FILE)
-          POSTFIX=$(yq eval '.variables.postfix' $CONFIG_FILE)
-          ENV=$(yq eval '.variables.environment' $CONFIG_FILE)
-          AML_COMPUTE_SKU=$(yq eval '.variables.aml_compute_sku' $CONFIG_FILE)
-          ENABLE_MONITORING=$(yq eval '.variables.enable_monitoring' $CONFIG_FILE)
-          ENABLE_CR=$(yq eval '.variables.enable_container_registry' $CONFIG_FILE)
-          ENABLE_COMPUTE=$(yq eval '.variables.enable_aml_computecluster' $CONFIG_FILE)
-          TAG_COST_CENTER=$(yq eval '.variables.tag_cost_center' $CONFIG_FILE)
-          TAG_MANAGED_BY=$(yq eval '.variables.tag_managed_by' $CONFIG_FILE)
+          # Read shared values from common config
+          COMMON_FILE="config-infra-common.yml"
+          PREFIX=$(yq eval '.variables.namespace' $COMMON_FILE)
+          AML_COMPUTE_SKU=$(yq eval '.variables.aml_compute_sku' $COMMON_FILE)
+          ENABLE_MONITORING=$(yq eval '.variables.enable_monitoring' $COMMON_FILE)
+          ENABLE_CR=$(yq eval '.variables.enable_container_registry' $COMMON_FILE)
+          ENABLE_COMPUTE=$(yq eval '.variables.enable_aml_computecluster' $COMMON_FILE)
+          TAG_COST_CENTER=$(yq eval '.variables.tag_cost_center' $COMMON_FILE)
+          TAG_MANAGED_BY=$(yq eval '.variables.tag_managed_by' $COMMON_FILE)
+          
+          # Read env-specific overrides (array format: - name: key / value: val)
+          LOCATION=$(yq eval '.variables[] | select(.name == "location") | .value' $CONFIG_FILE)
+          POSTFIX=$(yq eval '.variables[] | select(.name == "postfix") | .value' $CONFIG_FILE)
+          ENV=$(yq eval '.variables[] | select(.name == "environment") | .value' $CONFIG_FILE)
           
           echo "location=$LOCATION" >> $GITHUB_OUTPUT
           echo "prefix=$PREFIX" >> $GITHUB_OUTPUT
@@ -169,16 +173,20 @@ jobs:
           fi
           
           # Parse YAML config
-          LOCATION=$(yq eval '.variables.location' $CONFIG_FILE)
-          PREFIX=$(yq eval '.variables.namespace' $CONFIG_FILE)
-          POSTFIX=$(yq eval '.variables.postfix' $CONFIG_FILE)
-          ENV=$(yq eval '.variables.environment' $CONFIG_FILE)
-          AML_COMPUTE_SKU=$(yq eval '.variables.aml_compute_sku' $CONFIG_FILE)
-          ENABLE_MONITORING=$(yq eval '.variables.enable_monitoring' $CONFIG_FILE)
-          ENABLE_CR=$(yq eval '.variables.enable_container_registry' $CONFIG_FILE)
-          ENABLE_COMPUTE=$(yq eval '.variables.enable_aml_computecluster' $CONFIG_FILE)
-          TAG_COST_CENTER=$(yq eval '.variables.tag_cost_center' $CONFIG_FILE)
-          TAG_MANAGED_BY=$(yq eval '.variables.tag_managed_by' $CONFIG_FILE)
+          # Read shared values from common config
+          COMMON_FILE="config-infra-common.yml"
+          PREFIX=$(yq eval '.variables.namespace' $COMMON_FILE)
+          AML_COMPUTE_SKU=$(yq eval '.variables.aml_compute_sku' $COMMON_FILE)
+          ENABLE_MONITORING=$(yq eval '.variables.enable_monitoring' $COMMON_FILE)
+          ENABLE_CR=$(yq eval '.variables.enable_container_registry' $COMMON_FILE)
+          ENABLE_COMPUTE=$(yq eval '.variables.enable_aml_computecluster' $COMMON_FILE)
+          TAG_COST_CENTER=$(yq eval '.variables.tag_cost_center' $COMMON_FILE)
+          TAG_MANAGED_BY=$(yq eval '.variables.tag_managed_by' $COMMON_FILE)
+          
+          # Read env-specific overrides (array format: - name: key / value: val)
+          LOCATION=$(yq eval '.variables[] | select(.name == "location") | .value' $CONFIG_FILE)
+          POSTFIX=$(yq eval '.variables[] | select(.name == "postfix") | .value' $CONFIG_FILE)
+          ENV=$(yq eval '.variables[] | select(.name == "environment") | .value' $CONFIG_FILE)
           
           echo "location=$LOCATION" >> $GITHUB_OUTPUT
           echo "prefix=$PREFIX" >> $GITHUB_OUTPUT

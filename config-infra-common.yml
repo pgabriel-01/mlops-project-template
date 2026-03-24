@@ -11,7 +11,7 @@ variables:
   enable_aml_computecluster: true
   enable_monitoring: true
   enable_container_registry: true
-  aml_compute_sku: STANDARD_D16S_V3
+  aml_compute_sku: STANDARD_D2S_V3
 
   # Tags
   tag_cost_center: ''

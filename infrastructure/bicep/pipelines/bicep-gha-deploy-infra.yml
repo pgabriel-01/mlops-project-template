@@ -132,8 +132,10 @@ jobs:
           echo "ml_engineer_group_id=$MLE_GROUP" >> $GITHUB_OUTPUT
           ENABLE_AI_FOUNDRY=$(yq eval '.variables.enable_ai_foundry' $COMMON_FILE)
           ENABLE_APIM=$(yq eval '.variables.enable_api_management' $COMMON_FILE)
+          KV_ENABLE_PURGE=$(yq eval '.variables.kv_enable_purge_protection' $COMMON_FILE)
           echo "enable_ai_foundry=$ENABLE_AI_FOUNDRY" >> $GITHUB_OUTPUT
           echo "enable_api_management=$ENABLE_APIM" >> $GITHUB_OUTPUT
+          echo "kv_enable_purge_protection=$KV_ENABLE_PURGE" >> $GITHUB_OUTPUT
 
       - name: Get Service Principal Object ID
         id: get_sp_info
@@ -176,7 +178,8 @@ jobs:
               dataScientistGroupId='${{ steps.config.outputs.data_scientist_group_id }}' \
               mlEngineerGroupId='${{ steps.config.outputs.ml_engineer_group_id }}' \
               enableAIFoundry=${{ steps.config.outputs.enable_ai_foundry }} \
-              enableAPIManagement=${{ steps.config.outputs.enable_api_management }}
+              enableAPIManagement=${{ steps.config.outputs.enable_api_management }} \
+              kvEnablePurgeProtection=${{ steps.config.outputs.kv_enable_purge_protection }}
 
   deploy:
     name: Deploy Infrastructure
@@ -256,8 +259,10 @@ jobs:
           echo "ml_engineer_group_id=$MLE_GROUP" >> $GITHUB_OUTPUT
           ENABLE_AI_FOUNDRY=$(yq eval '.variables.enable_ai_foundry' $COMMON_FILE)
           ENABLE_APIM=$(yq eval '.variables.enable_api_management' $COMMON_FILE)
+          KV_ENABLE_PURGE=$(yq eval '.variables.kv_enable_purge_protection' $COMMON_FILE)
           echo "enable_ai_foundry=$ENABLE_AI_FOUNDRY" >> $GITHUB_OUTPUT
           echo "enable_api_management=$ENABLE_APIM" >> $GITHUB_OUTPUT
+          echo "kv_enable_purge_protection=$KV_ENABLE_PURGE" >> $GITHUB_OUTPUT
 
       - name: Get Service Principal Object ID
         id: get_sp_info
@@ -302,7 +307,8 @@ jobs:
               dataScientistGroupId='${{ steps.config.outputs.data_scientist_group_id }}' \
               mlEngineerGroupId='${{ steps.config.outputs.ml_engineer_group_id }}' \
               enableAIFoundry=${{ steps.config.outputs.enable_ai_foundry }} \
-              enableAPIManagement=${{ steps.config.outputs.enable_api_management }}
+              enableAPIManagement=${{ steps.config.outputs.enable_api_management }} \
+              kvEnablePurgeProtection=${{ steps.config.outputs.kv_enable_purge_protection }}
 
       - name: Output Deployment Results
         run: |

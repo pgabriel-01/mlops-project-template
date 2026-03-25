@@ -78,7 +78,8 @@ stages:
                     dataScientistGroupId='$(data_scientist_group_id)' \
                     mlEngineerGroupId='$(ml_engineer_group_id)' \
                     enableAIFoundry=$(enable_ai_foundry) \
-                    enableAPIManagement=$(enable_api_management)
+                    enableAPIManagement=$(enable_api_management) \
+                    kvEnablePurgeProtection=$(kv_enable_purge_protection)
 
   - stage: CheckOutBicepAndDeploy
     displayName: Deploy AML Workspace
@@ -139,5 +140,6 @@ stages:
                           dataScientistGroupId='$(data_scientist_group_id)' \
                           mlEngineerGroupId='$(ml_engineer_group_id)' \
                           enableAIFoundry=$(enable_ai_foundry) \
-                          enableAPIManagement=$(enable_api_management)
+                          enableAPIManagement=$(enable_api_management) \
+                          kvEnablePurgeProtection=$(kv_enable_purge_protection)
 

@@ -18,6 +18,16 @@ resource defenderForStorage 'Microsoft.Security/defenderForStorageSettings@2025-
   scope: storageAccount
   properties: {
     isEnabled: true
+    malwareScanning: {
+      onUpload: {
+        isEnabled: true
+        capGBPerMonth: 5000
+      }
+    }
+    sensitiveDataDiscovery: {
+      isEnabled: true
+    }
+    overrideSubscriptionLevelSettings: true
   }
 }
 

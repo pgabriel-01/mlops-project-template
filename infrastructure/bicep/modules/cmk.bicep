@@ -45,7 +45,7 @@ resource cmkKey 'Microsoft.KeyVault/vaults/keys@2025-05-01' = {
 }
 
 // Disk Encryption Set — used by compute and storage for CMEK
-resource des 'Microsoft.Compute/diskEncryptionSets@2024-07-01' = {
+resource des 'Microsoft.Compute/diskEncryptionSets@2024-03-02' = {
   name: 'des-${baseName}'
   location: location
   identity: {

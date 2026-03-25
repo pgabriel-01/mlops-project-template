@@ -1,5 +1,5 @@
-// Microsoft Defender for AI — enables threat protection on ML workspace and storage.
-// Uses the per-resource security settings (Advanced Threat Protection).
+// Microsoft Defender for Storage — enables threat protection on the ML storage account.
+// Uses the per-resource Defender for Storage settings (replaces deprecated advancedThreatProtection).
 
 param workspaceId string
 param storageAccountId string
@@ -8,17 +8,17 @@ param location string
 // Extract resource names from IDs
 var storageName = last(split(storageAccountId, '/'))
 
-// Enable Advanced Threat Protection on the Storage Account
-resource storageAtp 'Microsoft.Security/advancedThreatProtection@2019-01-01' = {
+resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' existing = {
+  name: storageName
+}
+
+// Enable Defender for Storage on the Storage Account
+resource defenderForStorage 'Microsoft.Security/defenderForStorageSettings@2025-01-01' = {
   name: 'current'
   scope: storageAccount
   properties: {
     isEnabled: true
   }
-}
-
-resource storageAccount 'Microsoft.Storage/storageAccounts@2023-05-01' existing = {
-  name: storageName
 }
 
 output defenderEnabled bool = true

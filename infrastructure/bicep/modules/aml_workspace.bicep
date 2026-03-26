@@ -9,6 +9,7 @@ param managedIdentityId string
 param managedIdentityPrincipalId string
 param adoServicePrincipalId string = ''
 param enableNetworkIsolation bool = false
+param computeSubnetId string = ''
 
 // Extract resource IDs for RBAC assignments
 var storageAccountName = split(stoacctid, '/')[8]
@@ -39,7 +40,10 @@ resource amls 'Microsoft.MachineLearningServices/workspaces@2024-04-01' = {
     primaryUserAssignedIdentity: managedIdentityId
     systemDatastoresAuthMode: 'identity'  // Use managed identity for datastore auth instead of access keys
     publicNetworkAccess: enableNetworkIsolation ? 'Disabled' : 'Enabled'
-    imageBuildCompute: hasContainerRegistry ? 'cpu-cluster' : null
+    serverlessComputeSettings: enableNetworkIsolation ? {
+      serverlessComputeCustomSubnet: computeSubnetId
+      serverlessComputeNoPublicIP: true
+    } : null
     v1LegacyMode: false
     encryption: {
       status: 'Disabled'

@@ -244,6 +244,7 @@ module mlw './modules/aml_workspace.bicep' = {
     managedIdentityPrincipalId: mi.outputs.managedIdentityPrincipalId
     adoServicePrincipalId: adoServicePrincipalId
     enableNetworkIsolation: enableVNet
+    computeSubnetId: enableVNet ? vnet.outputs.computeSubnetId : ''
     tags: tags
   }
 }

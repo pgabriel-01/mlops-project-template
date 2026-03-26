@@ -31,6 +31,7 @@ variables:
   # Tier 3 — Governance
   enable_cmek: false
   enable_defender: false
+  enable_aml_registry: true
   kv_enable_purge_protection: false
   project_number: '001'
   # Persona RBAC — set to Entra ID group object IDs (leave empty to skip)

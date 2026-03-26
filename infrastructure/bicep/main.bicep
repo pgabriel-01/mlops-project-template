@@ -23,6 +23,9 @@ param teamLeadGroupId string = ''
 param dataScientistGroupId string = ''
 param mlEngineerGroupId string = ''
 
+// AML Registry — cross-workspace model promotion
+param enableAMLRegistry bool = false
+
 // Tier 4 — GenAI / Agent feature flags
 param enableAIFoundry bool = false
 param enableAPIManagement bool = false
@@ -274,6 +277,35 @@ module mlwcc './modules/aml_computecluster.bicep' = if (enableComputeCluster) {
     vmSku: amlComputeSku
     managedIdentityId: mi.outputs.managedIdentityId
     subnetId: enableVNet ? vnet.outputs.computeSubnetId : ''
+  }
+}
+
+// AML Registry — cross-workspace model/asset promotion
+module amlReg './modules/aml_registry.bicep' = if (enableAMLRegistry) {
+  name: 'aml-registry'
+  scope: resourceGroup(rg.name)
+  params: {
+    baseName: baseName
+    location: location
+    tags: tags
+    enablePublicAccess: !enableVNet
+    managedIdentityPrincipalId: mi.outputs.managedIdentityPrincipalId
+    adoServicePrincipalId: adoServicePrincipalId
+  }
+}
+
+// AML Registry private endpoint
+module peAmlReg './modules/private_endpoint.bicep' = if (enableVNet && enableAMLRegistry) {
+  name: 'pe-aml-registry'
+  scope: resourceGroup(rg.name)
+  params: {
+    location: location
+    tags: tags
+    privateEndpointName: 'pe-reg-${baseName}'
+    targetResourceId: enableAMLRegistry ? amlReg.outputs.registryId : ''
+    groupId: 'amlregistry'
+    subnetId: enableVNet ? vnet.outputs.privateEndpointSubnetId : ''
+    privateDnsZoneId: enableVNet ? dnsZones.outputs.amlDnsZoneId : ''
   }
 }
 

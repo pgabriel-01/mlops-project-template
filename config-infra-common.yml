@@ -20,6 +20,10 @@ variables:
   compute_subnet_prefix: '10.0.1.0/24'
   pe_subnet_prefix: '10.0.2.0/24'
 
+  # Bastion settings (only used when enable_bastion: true; requires enable_vnet)
+  enable_bastion: false
+  bastion_subnet_prefix: '10.0.3.0/26'
+
   # Tags
   tag_cost_center: ''
   tag_managed_by: bicep-ado

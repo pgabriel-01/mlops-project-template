@@ -136,6 +136,10 @@ jobs:
           echo "enable_ai_foundry=$ENABLE_AI_FOUNDRY" >> $GITHUB_OUTPUT
           echo "enable_api_management=$ENABLE_APIM" >> $GITHUB_OUTPUT
           echo "kv_enable_purge_protection=$KV_ENABLE_PURGE" >> $GITHUB_OUTPUT
+          ENABLE_BASTION=$(yq eval '.variables.enable_bastion' $COMMON_FILE)
+          BASTION_SUBNET=$(yq eval '.variables.bastion_subnet_prefix' $COMMON_FILE)
+          echo "enable_bastion=$ENABLE_BASTION" >> $GITHUB_OUTPUT
+          echo "bastion_subnet_prefix=$BASTION_SUBNET" >> $GITHUB_OUTPUT
 
       - name: Get Service Principal Object ID
         id: get_sp_info
@@ -179,7 +183,10 @@ jobs:
               mlEngineerGroupId='${{ steps.config.outputs.ml_engineer_group_id }}' \
               enableAIFoundry=${{ steps.config.outputs.enable_ai_foundry }} \
               enableAPIManagement=${{ steps.config.outputs.enable_api_management }} \
-              kvEnablePurgeProtection=${{ steps.config.outputs.kv_enable_purge_protection }}
+              kvEnablePurgeProtection=${{ steps.config.outputs.kv_enable_purge_protection }} \
+              enableBastion=${{ steps.config.outputs.enable_bastion }} \
+              bastionSubnetPrefix='${{ steps.config.outputs.bastion_subnet_prefix }}' \
+              bastionAdminPassword='${{ secrets.BASTION_ADMIN_PASSWORD }}'
 
   deploy:
     name: Deploy Infrastructure
@@ -263,6 +270,10 @@ jobs:
           echo "enable_ai_foundry=$ENABLE_AI_FOUNDRY" >> $GITHUB_OUTPUT
           echo "enable_api_management=$ENABLE_APIM" >> $GITHUB_OUTPUT
           echo "kv_enable_purge_protection=$KV_ENABLE_PURGE" >> $GITHUB_OUTPUT
+          ENABLE_BASTION=$(yq eval '.variables.enable_bastion' $COMMON_FILE)
+          BASTION_SUBNET=$(yq eval '.variables.bastion_subnet_prefix' $COMMON_FILE)
+          echo "enable_bastion=$ENABLE_BASTION" >> $GITHUB_OUTPUT
+          echo "bastion_subnet_prefix=$BASTION_SUBNET" >> $GITHUB_OUTPUT
 
       - name: Get Service Principal Object ID
         id: get_sp_info
@@ -308,7 +319,10 @@ jobs:
               mlEngineerGroupId='${{ steps.config.outputs.ml_engineer_group_id }}' \
               enableAIFoundry=${{ steps.config.outputs.enable_ai_foundry }} \
               enableAPIManagement=${{ steps.config.outputs.enable_api_management }} \
-              kvEnablePurgeProtection=${{ steps.config.outputs.kv_enable_purge_protection }}
+              kvEnablePurgeProtection=${{ steps.config.outputs.kv_enable_purge_protection }} \
+              enableBastion=${{ steps.config.outputs.enable_bastion }} \
+              bastionSubnetPrefix='${{ steps.config.outputs.bastion_subnet_prefix }}' \
+              bastionAdminPassword='${{ secrets.BASTION_ADMIN_PASSWORD }}'
 
       - name: Output Deployment Results
         run: |

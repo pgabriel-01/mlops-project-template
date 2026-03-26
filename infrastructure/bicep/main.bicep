@@ -37,6 +37,12 @@ param defaultSubnetPrefix string = '10.0.0.0/24'
 param computeSubnetPrefix string = '10.0.1.0/24'
 param peSubnetPrefix string = '10.0.2.0/24'
 
+// Bastion settings (only used when enableBastion = true; requires enableVNet)
+param enableBastion bool = false
+param bastionSubnetPrefix string = '10.0.3.0/26'
+@secure()
+param bastionAdminPassword string = ''
+
 // Tag parameters
 param tagCostCenter string = ''
 param tagManagedBy string = 'bicep'
@@ -88,6 +94,8 @@ module vnet './modules/vnet.bicep' = if (enableVNet) {
     defaultSubnetPrefix: defaultSubnetPrefix
     computeSubnetPrefix: computeSubnetPrefix
     privateEndpointSubnetPrefix: peSubnetPrefix
+    enableBastion: enableBastion
+    bastionSubnetPrefix: bastionSubnetPrefix
   }
 }
 
@@ -98,6 +106,20 @@ module dnsZones './modules/private_dns_zones.bicep' = if (enableVNet) {
   params: {
     tags: tags
     vnetId: enableVNet ? vnet.outputs.vnetId : ''
+  }
+}
+
+// Bastion + Jump Box — conditional on enableBastion (requires enableVNet)
+module bastion './modules/bastion.bicep' = if (enableVNet && enableBastion) {
+  name: 'bastion'
+  scope: resourceGroup(rg.name)
+  params: {
+    baseName: baseName
+    location: location
+    tags: tags
+    bastionSubnetId: (enableVNet && enableBastion) ? vnet.outputs.bastionSubnetId : ''
+    defaultSubnetId: enableVNet ? vnet.outputs.defaultSubnetId : ''
+    adminPassword: bastionAdminPassword
   }
 }
 

@@ -11,8 +11,8 @@ variables:
   enable_aml_computecluster: true
   enable_monitoring: true
   enable_container_registry: true
-  enable_vnet: false
-  aml_compute_sku: STANDARD_D16S_V3
+  enable_vnet: true
+  aml_compute_sku: STANDARD_D2S_V3
 
   # VNet settings (only used when enable_vnet: true)
   vnet_address_prefix: '10.0.0.0/16'
@@ -21,7 +21,7 @@ variables:
   pe_subnet_prefix: '10.0.2.0/24'
 
   # Bastion settings (only used when enable_bastion: true; requires enable_vnet)
-  enable_bastion: false
+  enable_bastion: true
   bastion_subnet_prefix: '10.0.3.0/26'
 
   # Tags
@@ -31,6 +31,7 @@ variables:
   # Tier 3 — Governance
   enable_cmek: false
   enable_defender: false
+  enable_aml_registry: false
   kv_enable_purge_protection: false
   project_number: '001'
   # Persona RBAC — set to Entra ID group object IDs (leave empty to skip)

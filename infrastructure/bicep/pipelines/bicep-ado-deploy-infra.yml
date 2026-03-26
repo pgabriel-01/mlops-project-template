@@ -77,6 +77,7 @@ stages:
                     teamLeadGroupId='$(team_lead_group_id)' \
                     dataScientistGroupId='$(data_scientist_group_id)' \
                     mlEngineerGroupId='$(ml_engineer_group_id)' \
+                    enableAMLRegistry=$(enable_aml_registry) \
                     enableAIFoundry=$(enable_ai_foundry) \
                     enableAPIManagement=$(enable_api_management) \
                     kvEnablePurgeProtection=$(kv_enable_purge_protection) \
@@ -139,6 +140,7 @@ stages:
                           teamLeadGroupId='$(team_lead_group_id)' \
                           dataScientistGroupId='$(data_scientist_group_id)' \
                           mlEngineerGroupId='$(ml_engineer_group_id)' \
+                          enableAMLRegistry=$(enable_aml_registry) \
                           enableAIFoundry=$(enable_ai_foundry) \
                           enableAPIManagement=$(enable_api_management) \
                           kvEnablePurgeProtection=$(kv_enable_purge_protection) \

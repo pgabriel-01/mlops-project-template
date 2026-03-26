@@ -133,9 +133,11 @@ jobs:
           ENABLE_AI_FOUNDRY=$(yq eval '.variables.enable_ai_foundry' $COMMON_FILE)
           ENABLE_APIM=$(yq eval '.variables.enable_api_management' $COMMON_FILE)
           KV_ENABLE_PURGE=$(yq eval '.variables.kv_enable_purge_protection' $COMMON_FILE)
+          ENABLE_AML_REGISTRY=$(yq eval '.variables.enable_aml_registry' $COMMON_FILE)
           echo "enable_ai_foundry=$ENABLE_AI_FOUNDRY" >> $GITHUB_OUTPUT
           echo "enable_api_management=$ENABLE_APIM" >> $GITHUB_OUTPUT
           echo "kv_enable_purge_protection=$KV_ENABLE_PURGE" >> $GITHUB_OUTPUT
+          echo "enable_aml_registry=$ENABLE_AML_REGISTRY" >> $GITHUB_OUTPUT
           ENABLE_BASTION=$(yq eval '.variables.enable_bastion' $COMMON_FILE)
           BASTION_SUBNET=$(yq eval '.variables.bastion_subnet_prefix' $COMMON_FILE)
           echo "enable_bastion=$ENABLE_BASTION" >> $GITHUB_OUTPUT
@@ -181,6 +183,7 @@ jobs:
               teamLeadGroupId='${{ steps.config.outputs.team_lead_group_id }}' \
               dataScientistGroupId='${{ steps.config.outputs.data_scientist_group_id }}' \
               mlEngineerGroupId='${{ steps.config.outputs.ml_engineer_group_id }}' \
+              enableAMLRegistry=${{ steps.config.outputs.enable_aml_registry }} \
               enableAIFoundry=${{ steps.config.outputs.enable_ai_foundry }} \
               enableAPIManagement=${{ steps.config.outputs.enable_api_management }} \
               kvEnablePurgeProtection=${{ steps.config.outputs.kv_enable_purge_protection }} \
@@ -266,9 +269,11 @@ jobs:
           ENABLE_AI_FOUNDRY=$(yq eval '.variables.enable_ai_foundry' $COMMON_FILE)
           ENABLE_APIM=$(yq eval '.variables.enable_api_management' $COMMON_FILE)
           KV_ENABLE_PURGE=$(yq eval '.variables.kv_enable_purge_protection' $COMMON_FILE)
+          ENABLE_AML_REGISTRY=$(yq eval '.variables.enable_aml_registry' $COMMON_FILE)
           echo "enable_ai_foundry=$ENABLE_AI_FOUNDRY" >> $GITHUB_OUTPUT
           echo "enable_api_management=$ENABLE_APIM" >> $GITHUB_OUTPUT
           echo "kv_enable_purge_protection=$KV_ENABLE_PURGE" >> $GITHUB_OUTPUT
+          echo "enable_aml_registry=$ENABLE_AML_REGISTRY" >> $GITHUB_OUTPUT
           ENABLE_BASTION=$(yq eval '.variables.enable_bastion' $COMMON_FILE)
           BASTION_SUBNET=$(yq eval '.variables.bastion_subnet_prefix' $COMMON_FILE)
           echo "enable_bastion=$ENABLE_BASTION" >> $GITHUB_OUTPUT
@@ -316,6 +321,7 @@ jobs:
               teamLeadGroupId='${{ steps.config.outputs.team_lead_group_id }}' \
               dataScientistGroupId='${{ steps.config.outputs.data_scientist_group_id }}' \
               mlEngineerGroupId='${{ steps.config.outputs.ml_engineer_group_id }}' \
+              enableAMLRegistry=${{ steps.config.outputs.enable_aml_registry }} \
               enableAIFoundry=${{ steps.config.outputs.enable_ai_foundry }} \
               enableAPIManagement=${{ steps.config.outputs.enable_api_management }} \
               kvEnablePurgeProtection=${{ steps.config.outputs.kv_enable_purge_protection }} \

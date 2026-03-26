@@ -39,12 +39,12 @@ resource amlRegistry 'Microsoft.MachineLearningServices/registries@2024-04-01' =
 }
 
 // AzureML Registry User — allows workspace MI to pull assets from the registry
-// Role ID: 1823dd4f-9b8a-4ab6-8f43-b4a9f96d3700
+// Role ID: 1823dd4f-9b8c-4ab6-ab4e-7397a3684615
 resource rbacMiRegistryUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(managedIdentityPrincipalId)) {
-  name: guid(amlRegistry.id, managedIdentityPrincipalId, '1823dd4f-9b8a-4ab6-8f43-b4a9f96d3700')
+  name: guid(amlRegistry.id, managedIdentityPrincipalId, '1823dd4f-9b8c-4ab6-ab4e-7397a3684615')
   scope: amlRegistry
   properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '1823dd4f-9b8a-4ab6-8f43-b4a9f96d3700')
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '1823dd4f-9b8c-4ab6-ab4e-7397a3684615')
     principalId: managedIdentityPrincipalId
     principalType: 'ServicePrincipal'
   }
@@ -52,10 +52,10 @@ resource rbacMiRegistryUser 'Microsoft.Authorization/roleAssignments@2022-04-01'
 
 // AzureML Registry User — allows the ADO/GHA service principal to push/pull assets
 resource rbacSpnRegistryUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(adoServicePrincipalId)) {
-  name: guid(amlRegistry.id, adoServicePrincipalId, '1823dd4f-9b8a-4ab6-8f43-b4a9f96d3700')
+  name: guid(amlRegistry.id, adoServicePrincipalId, '1823dd4f-9b8c-4ab6-ab4e-7397a3684615')
   scope: amlRegistry
   properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '1823dd4f-9b8a-4ab6-8f43-b4a9f96d3700')
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '1823dd4f-9b8c-4ab6-ab4e-7397a3684615')
     principalId: adoServicePrincipalId
     principalType: 'ServicePrincipal'
   }

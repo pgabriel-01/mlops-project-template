@@ -185,8 +185,7 @@ jobs:
               enableAPIManagement=${{ steps.config.outputs.enable_api_management }} \
               kvEnablePurgeProtection=${{ steps.config.outputs.kv_enable_purge_protection }} \
               enableBastion=${{ steps.config.outputs.enable_bastion }} \
-              bastionSubnetPrefix='${{ steps.config.outputs.bastion_subnet_prefix }}' \
-              bastionAdminPassword='${{ secrets.BASTION_ADMIN_PASSWORD }}'
+              bastionSubnetPrefix='${{ steps.config.outputs.bastion_subnet_prefix }}'
 
   deploy:
     name: Deploy Infrastructure
@@ -321,8 +320,7 @@ jobs:
               enableAPIManagement=${{ steps.config.outputs.enable_api_management }} \
               kvEnablePurgeProtection=${{ steps.config.outputs.kv_enable_purge_protection }} \
               enableBastion=${{ steps.config.outputs.enable_bastion }} \
-              bastionSubnetPrefix='${{ steps.config.outputs.bastion_subnet_prefix }}' \
-              bastionAdminPassword='${{ secrets.BASTION_ADMIN_PASSWORD }}'
+              bastionSubnetPrefix='${{ steps.config.outputs.bastion_subnet_prefix }}'
 
       - name: Output Deployment Results
         run: |

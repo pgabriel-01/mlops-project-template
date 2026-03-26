@@ -81,8 +81,7 @@ stages:
                     enableAPIManagement=$(enable_api_management) \
                     kvEnablePurgeProtection=$(kv_enable_purge_protection) \
                     enableBastion=$(enable_bastion) \
-                    bastionSubnetPrefix='$(bastion_subnet_prefix)' \
-                    bastionAdminPassword='$(bastion_admin_password)'
+                    bastionSubnetPrefix='$(bastion_subnet_prefix)'
 
   - stage: CheckOutBicepAndDeploy
     displayName: Deploy AML Workspace
@@ -93,7 +92,7 @@ stages:
       - deployment: DevDeployBicep
         displayName: Deploy Bicep
         pool:
-          vmImage: $(ap_vm_image)
+          name: Default
         environment: $(environment)
         strategy:
           runOnce:
@@ -146,6 +145,5 @@ stages:
                           enableAPIManagement=$(enable_api_management) \
                           kvEnablePurgeProtection=$(kv_enable_purge_protection) \
                           enableBastion=$(enable_bastion) \
-                          bastionSubnetPrefix='$(bastion_subnet_prefix)' \
-                          bastionAdminPassword='$(bastion_admin_password)'
+                          bastionSubnetPrefix='$(bastion_subnet_prefix)'
 

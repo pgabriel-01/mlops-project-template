@@ -8,6 +8,35 @@ param privateEndpointSubnetPrefix string = '10.0.2.0/24'
 param bastionSubnetPrefix string = '10.0.3.0/26'
 param enableBastion bool = false
 
+// NAT Gateway for outbound internet from aml-compute subnet
+// Required for serverless compute image builds with no public IP
+resource natGatewayPip 'Microsoft.Network/publicIPAddresses@2024-05-01' = {
+  name: 'pip-nat-${baseName}'
+  location: location
+  sku: {
+    name: 'Standard'
+  }
+  properties: {
+    publicIPAllocationMethod: 'Static'
+  }
+  tags: tags
+}
+
+resource natGateway 'Microsoft.Network/natGateways@2024-05-01' = {
+  name: 'nat-${baseName}'
+  location: location
+  sku: {
+    name: 'Standard'
+  }
+  properties: {
+    publicIpAddresses: [
+      { id: natGatewayPip.id }
+    ]
+    idleTimeoutInMinutes: 10
+  }
+  tags: tags
+}
+
 var coreSubnets = [
   {
     name: 'default'
@@ -23,6 +52,9 @@ var coreSubnets = [
     name: 'aml-compute'
     properties: {
       addressPrefix: computeSubnetPrefix
+      natGateway: {
+        id: natGateway.id
+      }
       serviceEndpoints: [
         { service: 'Microsoft.KeyVault' }
         { service: 'Microsoft.Storage' }

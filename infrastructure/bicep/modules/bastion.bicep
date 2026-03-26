@@ -1,17 +1,19 @@
-// Azure Bastion + Jump Box VM for accessing VNet-isolated AML workspace.
-// Deploys: Public IP, Bastion Host (Basic SKU), NSG, NIC, and Ubuntu jump box VM.
+// Azure Bastion + Windows Jump Box VM for accessing VNet-isolated AML workspace.
+// Deploys: Public IP, Bastion Host (Basic SKU), NSG, NIC, Windows Server 2022 jump box.
+// Password is auto-generated and stored in Key Vault — never exposed in pipelines.
 
 param baseName string
 param location string
 param tags object
 param bastionSubnetId string
 param defaultSubnetId string
+param keyVaultName string
 param adminUsername string = 'azureuser'
+param vmSize string = 'Standard_D2s_v3'
 
-@secure()
-param adminPassword string
-
-param vmSize string = 'Standard_B2s'
+// Generate a deterministic password that meets Azure complexity requirements
+// uniqueString produces 13 lowercase alphanum chars — we append fixed complexity chars
+var generatedPassword = '${uniqueString(resourceGroup().id, baseName, 'bastion')}P@1x'
 
 // Public IP for Bastion
 resource bastionPip 'Microsoft.Network/publicIPAddresses@2024-05-01' = {
@@ -51,7 +53,7 @@ resource bastion 'Microsoft.Network/bastionHosts@2024-05-01' = {
   }
 }
 
-// NSG for the jump box
+// NSG for the jump box — RDP from VNet only (Bastion initiates RDP)
 resource jumpBoxNsg 'Microsoft.Network/networkSecurityGroups@2024-05-01' = {
   name: 'nsg-jumpbox-${baseName}'
   location: location
@@ -84,7 +86,7 @@ resource jumpBoxNic 'Microsoft.Network/networkInterfaces@2024-05-01' = {
   }
 }
 
-// Jump box VM (Ubuntu 22.04 LTS)
+// Jump box VM — Windows Server 2022 Datacenter (Desktop Experience)
 resource jumpBoxVm 'Microsoft.Compute/virtualMachines@2024-03-01' = {
   name: 'vm-jumpbox-${baseName}'
   location: location
@@ -96,16 +98,13 @@ resource jumpBoxVm 'Microsoft.Compute/virtualMachines@2024-03-01' = {
     osProfile: {
       computerName: 'jumpbox'
       adminUsername: adminUsername
-      adminPassword: adminPassword
-      linuxConfiguration: {
-        disablePasswordAuthentication: false
-      }
+      adminPassword: generatedPassword
     }
     storageProfile: {
       imageReference: {
-        publisher: 'Canonical'
-        offer: '0001-com-ubuntu-server-jammy'
-        sku: '22_04-lts-gen2'
+        publisher: 'MicrosoftWindowsServer'
+        offer: 'WindowsServer'
+        sku: '2022-datacenter-g2'
         version: 'latest'
       }
       osDisk: {
@@ -122,6 +121,21 @@ resource jumpBoxVm 'Microsoft.Compute/virtualMachines@2024-03-01' = {
         }
       ]
     }
+  }
+}
+
+// Reference existing Key Vault to store the generated password
+resource kv 'Microsoft.KeyVault/vaults@2025-05-01' existing = {
+  name: keyVaultName
+}
+
+// Store the admin password as a Key Vault secret
+resource bastionSecret 'Microsoft.KeyVault/vaults/secrets@2025-05-01' = {
+  parent: kv
+  name: 'bastion-admin-password'
+  properties: {
+    value: generatedPassword
+    contentType: 'text/plain'
   }
 }
 

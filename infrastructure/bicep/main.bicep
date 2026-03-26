@@ -40,8 +40,6 @@ param peSubnetPrefix string = '10.0.2.0/24'
 // Bastion settings (only used when enableBastion = true; requires enableVNet)
 param enableBastion bool = false
 param bastionSubnetPrefix string = '10.0.3.0/26'
-@secure()
-param bastionAdminPassword string = ''
 
 // Tag parameters
 param tagCostCenter string = ''
@@ -119,7 +117,7 @@ module bastion './modules/bastion.bicep' = if (enableVNet && enableBastion) {
     tags: tags
     bastionSubnetId: (enableVNet && enableBastion) ? vnet.outputs.bastionSubnetId : ''
     defaultSubnetId: enableVNet ? vnet.outputs.defaultSubnetId : ''
-    adminPassword: bastionAdminPassword
+    keyVaultName: kv.outputs.kvName
   }
 }
 

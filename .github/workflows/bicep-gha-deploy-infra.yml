@@ -1,0 +1,284 @@
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the MIT License.
+
+name: Bicep - Deploy Infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform (deploy or destroy)'
+        required: true
+        default: 'deploy'
+        type: choice
+        options:
+          - deploy
+          - destroy
+      wait_for_destroy:
+        description: 'Wait for resource group deletion to complete'
+        required: false
+        default: true
+        type: boolean
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'infrastructure/bicep/**'
+  pull_request:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'infrastructure/bicep/**'
+
+env:
+  config_env: "none"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  set-env-branch:
+    runs-on: ubuntu-latest
+    outputs:
+      config-file: ${{ steps.set-output-defaults.outputs.config-file }}
+      environment: ${{ steps.set-output-defaults.outputs.environment }}
+    steps:
+      - id: set-prod-branch
+        name: set-prod-branch
+        if: ${{ github.ref == 'refs/heads/main'}}
+        run: |
+          echo "config_env=config-infra-prod.yml" >> $GITHUB_ENV
+          echo "env_name=prod" >> $GITHUB_ENV
+      - id: set-dev-branch
+        name: setdevbranch
+        if: ${{ github.ref != 'refs/heads/main'}}
+        run: |
+          echo "config_env=config-infra-dev.yml" >> $GITHUB_ENV
+          echo "env_name=dev" >> $GITHUB_ENV
+      - id: set-output-defaults
+        name: set-output-defaults
+        run: |
+          echo "config-file=$config_env" >> $GITHUB_OUTPUT
+          echo "environment=$env_name" >> $GITHUB_OUTPUT
+
+  get-config:
+    needs: set-env-branch
+    permissions:
+      contents: read
+    uses: Azure/mlops-templates/.github/workflows/read-yaml.yml@main
+    with:
+      file_name: ${{ needs.set-env-branch.outputs.config-file}}
+
+  lint:
+    name: Lint Bicep Code
+    needs: [get-config, set-env-branch]
+    runs-on: ubuntu-latest
+    env:
+      BICEP_DIR: infrastructure/bicep
+      BICEP_FILE: main.bicep
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Bicep CLI
+        run: |
+          # Install Bicep CLI directly (no Azure login needed for linting)
+          curl -Lo bicep https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64
+          chmod +x ./bicep
+          sudo mv ./bicep /usr/local/bin/bicep
+          bicep --version
+
+      - name: Lint Bicep
+        run: |
+          bicep build $BICEP_DIR/$BICEP_FILE
+
+  validate:
+    name: Validate Bicep Deployment
+    runs-on: ubuntu-latest
+    needs: [get-config, set-env-branch, lint]
+    if: github.event_name != 'pull_request'
+    env:
+      BICEP_DIR: infrastructure/bicep
+      BICEP_FILE: main.bicep
+    outputs:
+      sp_object_id: ${{ steps.get_sp_info.outputs.sp_object_id }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get Service Principal Object ID
+        id: get_sp_info
+        run: |
+          # Get the SP object ID from the client ID
+          SP_OBJECT_ID=$(az ad sp show --id ${{ secrets.AZURE_CLIENT_ID }} --query id -o tsv)
+          
+          echo "Service Principal Client ID: ${{ secrets.AZURE_CLIENT_ID }}"
+          echo "Service Principal Object ID: $SP_OBJECT_ID"
+          echo "sp_object_id=$SP_OBJECT_ID" >> $GITHUB_OUTPUT
+
+      - name: Generate Parameters File
+        run: |
+          cat > $BICEP_DIR/parameters.json << EOF
+          {
+            "\$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+            "contentVersion": "1.0.0.0",
+            "parameters": {
+              "prefix": { "value": "${{ needs.get-config.outputs.namespace }}" },
+              "postfix": { "value": "${{ needs.get-config.outputs.postfix }}" },
+              "env": { "value": "${{ needs.get-config.outputs.environment }}" },
+              "location": { "value": "${{ needs.get-config.outputs.location }}" },
+              "adoServicePrincipalId": { "value": "${{ steps.get_sp_info.outputs.sp_object_id }}" },
+              "amlComputeSku": { "value": "${{ needs.get-config.outputs.aml_compute_sku }}" },
+              "enableVNet": { "value": ${{ needs.get-config.outputs.enable_vnet }} },
+              "vnetAddressPrefix": { "value": "${{ needs.get-config.outputs.vnet_address_prefix }}" },
+              "defaultSubnetPrefix": { "value": "${{ needs.get-config.outputs.default_subnet_prefix }}" },
+              "computeSubnetPrefix": { "value": "${{ needs.get-config.outputs.compute_subnet_prefix }}" },
+              "peSubnetPrefix": { "value": "${{ needs.get-config.outputs.pe_subnet_prefix }}" },
+              "enableContainerRegistry": { "value": ${{ needs.get-config.outputs.enable_container_registry }} },
+              "tagCostCenter": { "value": "${{ needs.get-config.outputs.tag_cost_center }}" },
+              "tagManagedBy": { "value": "${{ needs.get-config.outputs.tag_managed_by }}" }
+            }
+          }
+          EOF
+          echo "Generated parameters.json:"
+          cat $BICEP_DIR/parameters.json
+
+      - name: Validate Bicep Deployment
+        run: |
+          az deployment sub validate \
+            --name "bicep-gha-${{ github.run_number }}" \
+            --location ${{ needs.get-config.outputs.location }} \
+            --template-file $BICEP_DIR/$BICEP_FILE \
+            --parameters @$BICEP_DIR/parameters.json
+
+  deploy:
+    name: Deploy Infrastructure
+    runs-on: ubuntu-latest
+    needs: [get-config, set-env-branch, lint, validate]
+    if: github.event_name != 'pull_request' && github.event.inputs.action != 'destroy'
+    environment: ${{ needs.set-env-branch.outputs.environment }}
+    env:
+      BICEP_DIR: infrastructure/bicep
+      BICEP_FILE: main.bicep
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get Service Principal Object ID
+        id: get_sp_info
+        run: |
+          SP_OBJECT_ID=$(az ad sp show --id ${{ secrets.AZURE_CLIENT_ID }} --query id -o tsv)
+          
+          echo "Service Principal Client ID: ${{ secrets.AZURE_CLIENT_ID }}"
+          echo "Service Principal Object ID: $SP_OBJECT_ID"
+          echo "sp_object_id=$SP_OBJECT_ID" >> $GITHUB_OUTPUT
+
+      - name: Generate Parameters File
+        run: |
+          cat > $BICEP_DIR/parameters.json << EOF
+          {
+            "\$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+            "contentVersion": "1.0.0.0",
+            "parameters": {
+              "prefix": { "value": "${{ needs.get-config.outputs.namespace }}" },
+              "postfix": { "value": "${{ needs.get-config.outputs.postfix }}" },
+              "env": { "value": "${{ needs.get-config.outputs.environment }}" },
+              "location": { "value": "${{ needs.get-config.outputs.location }}" },
+              "adoServicePrincipalId": { "value": "${{ steps.get_sp_info.outputs.sp_object_id }}" },
+              "amlComputeSku": { "value": "${{ needs.get-config.outputs.aml_compute_sku }}" },
+              "enableVNet": { "value": ${{ needs.get-config.outputs.enable_vnet }} },
+              "vnetAddressPrefix": { "value": "${{ needs.get-config.outputs.vnet_address_prefix }}" },
+              "defaultSubnetPrefix": { "value": "${{ needs.get-config.outputs.default_subnet_prefix }}" },
+              "computeSubnetPrefix": { "value": "${{ needs.get-config.outputs.compute_subnet_prefix }}" },
+              "peSubnetPrefix": { "value": "${{ needs.get-config.outputs.pe_subnet_prefix }}" },
+              "enableContainerRegistry": { "value": ${{ needs.get-config.outputs.enable_container_registry }} },
+              "tagCostCenter": { "value": "${{ needs.get-config.outputs.tag_cost_center }}" },
+              "tagManagedBy": { "value": "${{ needs.get-config.outputs.tag_managed_by }}" }
+            }
+          }
+          EOF
+          echo "Generated parameters.json:"
+          cat $BICEP_DIR/parameters.json
+
+      - name: Deploy Bicep Template
+        run: |
+          echo "Deploying to ${{ needs.set-env-branch.outputs.environment }} environment..."
+          
+          az deployment sub create \
+            --name "bicep-gha-${{ github.run_number }}" \
+            --location ${{ needs.get-config.outputs.location }} \
+            --template-file $BICEP_DIR/$BICEP_FILE \
+            --parameters @$BICEP_DIR/parameters.json
+
+      - name: Output Deployment Results
+        run: |
+          echo "Deployment completed successfully!"
+          az deployment sub show \
+            --name "bicep-gha-${{ github.run_number }}" \
+            --query properties.outputs
+
+  destroy:
+    name: Destroy Infrastructure
+    runs-on: ubuntu-latest
+    needs: [get-config, set-env-branch]
+    if: github.event.inputs.action == 'destroy'
+    environment: ${{ needs.set-env-branch.outputs.environment }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Delete Resource Group
+        run: |
+          echo "Destroying ${{ needs.set-env-branch.outputs.environment }} environment..."
+          
+          RG_NAME="rg-${{ needs.get-config.outputs.namespace }}-${{ needs.get-config.outputs.postfix }}${{ needs.get-config.outputs.environment }}"
+          MLW_NAME="mlw-${{ needs.get-config.outputs.namespace }}-${{ needs.get-config.outputs.postfix }}${{ needs.get-config.outputs.environment }}"
+          
+          echo "Deleting resource group: $RG_NAME"
+          
+          # Check if we should wait for deletion to complete
+          if [ "${{ github.event.inputs.wait_for_destroy }}" == "true" ]; then
+            echo "Waiting for resource group deletion to complete..."
+            az group delete --name $RG_NAME --yes
+            echo "Resource group $RG_NAME has been deleted!"
+            
+            # Purge soft-deleted ML Workspace
+            echo "Purging soft-deleted ML Workspace..."
+            az ml workspace delete --name $MLW_NAME --resource-group $RG_NAME --permanently-delete --yes 2>/dev/null || true
+            
+            # Purge any soft-deleted Key Vaults to allow redeployment
+            echo "Purging soft-deleted Key Vaults..."
+            DELETED_KVS=$(az keyvault list-deleted --query "[?contains(properties.vaultId, '$RG_NAME')].name" -o tsv 2>/dev/null || true)
+            for KV_NAME in $DELETED_KVS; do
+              echo "Purging Key Vault: $KV_NAME"
+              az keyvault purge --name $KV_NAME --location ${{ needs.get-config.outputs.location }} --no-wait || true
+            done
+            echo "Cleanup complete!"
+          else
+            az group delete --name $RG_NAME --yes --no-wait
+            echo "Resource group deletion initiated (async)!"
+          fi

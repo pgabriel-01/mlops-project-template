@@ -103,6 +103,17 @@ resource "azurerm_machine_learning_workspace" "mlw" {
   ]
 }
 
+resource "azapi_update_resource" "identity_based_system_datastores" {
+  type        = "Microsoft.MachineLearningServices/workspaces@2025-06-01"
+  resource_id = azurerm_machine_learning_workspace.mlw.id
+
+  body = {
+    properties = {
+      systemDatastoresAuthMode = "identity"
+    }
+  }
+}
+
 # Grant the workspace system-assigned managed identity access to storage account
 resource "azurerm_role_assignment" "mlw_system_storage_blob_data_contributor" {
   scope                = var.storage_account_id
@@ -176,6 +187,10 @@ resource "azurerm_machine_learning_compute_cluster" "adl_aml_ws_compute_cluster"
     type         = "UserAssigned"
     identity_ids = [azurerm_user_assigned_identity.mlw_uai.id]
   }
+
+  depends_on = [
+    azapi_update_resource.identity_based_system_datastores
+  ]
 
   scale_settings {
     min_node_count                       = 0

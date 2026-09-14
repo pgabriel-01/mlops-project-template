@@ -153,6 +153,27 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
         terraform = (ROOT / "infrastructure/terraform/aml_deploy.tf").read_text()
         self.assertIn("depends_on = [\n    module.key_vault\n  ]", terraform)
 
+    def test_workspace_system_datastores_use_identity_authentication(self):
+        root = (ROOT / "infrastructure/terraform/main.tf").read_text()
+        self.assertIn('source  = "Azure/azapi"', root)
+
+        workspace = (
+            ROOT / "infrastructure/terraform/modules/aml-workspace/main.tf"
+        ).read_text()
+        self.assertIn(
+            'resource "azapi_update_resource" "identity_based_system_datastores"',
+            workspace,
+        )
+        self.assertIn(
+            'type        = "Microsoft.MachineLearningServices/workspaces@2025-06-01"',
+            workspace,
+        )
+        self.assertIn('systemDatastoresAuthMode = "identity"', workspace)
+        self.assertIn(
+            "azapi_update_resource.identity_based_system_datastores",
+            workspace,
+        )
+
     def test_no_live_azure_devops_identifiers_are_committed(self):
         checked_paths = [ROOT / "config-infra-common.yml", *ENVIRONMENT_CONFIGS.values()]
         for path in checked_paths:

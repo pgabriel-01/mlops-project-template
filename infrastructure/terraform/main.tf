@@ -6,6 +6,10 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 4.52.0"
     }
+    azapi = {
+      source  = "Azure/azapi"
+      version = "~> 2.0"
+    }
     random = {
       source  = "hashicorp/random"
       version = "~> 3.7.2"
@@ -30,6 +34,8 @@ provider "azurerm" {
   use_oidc            = true
   storage_use_azuread = true # Use Azure AD authentication for storage operations instead of keys
 }
+
+provider "azapi" {}
 
 data "azurerm_client_config" "current" {}
 

@@ -1,5 +1,9 @@
 output "name" {
   value = azurerm_machine_learning_workspace.mlw.name
+
+  depends_on = [
+    azapi_update_resource.identity_based_system_datastores
+  ]
 }
 
 output "user_assigned_identity_id" {

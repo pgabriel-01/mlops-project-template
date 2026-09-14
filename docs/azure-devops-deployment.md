@@ -20,7 +20,7 @@ templates for platform bootstrap, Terraform, and AML CLI v2. Pipeline parameter
 `mlopsTemplatesRef` defaults to `refs/heads/main`; before
 `pgabriel-01/mlops-templates#1` is merged, queue pipelines with its documented
 immutable commit SHA,
-`29ceabeb9d282f986a644c7e9de10bba41caaa71`. Release tags or commit SHAs are
+`bf38cd9d82f141cbc1518beb361b7d314194c643`. Release tags or commit SHAs are
 recommended for controlled promotion.
 
 ## Prerequisites
@@ -96,6 +96,10 @@ Review these values before deployment:
 - the `mlopsTemplatesRef` queue-time parameter;
 - the `agentPoolName` queue-time parameter.
 
+`terraform_version` is set to `1.16.x`. The reusable resolver selects the latest
+stable patch in the Terraform 1.16 release line before invoking
+`TerraformInstaller@1`.
+
 DEV defaults to public endpoints and Microsoft-hosted agents. Test and Prod
 default to private endpoints and the environment's
 `managed_devops_pool_alias`. `agentPoolName` overrides that default when a
@@ -164,7 +168,7 @@ python3 -m compileall classical/aml-cli-v2/data-science/src \
 ```
 
 Compile or preview each Azure DevOps YAML pipeline against the pinned template
-commit `29ceabeb9d282f986a644c7e9de10bba41caaa71` to verify
+commit `bf38cd9d82f141cbc1518beb361b7d314194c643` to verify
 repository-resource authorization, template paths, and parameters.
 
 Run the project contract tests:

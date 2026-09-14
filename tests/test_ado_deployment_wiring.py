@@ -133,7 +133,7 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
     def test_documentation_names_immutable_template_dependency(self):
         documentation = (ROOT / "docs/azure-devops-deployment.md").read_text()
         self.assertIn(
-            "29ceabeb9d282f986a644c7e9de10bba41caaa71",
+            "bf38cd9d82f141cbc1518beb361b7d314194c643",
             documentation,
         )
 
@@ -176,7 +176,7 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
 
     def test_terraform_cli_uses_current_runtime_pin(self):
         common = (ROOT / "config-infra-common.yml").read_text()
-        self.assertIn("terraform_version: 1.16.2", common)
+        self.assertIn("terraform_version: 1.16.x", common)
 
     def test_no_live_azure_devops_identifiers_are_committed(self):
         checked_paths = [ROOT / "config-infra-common.yml", *ENVIRONMENT_CONFIGS.values()]

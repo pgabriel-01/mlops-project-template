@@ -8,8 +8,8 @@ resource "azurerm_key_vault" "kv" {
   sku_name                   = "standard"
   purge_protection_enabled   = true
   soft_delete_retention_days = 90
-  rbac_authorization_enabled  = true
-  
+  rbac_authorization_enabled = true
+
   # Network ACL configured inline
   network_acls {
     default_action             = var.enable_private_endpoints ? "Deny" : "Allow"

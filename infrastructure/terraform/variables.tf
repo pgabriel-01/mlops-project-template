@@ -18,8 +18,15 @@ variable "postfix" {
   description = "Postfix for module names"
 }
 
+variable "project_number" {
+  type        = string
+  description = "Project number included in resource names"
+  default     = "001"
+}
+
 variable "enable_aml_computecluster" {
   description = "Variable to enable or disable AML compute cluster"
+  type        = bool
 }
 
 variable "aml_compute_sku" {
@@ -34,9 +41,9 @@ variable "enable_monitoring" {
   default     = false
 }
 
-variable "github_actions_service_principal_id" {
+variable "cicd_principal_object_id" {
   type        = string
-  description = "The object ID of the GitHub Actions service principal for role assignments"
+  description = "The object ID of the Azure DevOps service connection principal for role assignments"
   default     = ""
 }
 

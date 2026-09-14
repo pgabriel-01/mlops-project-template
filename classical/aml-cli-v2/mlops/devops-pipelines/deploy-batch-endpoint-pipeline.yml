@@ -4,16 +4,9 @@
 name: deploy-batch-endpoint-pipeline
 
 variables:
-  - ${{ if eq(variables['Build.SourceBranchName'], 'main') }}:
-      # 'main' branch: PRD environment
-      - template: ../../config-infra-prod.yml
-  - ${{ if ne(variables['Build.SourceBranchName'], 'main') }}:
-      # 'develop' or feature branches: DEV environment
-      - template: ../../config-infra-dev.yml
-  - name: version
-    value: aml-cli-v2
+  - template: ../../../../config-infra-dev.yml
   - name: endpoint_name
-    value: taxi-batch-$(namespace)$(postfix)$(environment)
+    value: $(batch_endpoint_name)
   - name: endpoint_type
     value: batch
 
@@ -27,7 +20,7 @@ resources:
     - repository: mlops-templates # Template Repo
       name: mlops-templates
       type: git
-      ref: main
+      ref: ${{ variables.mlops_templates_ref }}
 
 stages:
   - stage: CreateBatchEndpoint
@@ -37,36 +30,47 @@ stages:
         steps:
           - checkout: self
             path: s/
-          - task: Bash@3
-            displayName: "Create checkout repository folder(s)"
-            inputs:
-              targetType: "inline"
-              script: |
-                set -e
-                mkdir "$(Build.Repository.Name)"
-                mkdir "mlops-templates"
-          - checkout: mlops-templates
-            path: s/templates/
-          - template: templates/${{ variables.version }}/install-az-cli.yml@mlops-templates
-          - template: templates/${{ variables.version }}/install-aml-cli.yml@mlops-templates
-          - template: templates/${{ variables.version }}/connect-to-workspace.yml@mlops-templates
-          - template: templates/${{ variables.version }}/create-compute.yml@mlops-templates
+          - template: templates/aml-cli-v2/setup.yml@mlops-templates
             parameters:
-              cluster_name: batch-cluster # name must match cluster name in deployment file below
+              azure_service_connection: $(ado_service_connection_aml_ws)
+              resource_group: $(resource_group)
+              workspace_name: $(aml_workspace)
+              working_directory: $(System.DefaultWorkingDirectory)
+          - template: templates/aml-cli-v2/create-compute.yml@mlops-templates
+            parameters:
+              azure_service_connection: $(ado_service_connection_aml_ws)
+              resource_group: $(resource_group)
+              workspace_name: $(aml_workspace)
+              cluster_name: $(batch_compute_name) # name must match cluster name in deployment file below
               size: STANDARD_D4S_V5
               min_instances: 0
               max_instances: 5
               cluster_tier: dedicated
-          - template: templates/${{ variables.version }}/create-endpoint.yml@mlops-templates
+          - template: templates/aml-cli-v2/create-endpoint.yml@mlops-templates
             parameters:
-              endpoint_file: mlops/azureml/deploy/batch/batch-endpoint.yml
-          - template: templates/${{ variables.version }}/create-deployment.yml@mlops-templates
+              azure_service_connection: $(ado_service_connection_aml_ws)
+              resource_group: $(resource_group)
+              workspace_name: $(aml_workspace)
+              endpoint_type: batch
+              endpoint_name: $(endpoint_name)
+              endpoint_file: classical/aml-cli-v2/mlops/azureml/deploy/batch/batch-endpoint.yml
+          - template: templates/aml-cli-v2/create-deployment.yml@mlops-templates
             parameters:
-              deployment_name: taxi-batch-dp
-              deployment_file: mlops/azureml/deploy/batch/batch-deployment.yml
-          - template: templates/${{ variables.version }}/test-deployment.yml@mlops-templates
+              azure_service_connection: $(ado_service_connection_aml_ws)
+              resource_group: $(resource_group)
+              workspace_name: $(aml_workspace)
+              endpoint_type: batch
+              endpoint_name: $(endpoint_name)
+              deployment_name: $(batch_deployment_name)
+              deployment_file: classical/aml-cli-v2/mlops/azureml/deploy/batch/batch-deployment.yml
+          - template: templates/aml-cli-v2/test-deployment.yml@mlops-templates
             parameters:
-              deployment_name: taxi-batch-dp
-              sample_request: data/taxi-batch.csv
+              azure_service_connection: $(ado_service_connection_aml_ws)
+              resource_group: $(resource_group)
+              workspace_name: $(aml_workspace)
+              endpoint_type: batch
+              endpoint_name: $(endpoint_name)
+              working_directory: $(System.DefaultWorkingDirectory)
+              deployment_name: $(batch_deployment_name)
+              sample_request: classical/aml-cli-v2/data/taxi-batch.csv
               request_type: uri_file #either uri_folder or uri_file
-

@@ -4,12 +4,7 @@
 name: tf-ado-deploy-infra
 
 variables:
-  - ${{ if eq(variables['Build.SourceBranchName'], 'main') }}:
-      # 'main' branch: PRD environment
-      - template: ../../../config-infra-prod.yml
-  - ${{ if ne(variables['Build.SourceBranchName'], 'main') }}:
-      # 'develop' or feature branches: DEV environment
-      - template: ../../../config-infra-dev.yml
+  - template: ../../../config-infra-dev.yml
 
 trigger: none
 
@@ -18,54 +13,58 @@ pool:
 
 resources:
   repositories:
-    - repository: mlops-templates # Template Repo
+    - repository: mlops-templates
       name: mlops-templates
       type: git
-      ref: main
+      ref: ${{ variables.mlops_templates_ref }}
 
 stages:
-  - stage: CreateStorageAccountForTerraformState
-    displayName: Create Storage for Terraform
+  - stage: BootstrapTerraformState
+    displayName: Bootstrap Terraform state
     jobs:
-      - job: CreateStorageForTerraform
-        displayName: Create Storage for Terraform
+      - job: BootstrapTerraformState
+        displayName: Bootstrap Terraform state
         steps:
-          - checkout: self
-            path: s/
-          - task: Bash@3
-            displayName: "Create checkout repository folder(s)"
-            inputs:
-              targetType: "inline"
-              script: |
-                set -e
-                mkdir "$(Build.Repository.Name)"
-                mkdir "mlops-templates"
-          - checkout: mlops-templates
-            path: s/templates/
-          - template: templates/infra/create-resource-group.yml@mlops-templates
-          - template: templates/infra/create-storage-account.yml@mlops-templates
-          - template: templates/infra/create-storage-container.yml@mlops-templates
-  - stage: DeployAzureMachineLearningRG
-    displayName: Deploy AML Workspace
+          - checkout: none
+          - template: templates/infra/terraform-state-bootstrap.yml@mlops-templates
+            parameters:
+              azureServiceConnection: $(ado_service_connection_rg)
+              cicdPrincipalObjectId: $(cicd_principal_object_id)
+              location: $(terraform_st_location)
+              backendResourceGroup: $(terraform_st_resource_group)
+              backendStorageAccount: $(terraform_st_storage_account)
+              backendContainer: $(terraform_st_container_name)
+
+  - stage: DeployAzureMachineLearning
+    displayName: Deploy Azure Machine Learning
+    dependsOn: BootstrapTerraformState
     jobs:
-      - job: DeployAMLWorkspace
+      - job: DeployAzureMachineLearning
         displayName: Deploy Terraform
         steps:
           - checkout: self
             path: s/
-          - task: Bash@3
-            displayName: "Create checkout repository folder(s)"
-            inputs:
-              targetType: "inline"
-              script: |
-                set -e
-                mkdir "$(Build.Repository.Name)"
-                mkdir "mlops-templates"
-          - checkout: mlops-templates
-            path: s/templates/
-          - template: templates/infra/create-sp-variables.yml@mlops-templates
-          - template: templates/infra/install-terraform.yml@mlops-templates
-          - template: templates/infra/run-terraform-init.yml@mlops-templates
-          - template: templates/infra/run-terraform-validate.yml@mlops-templates
-          - template: templates/infra/run-terraform-plan.yml@mlops-templates
-          - template: templates/infra/run-terraform-apply.yml@mlops-templates
+          - template: templates/infra/terraform-deploy.yml@mlops-templates
+            parameters:
+              azureServiceConnection: $(ado_service_connection_rg)
+              terraformVersion: $(terraform_version)
+              workingDirectory: $(System.DefaultWorkingDirectory)/$(terraform_workingdir)
+              backendResourceGroup: $(terraform_st_resource_group)
+              backendStorageAccount: $(terraform_st_storage_account)
+              backendContainer: $(terraform_st_container_name)
+              backendKey: $(terraform_st_key)
+              location: $(location)
+              prefix: $(namespace)
+              postfix: $(postfix)
+              projectNumber: $(project_number)
+              environment: $(environment)
+              enableAmlComputeCluster: ${{ eq(variables.enable_aml_computecluster, 'true') }}
+              amlComputeSku: $(aml_compute_sku)
+              enableMonitoring: ${{ eq(variables.enable_monitoring, 'true') }}
+              cicdPrincipalObjectId: $(cicd_principal_object_id)
+              enablePrivateEndpoints: ${{ eq(variables.enable_private_endpoints, 'true') }}
+              vnetAddressSpace: $(vnet_address_space)
+              trainingSubnetAddressPrefix: $(training_subnet_address_prefix)
+              endpointsSubnetAddressPrefix: $(endpoints_subnet_address_prefix)
+              planFile: tfplan
+              apply: true

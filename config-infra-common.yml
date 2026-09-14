@@ -13,12 +13,28 @@ variables:
   enable_container_registry: true
   enable_vnet: true
   aml_compute_sku: STANDARD_D2S_V3
+  training_compute_name: cpu-cluster
+  batch_compute_name: batch-cluster
+  model_name: taxi-model
+  training_environment_name: taxi-train-env
+  training_data_name: taxi-data
+  online_endpoint_name: taxi-online-$(namespace)$(postfix)$(project_number)$(environment)
+  online_deployment_name: taxi-online-dp
+  batch_endpoint_name: taxi-batch-$(namespace)$(postfix)$(project_number)$(environment)
+  batch_deployment_name: taxi-batch-dp
 
   # VNet settings (only used when enable_vnet: true)
   vnet_address_prefix: '10.0.0.0/16'
   default_subnet_prefix: '10.0.0.0/24'
   compute_subnet_prefix: '10.0.1.0/24'
   pe_subnet_prefix: '10.0.2.0/24'
+
+  # Terraform network isolation. Keep false for DEV unless the agent has
+  # private DNS resolution and network access to the deployed resources.
+  enable_private_endpoints: false
+  vnet_address_space: '10.0.0.0/16'
+  training_subnet_address_prefix: '10.0.0.0/24'
+  endpoints_subnet_address_prefix: '10.0.1.0/24'
 
   # Bastion settings (only used when enable_bastion: true; requires enable_vnet)
   enable_bastion: true
@@ -74,4 +90,12 @@ variables:
   terraform_st_resource_group: rg-$(namespace)-$(postfix)$(environment)-tf
   terraform_st_storage_account: st$(namespace)$(postfix)$(environment)tf
   terraform_st_container_name: default
-  terraform_st_key: mlops-tab
+  terraform_st_key: mlops-$(environment).tfstate
+
+  # Pin the reusable templates. Replace only this value when a validated
+  # mlops-templates release or implementation commit is available.
+  mlops_templates_ref: 8dfb66dbd8c360063e0838ce616a9695a9a633fa
+
+  # Object ID of the Azure-ARM service connection principal. Set as a
+  # non-secret pipeline variable when Terraform should grant CI/CD RBAC.
+  cicd_principal_object_id: ''

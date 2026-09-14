@@ -19,8 +19,8 @@ resource "azurerm_storage_account" "st" {
   is_hns_enabled                = var.hns_enabled
   min_tls_version               = "TLS1_2"
   public_network_access_enabled = var.enable_private_endpoints ? false : true
-  shared_access_key_enabled     = false  # Disable key-based authentication, use managed identity instead
-  
+  shared_access_key_enabled     = false # Disable key-based authentication, use managed identity instead
+
   blob_properties {
     delete_retention_policy {
       days = 7
@@ -31,7 +31,7 @@ resource "azurerm_storage_account" "st" {
   }
 
   tags = var.tags
-  
+
 }
 
 # Virtual Network & Firewall configuration

@@ -8,36 +8,25 @@ parameters:
     displayName: Skip Environment Registration
     type: boolean
     default: false
-  - name: skipComputeCreation
-    displayName: Skip Compute Creation
-    type: boolean
-    default: false
   - name: skipDataRegistration
     displayName: Skip Data Registration
     type: boolean
     default: false
 
 variables:
-  - ${{ if eq(variables['Build.SourceBranchName'], 'main') }}:
-      # 'main' branch: PRD environment
-      - template: ../../../../config-infra-prod.yml
-  - ${{ if ne(variables['Build.SourceBranchName'], 'main') }}:
-      # 'develop' or feature branches: DEV environment
-      - template: ../../../../config-infra-dev.yml
-  - name: version
-    value: aml-cli-v2
+  - template: ../../../../config-infra-dev.yml
 
 trigger: none
 
 pool:
-  name: Default
+  vmImage: ubuntu-latest
 
 resources:
   repositories:
     - repository: mlops-templates # Template Repo
       name: mlops-templates
       type: git
-      ref: main
+      ref: ${{ variables.mlops_templates_ref }}
 
 stages:
   - stage: DeployTrainingPipeline
@@ -48,40 +37,48 @@ stages:
         steps:
           - checkout: self
             path: s/
-          - task: Bash@3
-            displayName: "Prevent repos dir warnings"
-            inputs:
-              targetType: "inline"
-              script: |
-                set -e
-                mkdir "$(Build.Repository.Name)"
-                mkdir "mlops-templates"
-          - checkout: mlops-templates
-            path: s/templates/
-          - template: templates/${{ variables.version }}/install-az-cli.yml@mlops-templates
-          - template: templates/${{ variables.version }}/install-aml-cli.yml@mlops-templates
-          - template: templates/${{ variables.version }}/connect-to-workspace.yml@mlops-templates
+          - template: templates/aml-cli-v2/setup.yml@mlops-templates
+            parameters:
+              azure_service_connection: $(ado_service_connection_aml_ws)
+              resource_group: $(resource_group)
+              workspace_name: $(aml_workspace)
+              working_directory: $(System.DefaultWorkingDirectory)
           - ${{ if ne(parameters.skipEnvironmentRegistration, true) }}:
-            - template: templates/${{ variables.version }}/register-environment.yml@mlops-templates
+            - template: templates/aml-cli-v2/register-environment.yml@mlops-templates
               parameters:
-                environment_name: taxi-train-env
+                azure_service_connection: $(ado_service_connection_aml_ws)
+                resource_group: $(resource_group)
+                workspace_name: $(aml_workspace)
+                working_directory: $(System.DefaultWorkingDirectory)
+                environment_name: $(training_environment_name)
                 environment_file: classical/aml-cli-v2/mlops/azureml/train/train-env.yml
-          - ${{ if ne(parameters.skipComputeCreation, true) }}:
-            - template: templates/${{ variables.version }}/create-compute.yml@mlops-templates
+          - ${{ if ne(variables.enable_aml_computecluster, 'true') }}:
+            - template: templates/aml-cli-v2/create-compute.yml@mlops-templates
               parameters:
-                cluster_name: cpu-cluster
-                size: Standard_D4s_v5
+                azure_service_connection: $(ado_service_connection_aml_ws)
+                resource_group: $(resource_group)
+                workspace_name: $(aml_workspace)
+                cluster_name: $(training_compute_name)
+                size: $(aml_compute_sku)
                 min_instances: 0
                 max_instances: 4
                 cluster_tier: low_priority
           - ${{ if ne(parameters.skipDataRegistration, true) }}:
-            - template: templates/${{ variables.version }}/register-data.yml@mlops-templates
+            - template: templates/aml-cli-v2/register-data.yml@mlops-templates
               parameters:
+                azure_service_connection: $(ado_service_connection_aml_ws)
+                resource_group: $(resource_group)
+                workspace_name: $(aml_workspace)
+                working_directory: $(System.DefaultWorkingDirectory)
                 data_type: uri_file
-                data_name: taxi-data
+                data_name: $(training_data_name)
                 data_file: classical/aml-cli-v2/mlops/azureml/train/data.yml
-          - template: templates/${{ variables.version }}/run-pipeline.yml@mlops-templates
+          - template: templates/aml-cli-v2/run-pipeline.yml@mlops-templates
             parameters:
+              azure_service_connection: $(ado_service_connection_aml_ws)
+              resource_group: $(resource_group)
+              workspace_name: $(aml_workspace)
+              working_directory: $(System.DefaultWorkingDirectory)
               pipeline_file: classical/aml-cli-v2/mlops/azureml/train/pipeline.yml
               experiment_name: $(environment)_taxi_fare_train_$(Build.SourceBranchName)
               display_name: $(environment)_taxi_fare_run_$(Build.BuildID)

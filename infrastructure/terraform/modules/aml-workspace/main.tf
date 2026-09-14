@@ -59,7 +59,7 @@ resource "azurerm_role_assignment" "mlw_uai_acr_push" {
 # Wait for RBAC propagation - Azure typically needs 60-120 seconds
 resource "time_sleep" "wait_for_rbac_propagation" {
   create_duration = "120s"
-  
+
   depends_on = [
     azurerm_role_assignment.mlw_uai_storage_blob_data_reader,
     azurerm_role_assignment.mlw_uai_storage_blob_data_contributor,
@@ -81,10 +81,10 @@ resource "azurerm_machine_learning_workspace" "mlw" {
   storage_account_id      = var.storage_account_id
   container_registry_id   = var.container_registry_id
 
-  sku_name                          = "Basic"
-  public_network_access_enabled     = true
-  image_build_compute_name          = "cpu-cluster"
-  v1_legacy_mode_enabled            = false
+  sku_name                      = "Basic"
+  public_network_access_enabled = true
+  image_build_compute_name      = "cpu-cluster"
+  v1_legacy_mode_enabled        = false
   # Note: system_datastores_auth_mode was removed from azurerm provider
   # Configure datastore auth via azurerm_machine_learning_datastore_blobstorage instead
 
@@ -96,7 +96,7 @@ resource "azurerm_machine_learning_workspace" "mlw" {
   primary_user_assigned_identity = azurerm_user_assigned_identity.mlw_uai.id
 
   tags = var.tags
-  
+
   # Wait for RBAC permissions to propagate
   depends_on = [
     time_sleep.wait_for_rbac_propagation
@@ -124,27 +124,42 @@ resource "azurerm_role_assignment" "mlw_system_acr_push" {
   principal_id         = azurerm_machine_learning_workspace.mlw.identity[0].principal_id
 }
 
-# Grant GitHub Actions service principal access to storage account (for CI/CD pipelines)
-resource "azurerm_role_assignment" "github_actions_storage_blob_data_reader" {
-  count                = var.github_actions_service_principal_id != "" ? 1 : 0
+# Grant the Azure DevOps service connection principal access for CI/CD pipelines.
+moved {
+  from = azurerm_role_assignment.github_actions_storage_blob_data_reader
+  to   = azurerm_role_assignment.cicd_storage_blob_data_reader
+}
+
+resource "azurerm_role_assignment" "cicd_storage_blob_data_reader" {
+  count                = var.cicd_principal_object_id != "" ? 1 : 0
   scope                = var.storage_account_id
   role_definition_name = "Storage Blob Data Reader"
-  principal_id         = var.github_actions_service_principal_id
+  principal_id         = var.cicd_principal_object_id
 }
 
-resource "azurerm_role_assignment" "github_actions_storage_blob_data_contributor" {
-  count                = var.github_actions_service_principal_id != "" ? 1 : 0
+moved {
+  from = azurerm_role_assignment.github_actions_storage_blob_data_contributor
+  to   = azurerm_role_assignment.cicd_storage_blob_data_contributor
+}
+
+resource "azurerm_role_assignment" "cicd_storage_blob_data_contributor" {
+  count                = var.cicd_principal_object_id != "" ? 1 : 0
   scope                = var.storage_account_id
   role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = var.github_actions_service_principal_id
+  principal_id         = var.cicd_principal_object_id
 }
 
-# Grant GitHub Actions service principal Contributor role on ML workspace (for endpoint deployments)
-resource "azurerm_role_assignment" "github_actions_workspace_contributor" {
-  count                = var.github_actions_service_principal_id != "" ? 1 : 0
+# Grant the CI/CD principal Contributor on the workspace for AML asset and endpoint operations.
+moved {
+  from = azurerm_role_assignment.github_actions_workspace_contributor
+  to   = azurerm_role_assignment.cicd_workspace_contributor
+}
+
+resource "azurerm_role_assignment" "cicd_workspace_contributor" {
+  count                = var.cicd_principal_object_id != "" ? 1 : 0
   scope                = azurerm_machine_learning_workspace.mlw.id
   role_definition_name = "Contributor"
-  principal_id         = var.github_actions_service_principal_id
+  principal_id         = var.cicd_principal_object_id
 }
 
 # Compute cluster

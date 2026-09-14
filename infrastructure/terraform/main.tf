@@ -28,7 +28,7 @@ provider "azurerm" {
     }
   }
   use_oidc            = true
-  storage_use_azuread = true  # Use Azure AD authentication for storage operations instead of keys
+  storage_use_azuread = true # Use Azure AD authentication for storage operations instead of keys
 }
 
 data "azurerm_client_config" "current" {}

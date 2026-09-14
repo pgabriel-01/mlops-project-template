@@ -23,6 +23,21 @@ variables:
   batch_endpoint_name: taxi-batch-$(namespace)$(postfix)$(project_number)$(environment)
   batch_deployment_name: taxi-batch-dp
 
+  # Managed DevOps Pool defaults for private environments.
+  managed_devops_pool_name: mdp-$(namespace)-$(postfix)$(project_number)$(environment)
+  managed_devops_pool_alias: mdp-$(namespace)-$(postfix)$(project_number)$(environment)
+  managed_devops_pool_resource_group: rg-$(namespace)-$(postfix)$(project_number)$(environment)-platform
+  managed_devops_pool_location: $(location)
+  managed_devops_pool_vm_sku: Standard_D2ads_v5
+  managed_devops_pool_image: ubuntu-24.04
+  managed_devops_pool_maximum_concurrency: 2
+  platform_vnet_name: vnet-$(namespace)-$(postfix)$(project_number)$(environment)-platform
+  platform_vnet_address_prefix: '10.20.0.0/16'
+  managed_devops_pool_subnet_name: snet-managed-devops
+  managed_devops_pool_subnet_address_prefix: '10.20.1.0/24'
+  platform_private_endpoint_subnet_name: snet-private-endpoints
+  platform_private_endpoint_subnet_address_prefix: '10.20.2.0/24'
+
   # VNet settings (only used when enable_vnet: true)
   vnet_address_prefix: '10.0.0.0/16'
   default_subnet_prefix: '10.0.0.0/24'
@@ -87,15 +102,7 @@ variables:
   terraform_version: 1.14.3
   terraform_workingdir: infrastructure/terraform
   terraform_st_location: $(location)
-  terraform_st_resource_group: rg-$(namespace)-$(postfix)$(environment)-tf
-  terraform_st_storage_account: st$(namespace)$(postfix)$(environment)tf
+  terraform_st_resource_group: $(managed_devops_pool_resource_group)
+  terraform_st_storage_account: st$(namespace)$(postfix)$(project_number)$(environment)tf
   terraform_st_container_name: default
   terraform_st_key: mlops-$(environment).tfstate
-
-  # Pin the reusable templates. Replace only this value when a validated
-  # mlops-templates release or implementation commit is available.
-  mlops_templates_ref: 8dfb66dbd8c360063e0838ce616a9695a9a633fa
-
-  # Object ID of the Azure-ARM service connection principal. Set as a
-  # non-secret pipeline variable when Terraform should grant CI/CD RBAC.
-  cicd_principal_object_id: ''

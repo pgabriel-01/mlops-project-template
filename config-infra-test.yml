@@ -1,8 +1,9 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
 
-# Dev environment — env-specific overrides.
-# Organization-specific values are supplied by the mlops-dev variable group.
+# Test environment — env-specific overrides
+# Service connections, principal IDs, and other organization-specific values
+# are supplied by the mlops-test Azure DevOps variable group.
 # Required variables:
 # - ado_service_connection_rg
 # - ado_service_connection_aml_ws
@@ -11,23 +12,22 @@
 # - devcenter_project_resource_id
 variables:
   - template: config-infra-common.yml
-  - group: mlops-dev
+  - group: mlops-test
 
-  # Environment-specific
   - name: postfix
-    value: 10001
+    value: 40001
   - name: location
     value: eastus2
   - name: environment
-    value: dev
+    value: test
   - name: deployment_environment
-    value: dev
+    value: test
   - name: network_mode
-    value: public
+    value: private
   - name: variable_group_name
-    value: mlops-dev
+    value: mlops-test
   - name: enable_private_endpoints
-    value: false
+    value: true
   - name: platform_service_connection_name
     value: $(ado_service_connection_rg)
   - name: workload_service_connection_name

@@ -1,10 +1,17 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
 
-# Prod environment — env-specific overrides
-# Shared values are in config-infra-common.yml
+# Prod environment — env-specific overrides.
+# Organization-specific values are supplied by the mlops-prod variable group.
+# Required variables:
+# - ado_service_connection_rg
+# - ado_service_connection_aml_ws
+# - cicd_principal_object_id
+# - devops_infrastructure_principal_object_id
+# - devcenter_project_resource_id
 variables:
   - template: config-infra-common.yml
+  - group: mlops-prod
 
   # Environment-specific
   - name: postfix
@@ -13,9 +20,15 @@ variables:
     value: eastus
   - name: environment
     value: prod
-
-  # Azure DevOps service connections
-  - name: ado_service_connection_rg
-    value: Azure-ARM-Prod
-  - name: ado_service_connection_aml_ws
-    value: Azure-ARM-Prod
+  - name: deployment_environment
+    value: prod
+  - name: network_mode
+    value: private
+  - name: variable_group_name
+    value: mlops-prod
+  - name: enable_private_endpoints
+    value: true
+  - name: platform_service_connection_name
+    value: $(ado_service_connection_rg)
+  - name: workload_service_connection_name
+    value: $(ado_service_connection_aml_ws)

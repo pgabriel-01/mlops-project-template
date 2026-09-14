@@ -32,13 +32,25 @@ output "private_dns_zone_ids" {
   value = {
     aml_api       = azurerm_private_dns_zone.aml_api.id
     aml_notebooks = azurerm_private_dns_zone.aml_notebooks.id
-    blob          = azurerm_private_dns_zone.blob.id
+    blob          = var.external_blob_private_dns_zone_id != "" ? var.external_blob_private_dns_zone_id : azurerm_private_dns_zone.blob[0].id
     file          = azurerm_private_dns_zone.file.id
     dfs           = azurerm_private_dns_zone.dfs.id
     keyvault      = azurerm_private_dns_zone.keyvault.id
     acr           = azurerm_private_dns_zone.acr.id
   }
   description = "Map of private DNS zone IDs"
+}
+
+output "private_dns_zone_names" {
+  value = {
+    aml_api       = azurerm_private_dns_zone.aml_api.name
+    aml_notebooks = azurerm_private_dns_zone.aml_notebooks.name
+    file          = azurerm_private_dns_zone.file.name
+    dfs           = azurerm_private_dns_zone.dfs.name
+    keyvault      = azurerm_private_dns_zone.keyvault.name
+    acr           = azurerm_private_dns_zone.acr.name
+  }
+  description = "Private DNS zone names created for workload services"
 }
 
 output "nsg_id" {

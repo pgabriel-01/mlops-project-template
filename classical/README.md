@@ -22,7 +22,7 @@ Please visit [MLOps v2](https://github.com/Azure/mlops-v2) for the initial deplo
 
 For this repository's supported Azure DevOps and Terraform deployment, use the
 AML CLI v2 implementation under `classical/aml-cli-v2` and follow the
-[DEV deployment runbook](../docs/azure-devops-dev-deployment.md). The
+[Azure DevOps deployment runbook](../docs/azure-devops-deployment.md). The
 `classical/python-sdk-v2` implementation is not part of that deployment path.
 
 

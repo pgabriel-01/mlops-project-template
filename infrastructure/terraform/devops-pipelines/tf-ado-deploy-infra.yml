@@ -3,41 +3,52 @@
 
 name: tf-ado-deploy-infra
 
+parameters:
+  - name: environment
+    displayName: Target environment
+    type: string
+    default: dev
+    values:
+      - dev
+      - test
+      - prod
+  - name: agentPoolName
+    displayName: Agent pool override (empty uses environment default)
+    type: string
+    default: ''
+  - name: mlopsTemplatesRef
+    displayName: mlops-templates branch, tag, or commit
+    type: string
+    default: refs/heads/main
+
 variables:
-  - template: ../../../config-infra-dev.yml
+  - ${{ if eq(parameters.environment, 'dev') }}:
+    - template: ../../../config-infra-dev.yml
+  - ${{ if eq(parameters.environment, 'test') }}:
+    - template: ../../../config-infra-test.yml
+  - ${{ if eq(parameters.environment, 'prod') }}:
+    - template: ../../../config-infra-prod.yml
 
 trigger: none
 
 pool:
-  vmImage: ubuntu-latest
+  ${{ if ne(parameters.agentPoolName, '') }}:
+    name: ${{ parameters.agentPoolName }}
+  ${{ elseif eq(variables.network_mode, 'private') }}:
+    name: $(managed_devops_pool_alias)
+  ${{ else }}:
+    vmImage: $(ap_vm_image)
 
 resources:
   repositories:
     - repository: mlops-templates
       name: mlops-templates
       type: git
-      ref: ${{ variables.mlops_templates_ref }}
+      ref: ${{ parameters.mlopsTemplatesRef }}
 
 stages:
-  - stage: BootstrapTerraformState
-    displayName: Bootstrap Terraform state
-    jobs:
-      - job: BootstrapTerraformState
-        displayName: Bootstrap Terraform state
-        steps:
-          - checkout: none
-          - template: templates/infra/terraform-state-bootstrap.yml@mlops-templates
-            parameters:
-              azureServiceConnection: $(ado_service_connection_rg)
-              cicdPrincipalObjectId: $(cicd_principal_object_id)
-              location: $(terraform_st_location)
-              backendResourceGroup: $(terraform_st_resource_group)
-              backendStorageAccount: $(terraform_st_storage_account)
-              backendContainer: $(terraform_st_container_name)
-
   - stage: DeployAzureMachineLearning
     displayName: Deploy Azure Machine Learning
-    dependsOn: BootstrapTerraformState
     jobs:
       - job: DeployAzureMachineLearning
         displayName: Deploy Terraform

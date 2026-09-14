@@ -4,6 +4,22 @@
 name: deploy-model-training-pipeline
 
 parameters:
+  - name: environment
+    displayName: Target environment
+    type: string
+    default: dev
+    values:
+      - dev
+      - test
+      - prod
+  - name: agentPoolName
+    displayName: Agent pool override (empty uses environment default)
+    type: string
+    default: ''
+  - name: mlopsTemplatesRef
+    displayName: mlops-templates branch, tag, or commit
+    type: string
+    default: refs/heads/main
   - name: skipEnvironmentRegistration
     displayName: Skip Environment Registration
     type: boolean
@@ -14,19 +30,29 @@ parameters:
     default: false
 
 variables:
-  - template: ../../../../config-infra-dev.yml
+  - ${{ if eq(parameters.environment, 'dev') }}:
+    - template: ../../../../config-infra-dev.yml
+  - ${{ if eq(parameters.environment, 'test') }}:
+    - template: ../../../../config-infra-test.yml
+  - ${{ if eq(parameters.environment, 'prod') }}:
+    - template: ../../../../config-infra-prod.yml
 
 trigger: none
 
 pool:
-  vmImage: ubuntu-latest
+  ${{ if ne(parameters.agentPoolName, '') }}:
+    name: ${{ parameters.agentPoolName }}
+  ${{ elseif eq(variables.network_mode, 'private') }}:
+    name: $(managed_devops_pool_alias)
+  ${{ else }}:
+    vmImage: $(ap_vm_image)
 
 resources:
   repositories:
     - repository: mlops-templates # Template Repo
       name: mlops-templates
       type: git
-      ref: ${{ variables.mlops_templates_ref }}
+      ref: ${{ parameters.mlopsTemplatesRef }}
 
 stages:
   - stage: DeployTrainingPipeline

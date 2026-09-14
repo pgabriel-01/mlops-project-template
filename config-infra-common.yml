@@ -99,7 +99,7 @@ variables:
   bicep_ado_service_principal_id: '' # Set via pipeline variable or secret
 
   # For terraform reference
-  terraform_version: 1.14.3
+  terraform_version: 1.16.2
   terraform_workingdir: infrastructure/terraform
   terraform_st_location: $(location)
   terraform_st_resource_group: $(managed_devops_pool_resource_group)

@@ -137,6 +137,22 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
             documentation,
         )
 
+    def test_monitoring_uses_supported_sku_after_key_vault_rbac(self):
+        data_explorer = (
+            ROOT / "infrastructure/terraform/modules/data-explorer/main.tf"
+        ).read_text()
+        self.assertIn('name     = "Standard_E2ads_v5"', data_explorer)
+        self.assertNotIn("Standard_D11_v2", data_explorer)
+
+        key_vault = (
+            ROOT / "infrastructure/terraform/modules/key-vault/main.tf"
+        ).read_text()
+        self.assertIn('resource "time_sleep" "wait_for_rbac_propagation"', key_vault)
+        self.assertIn('create_duration = "120s"', key_vault)
+
+        terraform = (ROOT / "infrastructure/terraform/aml_deploy.tf").read_text()
+        self.assertIn("depends_on = [\n    module.key_vault\n  ]", terraform)
+
     def test_no_live_azure_devops_identifiers_are_committed(self):
         checked_paths = [ROOT / "config-infra-common.yml", *ENVIRONMENT_CONFIGS.values()]
         for path in checked_paths:

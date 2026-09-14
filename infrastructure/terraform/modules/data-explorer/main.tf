@@ -8,7 +8,7 @@ resource "azurerm_kusto_cluster" "cluster" {
   count                       = var.enable_monitoring ? 1 : 0
 
   sku {
-    name     = "Standard_D11_v2"
+    name     = "Standard_E2ads_v5"
     capacity = 2
   }
 

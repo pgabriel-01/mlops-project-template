@@ -233,4 +233,8 @@ module "data_explorer" {
   enable_monitoring = var.enable_monitoring
 
   tags = local.tags
+
+  depends_on = [
+    module.key_vault
+  ]
 }

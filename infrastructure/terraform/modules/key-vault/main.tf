@@ -34,6 +34,15 @@ resource "azurerm_role_assignment" "kv_crypto_officer" {
   principal_id         = data.azurerm_client_config.current.object_id
 }
 
+resource "time_sleep" "wait_for_rbac_propagation" {
+  create_duration = "120s"
+
+  depends_on = [
+    azurerm_role_assignment.kv_secrets_officer,
+    azurerm_role_assignment.kv_crypto_officer
+  ]
+}
+
 # Private endpoint for Key Vault
 resource "azurerm_private_endpoint" "kv_pe" {
   count               = var.enable_private_endpoints ? 1 : 0

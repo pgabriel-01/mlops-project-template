@@ -179,7 +179,8 @@ resource "azapi_update_resource" "identity_based_system_datastores" {
   }
 
   depends_on = [
-    time_sleep.wait_for_managed_network_rbac
+    time_sleep.wait_for_managed_network_rbac,
+    time_sleep.wait_for_workspace_network_rbac
   ]
 }
 
@@ -258,17 +259,26 @@ resource "azurerm_role_assignment" "mlw_system_workspace_network_connection_appr
   principal_id         = azurerm_machine_learning_workspace.mlw.identity[0].principal_id
 }
 
+resource "time_sleep" "wait_for_workspace_network_rbac" {
+  count           = var.enable_private_endpoints ? 1 : 0
+  create_duration = "120s"
+
+  depends_on = [
+    azurerm_role_assignment.mlw_uai_workspace_network_connection_approver,
+    azurerm_role_assignment.mlw_system_workspace_network_connection_approver
+  ]
+}
+
 resource "time_sleep" "wait_for_managed_network_rbac" {
   count           = var.enable_private_endpoints ? 1 : 0
   create_duration = "120s"
 
   triggers = {
-    approval_contract = "target-and-workspace-scoped-approver-acr-reader-storage-data-v3"
+    approval_contract = "target-scoped-approver-acr-reader-storage-data-v2"
     approval_scopes = jsonencode(sort([
       var.container_registry_id,
       var.key_vault_id,
-      var.storage_account_id,
-      azurerm_machine_learning_workspace.mlw.id
+      var.storage_account_id
     ]))
   }
 
@@ -284,9 +294,7 @@ resource "time_sleep" "wait_for_managed_network_rbac" {
     azurerm_role_assignment.mlw_system_storage_table_data_contributor,
     azurerm_role_assignment.mlw_system_keyvault_network_connection_approver,
     azurerm_role_assignment.mlw_system_acr_network_connection_approver,
-    azurerm_role_assignment.mlw_system_acr_reader,
-    azurerm_role_assignment.mlw_uai_workspace_network_connection_approver,
-    azurerm_role_assignment.mlw_system_workspace_network_connection_approver
+    azurerm_role_assignment.mlw_system_acr_reader
   ]
 }
 

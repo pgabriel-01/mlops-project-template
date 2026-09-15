@@ -377,15 +377,14 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
         )
         self.assertNotIn("scope                = var.rg_id", workspace)
         self.assertIn(
-            'approval_contract = "target-and-workspace-scoped-approver-acr-reader-storage-data-v3"',
+            'approval_contract = "target-scoped-approver-acr-reader-storage-data-v2"',
             workspace,
         )
         self.assertIn(
             "approval_scopes = jsonencode(sort([\n"
             "      var.container_registry_id,\n"
             "      var.key_vault_id,\n"
-            "      var.storage_account_id,\n"
-            "      azurerm_machine_learning_workspace.mlw.id\n"
+            "      var.storage_account_id\n"
             "    ]))",
             workspace,
         )
@@ -398,8 +397,6 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
             "mlw_system_keyvault_network_connection_approver",
             "mlw_system_acr_network_connection_approver",
             "mlw_system_acr_reader",
-            "mlw_uai_workspace_network_connection_approver",
-            "mlw_system_workspace_network_connection_approver",
         ):
             self.assertIn(
                 f"azurerm_role_assignment.{dependency}",
@@ -411,10 +408,25 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
         )
         self.assertIn(
             "depends_on = [\n"
-            "    time_sleep.wait_for_managed_network_rbac\n"
+            "    time_sleep.wait_for_managed_network_rbac,\n"
+            "    time_sleep.wait_for_workspace_network_rbac\n"
             "  ]",
             workspace,
         )
+        self.assertIn(
+            'resource "time_sleep" "wait_for_workspace_network_rbac" {\n'
+            "  count           = var.enable_private_endpoints ? 1 : 0\n"
+            '  create_duration = "120s"',
+            workspace,
+        )
+        for dependency in (
+            "mlw_uai_workspace_network_connection_approver",
+            "mlw_system_workspace_network_connection_approver",
+        ):
+            self.assertIn(
+                f"azurerm_role_assignment.{dependency}",
+                workspace,
+            )
         self.assertIn(
             "depends_on = [\n"
             "    azapi_update_resource.identity_based_system_datastores,\n"

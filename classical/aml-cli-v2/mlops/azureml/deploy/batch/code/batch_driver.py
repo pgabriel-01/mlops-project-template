@@ -38,6 +38,50 @@ def _resolve_mlflow_model_path(model_dir):
     )
 
 
+def _get_expected_feature_names(loaded_model):
+    metadata = getattr(loaded_model, "metadata", None)
+    if metadata is not None:
+        input_schema = metadata.get_input_schema()
+        if input_schema is not None:
+            input_names = input_schema.input_names()
+            if input_names and all(input_names):
+                return list(input_names)
+
+    model_impl = getattr(loaded_model, "_model_impl", None)
+    sklearn_model = getattr(model_impl, "sklearn_model", None)
+    feature_names = getattr(sklearn_model, "feature_names_in_", None)
+    if feature_names is not None:
+        return list(feature_names)
+
+    return None
+
+
+def _select_model_features(data, loaded_model):
+    expected_features = _get_expected_feature_names(loaded_model)
+    if expected_features is None:
+        return data
+
+    missing_features = [
+        feature for feature in expected_features if feature not in data.columns
+    ]
+    if missing_features:
+        raise ValueError(
+            "Batch input is missing model features: "
+            + ", ".join(missing_features)
+        )
+
+    ignored_columns = [
+        column for column in data.columns if column not in expected_features
+    ]
+    if ignored_columns:
+        logger.info(
+            "Ignoring batch input columns not used by the model: %s",
+            ", ".join(ignored_columns),
+        )
+
+    return data[expected_features]
+
+
 def init():
     """
     Initialize the model for batch scoring.
@@ -89,7 +133,7 @@ def run(mini_batch):
             logger.info(f"Read {len(data)} rows from {file_path}")
             
             # Make predictions
-            predictions = model.predict(data)
+            predictions = model.predict(_select_model_features(data, model))
             logger.info(f"Generated {len(predictions)} predictions")
             
             # Append predictions as rows (for append_row output action)

@@ -28,6 +28,16 @@ def load_batch_driver():
     return module
 
 
+class FakeDataFrame:
+    def __init__(self, columns):
+        self.columns = columns
+        self.selected_columns = None
+
+    def __getitem__(self, columns):
+        self.selected_columns = columns
+        return self
+
+
 class BatchDriverModelPathTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -80,6 +90,40 @@ class BatchDriverModelPathTests(unittest.TestCase):
                 "Multiple MLflow model roots",
             ):
                 self.batch_driver._resolve_mlflow_model_path(root)
+
+    def test_selects_sklearn_model_features_and_ignores_extra_columns(self):
+        expected_features = ["distance", "passengers"]
+        loaded_model = SimpleNamespace(
+            metadata=None,
+            _model_impl=SimpleNamespace(
+                sklearn_model=SimpleNamespace(
+                    feature_names_in_=expected_features,
+                )
+            ),
+        )
+        data = FakeDataFrame(["Unnamed: 0", "distance", "passengers", "cost"])
+
+        selected = self.batch_driver._select_model_features(data, loaded_model)
+
+        self.assertIs(selected, data)
+        self.assertEqual(data.selected_columns, expected_features)
+
+    def test_rejects_missing_model_features(self):
+        loaded_model = SimpleNamespace(
+            metadata=None,
+            _model_impl=SimpleNamespace(
+                sklearn_model=SimpleNamespace(
+                    feature_names_in_=["distance", "passengers"],
+                )
+            ),
+        )
+        data = FakeDataFrame(["distance", "cost"])
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "Batch input is missing model features: passengers",
+        ):
+            self.batch_driver._select_model_features(data, loaded_model)
 
 
 if __name__ == "__main__":

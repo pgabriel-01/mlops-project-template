@@ -133,7 +133,7 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
     def test_documentation_names_immutable_template_dependency(self):
         documentation = (ROOT / "docs/azure-devops-deployment.md").read_text()
         self.assertIn(
-            "bf38cd9d82f141cbc1518beb361b7d314194c643",
+            "1d7ac905094799455fc7112add7d1d8209b0ca77",
             documentation,
         )
 

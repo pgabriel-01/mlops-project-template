@@ -14,7 +14,6 @@ variables:
   enable_vnet: true
   aml_compute_sku: STANDARD_D2S_V3
   training_compute_name: cpu-cluster
-  batch_compute_name: batch-cluster
   model_name: taxi-model
   training_environment_name: taxi-train-env
   training_data_name: taxi-data

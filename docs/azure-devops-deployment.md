@@ -89,7 +89,7 @@ Review these values before deployment:
 
 - `namespace`, `project_number`, `postfix`, `location`, and `environment`;
 - Terraform backend resource group, storage account, container, and state key;
-- `aml_compute_sku`, training compute, batch compute, model, environment, data,
+- `aml_compute_sku`, training compute, model, environment, data,
   endpoint, and deployment names;
 - monitoring and AML compute flags;
 - the matching variable group;
@@ -154,9 +154,11 @@ All pipelines are manual (`trigger: none`). At queue time select:
    Endpoint deployment requires the registered model from step 4.
 6. Re-run Terraform plan and the selected AML pipelines to confirm idempotency.
 
-The batch endpoint pipeline owns its endpoint-specific batch compute. Reusable
-templates fail the Azure DevOps job when setup, training, deployment, polling,
-or scoring fails.
+Online deployment uses `Standard_D2ds_v5`. Batch deployment reuses the
+Terraform-managed `cpu-cluster`, preserving its private subnet and no-public-IP
+configuration instead of creating a separate pipeline-owned compute cluster.
+Reusable templates fail the Azure DevOps job when setup, training, deployment,
+polling, or scoring fails.
 
 ## Validation
 

@@ -200,6 +200,33 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
             workspace,
         )
 
+    def test_endpoint_deployments_use_supported_private_compute(self):
+        online = (
+            ROOT
+            / "classical/aml-cli-v2/mlops/azureml/deploy/online/online-deployment.yml"
+        ).read_text()
+        self.assertIn("instance_type: Standard_D2ds_v5", online)
+        self.assertNotIn("Standard_D4s_v5", online)
+
+        batch = (
+            ROOT
+            / "classical/aml-cli-v2/mlops/azureml/deploy/batch/batch-deployment.yml"
+        ).read_text()
+        self.assertIn("compute: azureml:cpu-cluster", batch)
+        self.assertNotIn("compute: azureml:batch-cluster", batch)
+
+        batch_pipeline = (
+            ROOT
+            / "classical/aml-cli-v2/mlops/devops-pipelines/deploy-batch-endpoint-pipeline.yml"
+        ).read_text()
+        self.assertNotIn(
+            "templates/aml-cli-v2/create-compute.yml@mlops-templates",
+            batch_pipeline,
+        )
+        self.assertNotIn("STANDARD_D4S_V5", batch_pipeline)
+        common = (ROOT / "config-infra-common.yml").read_text()
+        self.assertNotIn("batch_compute_name", common)
+
     def test_terraform_cli_uses_current_runtime_pin(self):
         common = (ROOT / "config-infra-common.yml").read_text()
         self.assertIn("terraform_version: 1.16.x", common)

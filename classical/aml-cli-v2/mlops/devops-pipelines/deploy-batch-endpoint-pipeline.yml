@@ -64,16 +64,6 @@ stages:
               resource_group: $(resource_group)
               workspace_name: $(aml_workspace)
               working_directory: $(System.DefaultWorkingDirectory)
-          - template: templates/aml-cli-v2/create-compute.yml@mlops-templates
-            parameters:
-              azure_service_connection: $(ado_service_connection_aml_ws)
-              resource_group: $(resource_group)
-              workspace_name: $(aml_workspace)
-              cluster_name: $(batch_compute_name) # name must match cluster name in deployment file below
-              size: STANDARD_D4S_V5
-              min_instances: 0
-              max_instances: 5
-              cluster_tier: dedicated
           - template: templates/aml-cli-v2/create-endpoint.yml@mlops-templates
             parameters:
               azure_service_connection: $(ado_service_connection_aml_ws)

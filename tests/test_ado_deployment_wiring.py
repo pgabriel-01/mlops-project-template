@@ -33,10 +33,7 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
             self.assertNotIn("Azure-ARM-", content)
 
     def test_private_endpoint_posture_is_environment_specific(self):
-        self.assertIn(
-            "value: false", ENVIRONMENT_CONFIGS["dev"].read_text()
-        )
-        for environment in ("test", "prod"):
+        for environment in ("dev", "test", "prod"):
             self.assertIn(
                 "value: true", ENVIRONMENT_CONFIGS[environment].read_text()
             )
@@ -88,7 +85,7 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
 
         for environment, path in ENVIRONMENT_CONFIGS.items():
             content = path.read_text()
-            expected_mode = "public" if environment == "dev" else "private"
+            expected_mode = "private"
             self.assertIn(f"value: {expected_mode}", content)
             self.assertIn("platform_service_connection_name", content)
             self.assertIn("workload_service_connection_name", content)

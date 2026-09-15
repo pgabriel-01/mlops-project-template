@@ -100,8 +100,8 @@ Review these values before deployment:
 stable patch in the Terraform 1.16 release line before invoking
 `TerraformInstaller@1`.
 
-DEV defaults to public workload endpoints, while Test and Prod default to
-private endpoints. All workload pipelines use the environment's
+DEV, Test, and Prod default to private workload endpoints. All workload
+pipelines use the environment's
 `managed_devops_pool_alias` because the Terraform state backend is private;
 `agentPoolName` overrides that default when a different authorized pool is
 required. Platform bootstrap remains on a Microsoft-hosted agent because the

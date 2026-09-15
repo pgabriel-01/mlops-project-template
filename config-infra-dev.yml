@@ -23,11 +23,11 @@ variables:
   - name: deployment_environment
     value: dev
   - name: network_mode
-    value: public
+    value: private
   - name: variable_group_name
     value: mlops-dev
   - name: enable_private_endpoints
-    value: false
+    value: true
   - name: platform_service_connection_name
     value: $(ado_service_connection_rg)
   - name: workload_service_connection_name

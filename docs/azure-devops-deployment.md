@@ -122,7 +122,9 @@ node public IPs disabled, and is not attached to the user-managed training
 subnet. Existing computes must still be deleted and recreated when migrating
 them to AML managed networking. Private online deployment definitions omit
 `egress_public_network_access`, which Azure ML no longer accepts when the
-workspace uses a managed VNet.
+workspace uses a managed VNet. Batch endpoint validation invokes the registered
+`azureml:taxi-data@latest` URI file rather than uploading a local file, so the
+request uses the identity-accessible AML datastore path.
 
 ## Pipeline entrypoints
 

@@ -90,5 +90,5 @@ stages:
               endpoint_name: $(endpoint_name)
               working_directory: $(System.DefaultWorkingDirectory)
               deployment_name: $(batch_deployment_name)
-              sample_request: classical/aml-cli-v2/data/taxi-batch.csv
+              sample_request: azureml:taxi-data@latest
               request_type: uri_file #either uri_folder or uri_file

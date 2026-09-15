@@ -331,6 +331,12 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
             batch_pipeline,
         )
         self.assertNotIn("STANDARD_D4S_V5", batch_pipeline)
+        self.assertIn("sample_request: azureml:taxi-data@latest", batch_pipeline)
+        self.assertIn("request_type: uri_file", batch_pipeline)
+        self.assertNotIn(
+            "sample_request: classical/aml-cli-v2/data/taxi-batch.csv",
+            batch_pipeline,
+        )
         common = (ROOT / "config-infra-common.yml").read_text()
         self.assertNotIn("batch_compute_name", common)
 

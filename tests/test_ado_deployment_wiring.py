@@ -334,6 +334,26 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
         common = (ROOT / "config-infra-common.yml").read_text()
         self.assertNotIn("batch_compute_name", common)
 
+    def test_mlflow_models_include_aml_monitoring_dependency(self):
+        for source_name in ("train.py", "register.py"):
+            source = (
+                ROOT / "classical/aml-cli-v2/data-science/src" / source_name
+            ).read_text()
+            requirement_lines = [
+                line.strip()
+                for line in source.splitlines()
+                if line.strip().startswith('"')
+            ]
+            mlflow_index = requirement_lines.index('"mlflow==2.22.4",')
+            self.assertEqual(
+                requirement_lines[mlflow_index + 1],
+                '"azureml-ai-monitoring==1.0.0",',
+            )
+            self.assertEqual(
+                source.count('"azureml-ai-monitoring==1.0.0"'),
+                1,
+            )
+
     def test_terraform_cli_uses_current_runtime_pin(self):
         common = (ROOT / "config-infra-common.yml").read_text()
         self.assertIn("terraform_version: 1.16.x", common)

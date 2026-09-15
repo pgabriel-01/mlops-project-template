@@ -56,6 +56,13 @@ resource "azurerm_role_assignment" "mlw_uai_acr_push" {
   principal_id         = azurerm_user_assigned_identity.mlw_uai.principal_id
 }
 
+resource "azurerm_role_assignment" "mlw_uai_network_connection_approver" {
+  count                = var.enable_private_endpoints ? 1 : 0
+  scope                = var.rg_id
+  role_definition_name = "Azure AI Enterprise Network Connection Approver"
+  principal_id         = azurerm_user_assigned_identity.mlw_uai.principal_id
+}
+
 # Wait for RBAC propagation - Azure typically needs 60-120 seconds
 resource "time_sleep" "wait_for_rbac_propagation" {
   create_duration = "120s"
@@ -140,6 +147,23 @@ resource "azurerm_role_assignment" "mlw_system_acr_push" {
   scope                = var.container_registry_id
   role_definition_name = "AcrPush"
   principal_id         = azurerm_machine_learning_workspace.mlw.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "mlw_system_network_connection_approver" {
+  count                = var.enable_private_endpoints ? 1 : 0
+  scope                = var.rg_id
+  role_definition_name = "Azure AI Enterprise Network Connection Approver"
+  principal_id         = azurerm_machine_learning_workspace.mlw.identity[0].principal_id
+}
+
+resource "time_sleep" "wait_for_managed_network_rbac_propagation" {
+  count           = var.enable_private_endpoints ? 1 : 0
+  create_duration = "120s"
+
+  depends_on = [
+    azurerm_role_assignment.mlw_uai_network_connection_approver,
+    azurerm_role_assignment.mlw_system_network_connection_approver
+  ]
 }
 
 # Grant the Azure DevOps service connection principal access for CI/CD pipelines.
@@ -249,6 +273,7 @@ resource "azapi_resource_action" "provision_managed_network" {
 
   depends_on = [
     azapi_update_resource.identity_based_system_datastores,
-    azurerm_private_endpoint.mlw_pe
+    azurerm_private_endpoint.mlw_pe,
+    time_sleep.wait_for_managed_network_rbac_propagation
   ]
 }

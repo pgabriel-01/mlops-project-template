@@ -186,9 +186,11 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
         workspace = (
             ROOT / "infrastructure/terraform/modules/aml-workspace/main.tf"
         ).read_text()
-        self.assertIn('dynamic "managed_network"', workspace)
-        self.assertIn('isolation_mode                = "AllowInternetOutbound"', workspace)
-        self.assertIn("provision_on_creation_enabled = true", workspace)
+        self.assertNotIn('dynamic "managed_network"', workspace)
+        self.assertNotIn("provision_on_creation_enabled", workspace)
+        self.assertIn("managedNetwork = {", workspace)
+        self.assertIn('isolationMode = "AllowInternetOutbound"', workspace)
+        self.assertIn("var.enable_private_endpoints ? {", workspace)
         self.assertIn(
             "public_network_access_enabled = !var.enable_private_endpoints",
             workspace,

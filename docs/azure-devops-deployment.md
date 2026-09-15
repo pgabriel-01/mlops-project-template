@@ -107,11 +107,12 @@ different authorized pool is required. Review VNet/subnet CIDRs for overlap
 before platform bootstrap. Private environments use separate platform and
 workload VNets: Terraform peers them, links workload private DNS zones to the
 platform VNet, and reuses the platform Blob private DNS zone for both state and
-workload storage. The AML workspace additionally provisions its managed VNet in
-`AllowInternetOutbound` mode. AML-managed compute uses that network with node
-public IPs disabled; it is not attached to the user-managed training subnet.
-Enabling managed VNet or changing node public IP behavior replaces existing
-compute resources.
+workload storage. Terraform enables the AML managed VNet in
+`AllowInternetOutbound` mode through an in-place Azure API workspace update,
+avoiding workspace replacement and soft-delete name retention. AML-managed
+compute uses that network with node public IPs disabled; it is not attached to
+the user-managed training subnet. Existing computes must still be deleted and
+recreated when migrating them to AML managed networking.
 
 ## Pipeline entrypoints
 

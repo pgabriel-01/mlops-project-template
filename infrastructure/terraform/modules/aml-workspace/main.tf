@@ -95,15 +95,6 @@ resource "azurerm_machine_learning_workspace" "mlw" {
 
   primary_user_assigned_identity = azurerm_user_assigned_identity.mlw_uai.id
 
-  dynamic "managed_network" {
-    for_each = var.enable_private_endpoints ? [1] : []
-
-    content {
-      isolation_mode                = "AllowInternetOutbound"
-      provision_on_creation_enabled = true
-    }
-  }
-
   tags = var.tags
 
   # Wait for RBAC permissions to propagate
@@ -117,9 +108,16 @@ resource "azapi_update_resource" "identity_based_system_datastores" {
   resource_id = azurerm_machine_learning_workspace.mlw.id
 
   body = {
-    properties = {
-      systemDatastoresAuthMode = "identity"
-    }
+    properties = merge(
+      {
+        systemDatastoresAuthMode = "identity"
+      },
+      var.enable_private_endpoints ? {
+        managedNetwork = {
+          isolationMode = "AllowInternetOutbound"
+        }
+      } : {}
+    )
   }
 }
 

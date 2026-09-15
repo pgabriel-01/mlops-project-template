@@ -368,6 +368,10 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
         terraform_sample = (
             ROOT / "infrastructure/terraform/terraform.tfvars.sample"
         )
+        workspace_datastore = (
+            ROOT
+            / "classical/aml-cli-v2/mlops/azureml/datastores/workspaceblobstore.yml"
+        )
         checked_paths = [
             ROOT / "config-infra-common.yml",
             *ENVIRONMENT_CONFIGS.values(),
@@ -384,6 +388,10 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
         self.assertIn('prefix         = "mlopsv2"', sample)
         self.assertIn('postfix        = "0001"', sample)
         self.assertNotIn('postfix        = "10001"', sample)
+        self.assertFalse(
+            workspace_datastore.exists(),
+            "Do not commit a workspace-generated datastore account/container",
+        )
 
 
 if __name__ == "__main__":

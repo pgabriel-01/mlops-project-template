@@ -112,12 +112,15 @@ workload storage. Terraform enables the AML managed VNet in
 avoiding workspace replacement and soft-delete name retention. AML-managed
 network provisioning runs only after the workspace private endpoint completes.
 Both workspace identities receive `Azure AI Enterprise Network Connection
-Approver` on the workload resource group, and Terraform waits for those
-assignments to propagate before provisioning the managed network. AML-managed
-compute then waits for the private endpoint and managed-network provisioning,
-uses the managed network with node public IPs disabled, and is not attached to
-the user-managed training subnet. Existing computes must still be deleted and
-recreated when migrating them to AML managed networking.
+Approver` directly on the workspace Storage Account, Key Vault, and Container
+Registry. They also receive Container Registry `Reader`, which supplies the
+registry metadata permission omitted by the approver and `AcrPush` roles.
+Terraform uses a target-scope/contract-sensitive 120-second propagation barrier
+before provisioning the managed network. AML-managed compute then waits for the
+private endpoint and managed-network provisioning, uses the managed network with
+node public IPs disabled, and is not attached to the user-managed training
+subnet. Existing computes must still be deleted and recreated when migrating
+them to AML managed networking.
 
 ## Pipeline entrypoints
 

@@ -95,7 +95,6 @@ module "aml_workspace" {
   source = "./modules/aml-workspace"
 
   rg_name  = module.resource_group.name
-  rg_id    = module.resource_group.id
   location = module.resource_group.location
 
   prefix  = var.prefix

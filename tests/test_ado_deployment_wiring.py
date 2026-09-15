@@ -177,12 +177,13 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
     def test_private_workspace_uses_managed_network_without_public_compute_ips(self):
         root = (ROOT / "infrastructure/terraform/aml_deploy.tf").read_text()
         self.assertNotIn("training_subnet_id                =", root)
-        self.assertIn("rg_id    = module.resource_group.id", root)
+        self.assertNotIn("rg_id    = module.resource_group.id", root)
 
         variables = (
             ROOT / "infrastructure/terraform/modules/aml-workspace/variables.tf"
         ).read_text()
         self.assertNotIn('variable "training_subnet_id"', variables)
+        self.assertNotIn('variable "rg_id"', variables)
 
         workspace = (
             ROOT / "infrastructure/terraform/modules/aml-workspace/main.tf"
@@ -211,37 +212,60 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
             workspace.count(
                 'role_definition_name = "Azure AI Enterprise Network Connection Approver"'
             ),
-            2,
+            6,
         )
+        for identity in ("mlw_uai", "mlw_system"):
+            for target in ("storage", "keyvault", "acr"):
+                self.assertIn(
+                    f'resource "azurerm_role_assignment" "{identity}_{target}_network_connection_approver" {{\n'
+                    "  count                = var.enable_private_endpoints ? 1 : 0",
+                    workspace,
+                )
+            self.assertIn(
+                f'resource "azurerm_role_assignment" "{identity}_acr_reader" {{\n'
+                "  count                = var.enable_private_endpoints ? 1 : 0\n"
+                "  scope                = var.container_registry_id\n"
+                '  role_definition_name = "Reader"',
+                workspace,
+            )
         self.assertIn(
-            'resource "azurerm_role_assignment" "mlw_uai_network_connection_approver" {\n'
-            "  count                = var.enable_private_endpoints ? 1 : 0",
-            workspace,
-        )
-        self.assertIn(
-            'resource "azurerm_role_assignment" "mlw_system_network_connection_approver" {\n'
-            "  count                = var.enable_private_endpoints ? 1 : 0",
-            workspace,
-        )
-        self.assertIn(
-            'resource "time_sleep" "wait_for_managed_network_rbac_propagation" {\n'
+            'resource "time_sleep" "wait_for_managed_network_rbac" {\n'
             "  count           = var.enable_private_endpoints ? 1 : 0\n"
             '  create_duration = "120s"',
             workspace,
         )
-        self.assertIn("scope                = var.rg_id", workspace)
+        self.assertNotIn("scope                = var.rg_id", workspace)
         self.assertIn(
-            "depends_on = [\n"
-            "    azurerm_role_assignment.mlw_uai_network_connection_approver,\n"
-            "    azurerm_role_assignment.mlw_system_network_connection_approver\n"
-            "  ]",
+            'approval_contract = "target-scoped-approver-plus-acr-reader-v1"',
             workspace,
         )
+        self.assertIn(
+            "approval_scopes = jsonencode(sort([\n"
+            "      var.container_registry_id,\n"
+            "      var.key_vault_id,\n"
+            "      var.storage_account_id\n"
+            "    ]))",
+            workspace,
+        )
+        for dependency in (
+            "mlw_uai_storage_network_connection_approver",
+            "mlw_uai_keyvault_network_connection_approver",
+            "mlw_uai_acr_network_connection_approver",
+            "mlw_uai_acr_reader",
+            "mlw_system_storage_network_connection_approver",
+            "mlw_system_keyvault_network_connection_approver",
+            "mlw_system_acr_network_connection_approver",
+            "mlw_system_acr_reader",
+        ):
+            self.assertIn(
+                f"azurerm_role_assignment.{dependency}",
+                workspace,
+            )
         self.assertIn(
             "depends_on = [\n"
             "    azapi_update_resource.identity_based_system_datastores,\n"
             "    azurerm_private_endpoint.mlw_pe,\n"
-            "    time_sleep.wait_for_managed_network_rbac_propagation\n"
+            "    time_sleep.wait_for_managed_network_rbac\n"
             "  ]",
             workspace,
         )

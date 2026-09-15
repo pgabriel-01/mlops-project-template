@@ -56,10 +56,31 @@ resource "azurerm_role_assignment" "mlw_uai_acr_push" {
   principal_id         = azurerm_user_assigned_identity.mlw_uai.principal_id
 }
 
-resource "azurerm_role_assignment" "mlw_uai_network_connection_approver" {
+resource "azurerm_role_assignment" "mlw_uai_storage_network_connection_approver" {
   count                = var.enable_private_endpoints ? 1 : 0
-  scope                = var.rg_id
+  scope                = var.storage_account_id
   role_definition_name = "Azure AI Enterprise Network Connection Approver"
+  principal_id         = azurerm_user_assigned_identity.mlw_uai.principal_id
+}
+
+resource "azurerm_role_assignment" "mlw_uai_keyvault_network_connection_approver" {
+  count                = var.enable_private_endpoints ? 1 : 0
+  scope                = var.key_vault_id
+  role_definition_name = "Azure AI Enterprise Network Connection Approver"
+  principal_id         = azurerm_user_assigned_identity.mlw_uai.principal_id
+}
+
+resource "azurerm_role_assignment" "mlw_uai_acr_network_connection_approver" {
+  count                = var.enable_private_endpoints ? 1 : 0
+  scope                = var.container_registry_id
+  role_definition_name = "Azure AI Enterprise Network Connection Approver"
+  principal_id         = azurerm_user_assigned_identity.mlw_uai.principal_id
+}
+
+resource "azurerm_role_assignment" "mlw_uai_acr_reader" {
+  count                = var.enable_private_endpoints ? 1 : 0
+  scope                = var.container_registry_id
+  role_definition_name = "Reader"
   principal_id         = azurerm_user_assigned_identity.mlw_uai.principal_id
 }
 
@@ -149,20 +170,56 @@ resource "azurerm_role_assignment" "mlw_system_acr_push" {
   principal_id         = azurerm_machine_learning_workspace.mlw.identity[0].principal_id
 }
 
-resource "azurerm_role_assignment" "mlw_system_network_connection_approver" {
+resource "azurerm_role_assignment" "mlw_system_storage_network_connection_approver" {
   count                = var.enable_private_endpoints ? 1 : 0
-  scope                = var.rg_id
+  scope                = var.storage_account_id
   role_definition_name = "Azure AI Enterprise Network Connection Approver"
   principal_id         = azurerm_machine_learning_workspace.mlw.identity[0].principal_id
 }
 
-resource "time_sleep" "wait_for_managed_network_rbac_propagation" {
+resource "azurerm_role_assignment" "mlw_system_keyvault_network_connection_approver" {
+  count                = var.enable_private_endpoints ? 1 : 0
+  scope                = var.key_vault_id
+  role_definition_name = "Azure AI Enterprise Network Connection Approver"
+  principal_id         = azurerm_machine_learning_workspace.mlw.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "mlw_system_acr_network_connection_approver" {
+  count                = var.enable_private_endpoints ? 1 : 0
+  scope                = var.container_registry_id
+  role_definition_name = "Azure AI Enterprise Network Connection Approver"
+  principal_id         = azurerm_machine_learning_workspace.mlw.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "mlw_system_acr_reader" {
+  count                = var.enable_private_endpoints ? 1 : 0
+  scope                = var.container_registry_id
+  role_definition_name = "Reader"
+  principal_id         = azurerm_machine_learning_workspace.mlw.identity[0].principal_id
+}
+
+resource "time_sleep" "wait_for_managed_network_rbac" {
   count           = var.enable_private_endpoints ? 1 : 0
   create_duration = "120s"
 
+  triggers = {
+    approval_contract = "target-scoped-approver-plus-acr-reader-v1"
+    approval_scopes = jsonencode(sort([
+      var.container_registry_id,
+      var.key_vault_id,
+      var.storage_account_id
+    ]))
+  }
+
   depends_on = [
-    azurerm_role_assignment.mlw_uai_network_connection_approver,
-    azurerm_role_assignment.mlw_system_network_connection_approver
+    azurerm_role_assignment.mlw_uai_storage_network_connection_approver,
+    azurerm_role_assignment.mlw_uai_keyvault_network_connection_approver,
+    azurerm_role_assignment.mlw_uai_acr_network_connection_approver,
+    azurerm_role_assignment.mlw_uai_acr_reader,
+    azurerm_role_assignment.mlw_system_storage_network_connection_approver,
+    azurerm_role_assignment.mlw_system_keyvault_network_connection_approver,
+    azurerm_role_assignment.mlw_system_acr_network_connection_approver,
+    azurerm_role_assignment.mlw_system_acr_reader
   ]
 }
 
@@ -274,6 +331,6 @@ resource "azapi_resource_action" "provision_managed_network" {
   depends_on = [
     azapi_update_resource.identity_based_system_datastores,
     azurerm_private_endpoint.mlw_pe,
-    time_sleep.wait_for_managed_network_rbac_propagation
+    time_sleep.wait_for_managed_network_rbac
   ]
 }

@@ -101,7 +101,7 @@ class BatchDriverModelPathTests(unittest.TestCase):
                 )
             ),
         )
-        data = FakeDataFrame(["Unnamed: 0", "distance", "passengers", "cost"])
+        data = FakeDataFrame(["Unnamed: 0", "passengers", "distance", "cost"])
 
         selected = self.batch_driver._select_model_features(data, loaded_model)
 

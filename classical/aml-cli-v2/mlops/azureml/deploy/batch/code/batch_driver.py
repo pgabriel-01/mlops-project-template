@@ -1,11 +1,41 @@
+import logging
 import os
+from pathlib import Path
+
 import mlflow
 import pandas as pd
-import logging
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def _resolve_mlflow_model_path(model_dir):
+    model_root = Path(model_dir)
+    if (model_root / "MLmodel").is_file():
+        return model_root
+
+    if not model_root.is_dir():
+        raise FileNotFoundError(f"Model directory does not exist: {model_root}")
+
+    candidates = sorted(
+        child
+        for child in model_root.iterdir()
+        if child.is_dir() and (child / "MLmodel").is_file()
+    )
+    if len(candidates) == 1:
+        return candidates[0]
+    if not candidates:
+        raise FileNotFoundError(
+            f"No MLflow model root containing MLmodel was found in "
+            f"{model_root} or its immediate child directories"
+        )
+
+    candidate_paths = ", ".join(str(candidate) for candidate in candidates)
+    raise RuntimeError(
+        f"Multiple MLflow model roots were found under {model_root}: "
+        f"{candidate_paths}"
+    )
 
 
 def init():
@@ -21,17 +51,15 @@ def init():
     logger.info(f"AZUREML_MODEL_DIR: {model_dir}")
     
     if model_dir:
-        # List contents to debug
         logger.info(f"Contents of model directory: {os.listdir(model_dir)}")
-        
-        # The MLflow model should be directly in the model directory
-        model_path = model_dir
     else:
-        model_path = "./model"
+        model_dir = "./model"
+
+    model_path = _resolve_mlflow_model_path(model_dir)
     
     # Load the MLflow model
     try:
-        model = mlflow.pyfunc.load_model(model_path)
+        model = mlflow.pyfunc.load_model(str(model_path))
         logger.info(f"Model loaded successfully from {model_path}")
     except Exception as e:
         logger.error(f"Failed to load model from {model_path}: {str(e)}")

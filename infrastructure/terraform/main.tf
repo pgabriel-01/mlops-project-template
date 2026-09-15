@@ -8,7 +8,7 @@ terraform {
     }
     random = {
       source  = "hashicorp/random"
-      version = "~> 3.7.2"
+      version = "~> 3.9.1"
     }
     time = {
       source  = "hashicorp/time"
@@ -28,7 +28,7 @@ provider "azurerm" {
     }
   }
   use_oidc            = true
-  storage_use_azuread = true  # Use Azure AD authentication for storage operations instead of keys
+  storage_use_azuread = true # Use Azure AD authentication for storage operations instead of keys
 }
 
 data "azurerm_client_config" "current" {}

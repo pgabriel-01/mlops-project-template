@@ -107,7 +107,10 @@ different authorized pool is required. Review VNet/subnet CIDRs for overlap
 before platform bootstrap. Private environments use separate platform and
 workload VNets: Terraform peers them, links workload private DNS zones to the
 platform VNet, and reuses the platform Blob private DNS zone for both state and
-workload storage.
+workload storage. Terraform also places the AML training compute in the workload
+training subnet and disables node public IPs. Enabling private endpoints on an
+existing public compute cluster replaces that cluster because both settings are
+immutable.
 
 ## Pipeline entrypoints
 

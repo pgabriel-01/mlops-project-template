@@ -182,6 +182,8 @@ resource "azurerm_machine_learning_compute_cluster" "adl_aml_ws_compute_cluster"
   vm_size                       = var.aml_compute_sku
   machine_learning_workspace_id = azurerm_machine_learning_workspace.mlw.id
   count                         = var.enable_aml_computecluster ? 1 : 0
+  subnet_resource_id            = var.enable_private_endpoints ? var.training_subnet_id : null
+  node_public_ip_enabled        = !var.enable_private_endpoints
 
   identity {
     type         = "UserAssigned"

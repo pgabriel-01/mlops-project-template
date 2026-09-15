@@ -174,6 +174,32 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
             workspace,
         )
 
+    def test_private_compute_uses_training_subnet_without_public_ips(self):
+        root = (ROOT / "infrastructure/terraform/aml_deploy.tf").read_text()
+        self.assertIn(
+            "training_subnet_id                = "
+            "var.enable_private_endpoints ? module.vnet[0].training_subnet_id : \"\"",
+            root,
+        )
+
+        variables = (
+            ROOT / "infrastructure/terraform/modules/aml-workspace/variables.tf"
+        ).read_text()
+        self.assertIn('variable "training_subnet_id"', variables)
+
+        workspace = (
+            ROOT / "infrastructure/terraform/modules/aml-workspace/main.tf"
+        ).read_text()
+        self.assertIn(
+            "subnet_resource_id            = "
+            "var.enable_private_endpoints ? var.training_subnet_id : null",
+            workspace,
+        )
+        self.assertIn(
+            "node_public_ip_enabled        = !var.enable_private_endpoints",
+            workspace,
+        )
+
     def test_terraform_cli_uses_current_runtime_pin(self):
         common = (ROOT / "config-infra-common.yml").read_text()
         self.assertIn("terraform_version: 1.16.x", common)

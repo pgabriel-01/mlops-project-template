@@ -74,8 +74,12 @@ stages:
               privateEndpointSubnetPrefix: $(platform_private_endpoint_subnet_address_prefix)
               stateStorageAccountName: $(terraform_st_storage_account)
               stateContainerName: $(terraform_st_container_name)
-              managedDevOpsPoolName: ${{ coalesce(parameters.agentPoolName, variables.managed_devops_pool_name) }}
-              managedDevOpsPoolAlias: ${{ coalesce(parameters.agentPoolName, variables.managed_devops_pool_alias) }}
+              ${{ if ne(parameters.agentPoolName, '') }}:
+                managedDevOpsPoolName: ${{ parameters.agentPoolName }}
+                managedDevOpsPoolAlias: ${{ parameters.agentPoolName }}
+              ${{ else }}:
+                managedDevOpsPoolName: $(managed_devops_pool_name)
+                managedDevOpsPoolAlias: $(managed_devops_pool_alias)
               managedDevOpsPoolSku: $(managed_devops_pool_vm_sku)
               managedDevOpsPoolImage: $(managed_devops_pool_image)
               maximumConcurrency: ${{ variables.managed_devops_pool_maximum_concurrency }}

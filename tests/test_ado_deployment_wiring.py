@@ -56,13 +56,36 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
                     "templates/infra/platform-bootstrap.yml@mlops-templates",
                     content,
                 )
-            else:
                 self.assertIn(
-                    "value: ${{ coalesce(parameters.agentPoolName, "
-                    "variables.managed_devops_pool_alias) }}",
+                    "${{ if ne(parameters.agentPoolName, '') }}:",
                     content,
                 )
-                self.assertIn("name: $(selected_agent_pool)", content)
+                self.assertIn(
+                    "managedDevOpsPoolName: $(managed_devops_pool_name)",
+                    content,
+                )
+                self.assertIn(
+                    "managedDevOpsPoolAlias: $(managed_devops_pool_alias)",
+                    content,
+                )
+            else:
+                self.assertIn(
+                    "${{ if ne(parameters.agentPoolName, '') }}:\n"
+                    "  pool:\n"
+                    "    name: ${{ parameters.agentPoolName }}",
+                    content,
+                )
+                self.assertIn(
+                    "${{ else }}:\n"
+                    "  pool:\n"
+                    "    name: $(managed_devops_pool_alias)",
+                    content,
+                )
+                self.assertNotIn("selected_agent_pool", content)
+                self.assertNotIn(
+                    "coalesce(parameters.agentPoolName",
+                    content,
+                )
                 self.assertNotIn(
                     "${{ elseif eq(variables.network_mode, 'private') }}",
                     content,

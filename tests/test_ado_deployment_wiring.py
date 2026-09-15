@@ -359,13 +359,25 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
         self.assertIn("terraform_version: 1.16.x", common)
 
     def test_no_live_azure_devops_identifiers_are_committed(self):
-        checked_paths = [ROOT / "config-infra-common.yml", *ENVIRONMENT_CONFIGS.values()]
+        terraform_sample = (
+            ROOT / "infrastructure/terraform/terraform.tfvars.sample"
+        )
+        checked_paths = [
+            ROOT / "config-infra-common.yml",
+            *ENVIRONMENT_CONFIGS.values(),
+            terraform_sample,
+        ]
         for path in checked_paths:
             content = path.read_text()
             self.assertNotIn("Azure-ARM-Dev", content)
             self.assertNotIn("Azure-ARM-Test", content)
             self.assertNotIn("Azure-ARM-Prod", content)
             self.assertNotIn("00000000-0000-0000-0000-000000000000", content)
+
+        sample = terraform_sample.read_text()
+        self.assertIn('prefix         = "mlopsv2"', sample)
+        self.assertIn('postfix        = "0001"', sample)
+        self.assertNotIn('postfix        = "10001"', sample)
 
 
 if __name__ == "__main__":

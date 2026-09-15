@@ -38,15 +38,14 @@ variables:
   - ${{ else }}:
     - name: online_deployment_file
       value: classical/aml-cli-v2/mlops/azureml/deploy/online/online-deployment.yml
+  - ${{ if ne(parameters.agentPoolName, '') }}:
+    - name: managed_devops_pool_alias
+      value: ${{ parameters.agentPoolName }}
 
 trigger: none
 
-${{ if ne(parameters.agentPoolName, '') }}:
-  pool:
-    name: ${{ parameters.agentPoolName }}
-${{ else }}:
-  pool:
-    name: $(managed_devops_pool_alias)
+pool:
+  name: $(managed_devops_pool_alias)
 
 resources:
   repositories:

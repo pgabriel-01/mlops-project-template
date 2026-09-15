@@ -61,6 +61,11 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
                     content,
                 )
                 self.assertIn(
+                    "name: managed_devops_pool_name\n"
+                    "      value: ${{ parameters.agentPoolName }}",
+                    content,
+                )
+                self.assertIn(
                     "managedDevOpsPoolName: $(managed_devops_pool_name)",
                     content,
                 )
@@ -70,15 +75,14 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
                 )
             else:
                 self.assertIn(
-                    "${{ if ne(parameters.agentPoolName, '') }}:\n"
-                    "  pool:\n"
-                    "    name: ${{ parameters.agentPoolName }}",
+                    "- ${{ if ne(parameters.agentPoolName, '') }}:\n"
+                    "    - name: managed_devops_pool_alias\n"
+                    "      value: ${{ parameters.agentPoolName }}",
                     content,
                 )
                 self.assertIn(
-                    "${{ else }}:\n"
-                    "  pool:\n"
-                    "    name: $(managed_devops_pool_alias)",
+                    "pool:\n"
+                    "  name: $(managed_devops_pool_alias)",
                     content,
                 )
                 self.assertNotIn("selected_agent_pool", content)

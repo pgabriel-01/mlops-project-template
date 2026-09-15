@@ -32,15 +32,14 @@ variables:
     value: $(batch_endpoint_name)
   - name: endpoint_type
     value: batch
+  - ${{ if ne(parameters.agentPoolName, '') }}:
+    - name: managed_devops_pool_alias
+      value: ${{ parameters.agentPoolName }}
 
 trigger: none
 
-${{ if ne(parameters.agentPoolName, '') }}:
-  pool:
-    name: ${{ parameters.agentPoolName }}
-${{ else }}:
-  pool:
-    name: $(managed_devops_pool_alias)
+pool:
+  name: $(managed_devops_pool_alias)
 
 resources:
   repositories:

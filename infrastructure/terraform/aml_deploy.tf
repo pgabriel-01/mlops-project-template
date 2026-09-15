@@ -73,23 +73,12 @@ resource "azurerm_private_dns_zone_virtual_network_link" "workload_aml_zones_to_
 resource "azurerm_private_dns_zone_virtual_network_link" "workload_service_zones_to_platform" {
   for_each = var.enable_private_endpoints ? {
     for key, name in module.vnet[0].private_dns_zone_names : key => name
-    if !contains(["aml_api", "aml_notebooks", "blob"], key)
+    if !contains(["aml_api", "aml_notebooks", "blob", "keyvault"], key)
   } : {}
 
   name                  = "link-${each.key}-platform"
   resource_group_name   = module.resource_group.name
   private_dns_zone_name = each.value
-  virtual_network_id    = data.azurerm_virtual_network.platform[0].id
-  registration_enabled  = false
-  tags                  = local.tags
-}
-
-resource "azurerm_private_dns_zone_virtual_network_link" "workload_blob_to_platform" {
-  count = var.enable_private_endpoints ? 1 : 0
-
-  name                  = "link-agents-privatelink_blob_core_windows_net"
-  resource_group_name   = module.resource_group.name
-  private_dns_zone_name = module.vnet[0].private_dns_zone_names.blob
   virtual_network_id    = data.azurerm_virtual_network.platform[0].id
   registration_enabled  = false
   tags                  = local.tags
@@ -210,6 +199,24 @@ module "key_vault" {
   firewall_virtual_network_subnet_ids = var.enable_private_endpoints ? [module.vnet[0].training_subnet_id] : []
 
   tags = local.tags
+}
+
+import {
+  for_each = var.existing_cicd_key_vault_secrets_officer_role_assignment_id != "" ? {
+    existing = var.existing_cicd_key_vault_secrets_officer_role_assignment_id
+  } : {}
+
+  to = module.key_vault.azurerm_role_assignment.kv_secrets_officer
+  id = each.value
+}
+
+import {
+  for_each = var.existing_cicd_key_vault_crypto_officer_role_assignment_id != "" ? {
+    existing = var.existing_cicd_key_vault_crypto_officer_role_assignment_id
+  } : {}
+
+  to = module.key_vault.azurerm_role_assignment.kv_crypto_officer
+  id = each.value
 }
 
 # Application insights

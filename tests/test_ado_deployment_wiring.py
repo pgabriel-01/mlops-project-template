@@ -126,9 +126,16 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
             'azurerm_virtual_network_peering" "workload_to_platform',
             'azurerm_private_dns_zone_virtual_network_link" "workload_aml_zones_to_platform',
             'azurerm_private_dns_zone_virtual_network_link" "workload_service_zones_to_platform',
-            'azurerm_private_dns_zone_virtual_network_link" "workload_blob_to_platform',
         ):
             self.assertIn(resource, terraform)
+        self.assertNotIn(
+            'azurerm_private_dns_zone_virtual_network_link" "workload_blob_to_platform',
+            terraform,
+        )
+        self.assertIn(
+            'if !contains(["aml_api", "aml_notebooks", "blob", "keyvault"], key)',
+            terraform,
+        )
 
         self.assertIn('name                      = "peer-agents-to-workload"', terraform)
         self.assertIn('name                      = "peer-workload-to-agents"', terraform)
@@ -136,8 +143,16 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
             'name                  = "link-agents-${replace(each.value, ".", "_")}"',
             terraform,
         )
-        self.assertEqual(terraform.count("import {\n"), 3)
+        self.assertEqual(terraform.count("import {\n"), 5)
         self.assertIn("var.import_existing_platform_connectivity", terraform)
+        self.assertIn(
+            "var.existing_cicd_key_vault_secrets_officer_role_assignment_id",
+            terraform,
+        )
+        self.assertIn(
+            "var.existing_cicd_key_vault_crypto_officer_role_assignment_id",
+            terraform,
+        )
 
         vnet_module = (
             ROOT / "infrastructure/terraform/modules/vnet/main.tf"
@@ -149,6 +164,14 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
         self.assertIn('variable "platform_virtual_network_name"', variables)
         self.assertIn(
             'variable "import_existing_platform_connectivity"',
+            variables,
+        )
+        self.assertIn(
+            'variable "existing_cicd_key_vault_secrets_officer_role_assignment_id"',
+            variables,
+        )
+        self.assertIn(
+            'variable "existing_cicd_key_vault_crypto_officer_role_assignment_id"',
             variables,
         )
 
@@ -166,12 +189,22 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
             "${{ parameters.importExistingPlatformConnectivity }}",
             pipeline,
         )
+        self.assertIn(
+            "existingCicdKeyVaultSecretsOfficerRoleAssignmentId: "
+            "$(existing_cicd_key_vault_secrets_officer_role_assignment_id)",
+            pipeline,
+        )
+        self.assertIn(
+            "existingCicdKeyVaultCryptoOfficerRoleAssignmentId: "
+            "$(existing_cicd_key_vault_crypto_officer_role_assignment_id)",
+            pipeline,
+        )
         self.assertIn("apply: ${{ parameters.applyTerraform }}", pipeline)
 
     def test_documentation_names_immutable_template_dependency(self):
         documentation = (ROOT / "docs/azure-devops-deployment.md").read_text()
         self.assertIn(
-            "80a74134d9c6f6ebf0e1545e906685770d316b2a",
+            "86d0bebe8f591373b2d04b69cb4d372ccc8fbb5d",
             documentation,
         )
 
@@ -314,7 +347,7 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
             workspace.count(
                 'role_definition_name = "Azure AI Enterprise Network Connection Approver"'
             ),
-            6,
+            8,
         )
         for identity in ("mlw_uai", "mlw_system"):
             for target in ("storage", "keyvault", "acr"):
@@ -323,6 +356,12 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
                     "  count                = var.enable_private_endpoints ? 1 : 0",
                     workspace,
                 )
+            self.assertIn(
+                f'resource "azurerm_role_assignment" "{identity}_workspace_network_connection_approver" {{\n'
+                "  count                = var.enable_private_endpoints ? 1 : 0\n"
+                "  scope                = azurerm_machine_learning_workspace.mlw.id",
+                workspace,
+            )
             self.assertIn(
                 f'resource "azurerm_role_assignment" "{identity}_acr_reader" {{\n'
                 "  count                = var.enable_private_endpoints ? 1 : 0\n"
@@ -338,14 +377,15 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
         )
         self.assertNotIn("scope                = var.rg_id", workspace)
         self.assertIn(
-            'approval_contract = "target-scoped-approver-acr-reader-storage-data-v2"',
+            'approval_contract = "target-and-workspace-scoped-approver-acr-reader-storage-data-v3"',
             workspace,
         )
         self.assertIn(
             "approval_scopes = jsonencode(sort([\n"
             "      var.container_registry_id,\n"
             "      var.key_vault_id,\n"
-            "      var.storage_account_id\n"
+            "      var.storage_account_id,\n"
+            "      azurerm_machine_learning_workspace.mlw.id\n"
             "    ]))",
             workspace,
         )
@@ -358,11 +398,23 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
             "mlw_system_keyvault_network_connection_approver",
             "mlw_system_acr_network_connection_approver",
             "mlw_system_acr_reader",
+            "mlw_uai_workspace_network_connection_approver",
+            "mlw_system_workspace_network_connection_approver",
         ):
             self.assertIn(
                 f"azurerm_role_assignment.{dependency}",
                 workspace,
             )
+        self.assertIn(
+            'resource "azapi_update_resource" "identity_based_system_datastores"',
+            workspace,
+        )
+        self.assertIn(
+            "depends_on = [\n"
+            "    time_sleep.wait_for_managed_network_rbac\n"
+            "  ]",
+            workspace,
+        )
         self.assertIn(
             "depends_on = [\n"
             "    azapi_update_resource.identity_based_system_datastores,\n"

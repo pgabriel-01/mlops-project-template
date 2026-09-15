@@ -82,6 +82,8 @@ stages:
               platformResourceGroupName: $(managed_devops_pool_resource_group)
               platformVirtualNetworkName: $(platform_vnet_name)
               importExistingPlatformConnectivity: ${{ parameters.importExistingPlatformConnectivity }}
+              existingCicdKeyVaultSecretsOfficerRoleAssignmentId: $(existing_cicd_key_vault_secrets_officer_role_assignment_id)
+              existingCicdKeyVaultCryptoOfficerRoleAssignmentId: $(existing_cicd_key_vault_crypto_officer_role_assignment_id)
               vnetAddressSpace: $(vnet_address_space)
               trainingSubnetAddressPrefix: $(training_subnet_address_prefix)
               endpointsSubnetAddressPrefix: $(endpoints_subnet_address_prefix)

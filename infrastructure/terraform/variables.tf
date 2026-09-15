@@ -71,6 +71,18 @@ variable "import_existing_platform_connectivity" {
   default     = false
 }
 
+variable "existing_cicd_key_vault_secrets_officer_role_assignment_id" {
+  type        = string
+  description = "Optional full resource ID of an existing CI Key Vault Secrets Officer role assignment to import"
+  default     = ""
+}
+
+variable "existing_cicd_key_vault_crypto_officer_role_assignment_id" {
+  type        = string
+  description = "Optional full resource ID of an existing CI Key Vault Crypto Officer role assignment to import"
+  default     = ""
+}
+
 variable "vnet_address_space" {
   type        = string
   description = "Address space for the virtual network (only used if enable_private_endpoints is true)"

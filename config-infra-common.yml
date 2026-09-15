@@ -36,6 +36,10 @@ variables:
   managed_devops_pool_subnet_address_prefix: '10.20.1.0/24'
   platform_private_endpoint_subnet_name: snet-private-endpoints
   platform_private_endpoint_subnet_address_prefix: '10.20.2.0/24'
+  # Optional full Azure resource IDs used to adopt CI Key Vault role assignments
+  # that already exist outside Terraform state.
+  existing_cicd_key_vault_secrets_officer_role_assignment_id: ''
+  existing_cicd_key_vault_crypto_officer_role_assignment_id: ''
 
   # VNet settings (only used when enable_vnet: true)
   vnet_address_prefix: '10.0.0.0/16'

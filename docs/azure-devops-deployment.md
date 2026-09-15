@@ -20,7 +20,7 @@ templates for platform bootstrap, Terraform, and AML CLI v2. Pipeline parameter
 `mlopsTemplatesRef` defaults to `refs/heads/main`; before
 `pgabriel-01/mlops-templates#1` is merged, queue pipelines with its documented
 immutable commit SHA,
-`80a74134d9c6f6ebf0e1545e906685770d316b2a`. Release tags or commit SHAs are
+`86d0bebe8f591373b2d04b69cb4d372ccc8fbb5d`. Release tags or commit SHAs are
 recommended for controlled promotion.
 
 ## Prerequisites
@@ -51,6 +51,12 @@ Create Azure DevOps variable groups named `mlops-dev`, `mlops-test`, and
   Microsoft DevOpsInfrastructure service principal in the tenant;
 - `devcenter_project_resource_id`, the full Azure resource ID of the Dev Center
   project used by the Managed DevOps Pool.
+
+If CI Key Vault roles already exist outside the current Terraform state, set
+`existing_cicd_key_vault_secrets_officer_role_assignment_id` and
+`existing_cicd_key_vault_crypto_officer_role_assignment_id` to their full Azure
+resource IDs for one-time state adoption. Leave both values empty for new
+environments.
 
 Do not commit live service connection names, tenant/subscription IDs, principal
 IDs, organization URLs, project IDs, or credentials. Platform bootstrap values
@@ -107,20 +113,23 @@ pipelines use the environment's
 required. Platform bootstrap remains on a Microsoft-hosted agent because the
 managed pool may not exist yet. Review VNet/subnet CIDRs for overlap before
 platform bootstrap. Private environments use separate platform and workload
-VNets: Terraform peers them and links workload private DNS zones to the platform
-VNet. The Terraform backend and AML workload storage retain separate Blob
-private DNS zones, each linked only where it is consumed. The platform resource
-group and VNet names are explicit inputs so an existing Managed DevOps Pool
-network can be adopted without encoding live resource IDs. Queue the
+VNets: Terraform peers them and links the workload AML, registry, and
+File/DFS/Queue/Table private DNS zones to the platform VNet. The Terraform
+backend and AML workload retain separate Blob and Key Vault private DNS zones;
+the platform bootstrap zones contain platform-side private endpoint records for
+the workload resources, avoiding Azure's duplicate-namespace VNet-link
+restriction. The platform resource group and VNet names are explicit inputs so
+an existing Managed DevOps Pool network can be adopted without encoding live
+resource IDs. Queue the
 infrastructure pipeline once with `importExistingPlatformConnectivity=true` to
-adopt existing bidirectional peerings and AML API/notebooks/Blob DNS links, then
+adopt existing bidirectional peerings and AML API/notebooks DNS links, then
 return it to `false`. Terraform enables the AML managed VNet in
 `AllowInternetOutbound` mode through an in-place Azure API workspace update,
 avoiding workspace replacement and soft-delete name retention. AML-managed
 network provisioning runs only after the workspace private endpoint completes.
 Both workspace identities receive `Azure AI Enterprise Network Connection
-Approver` directly on the workspace Storage Account, Key Vault, and Container
-Registry. They also receive Container Registry `Reader`, which supplies the
+Approver` directly on the workspace and its Storage Account, Key Vault, and
+Container Registry. They also receive Container Registry `Reader`, which supplies the
 registry metadata permission omitted by the approver and `AcrPush` roles.
 Terraform uses a target-scope/contract-sensitive 120-second propagation barrier
 before provisioning the managed network. AML-managed compute then waits for the
@@ -201,7 +210,7 @@ python3 -m compileall classical/aml-cli-v2/data-science/src \
 ```
 
 Compile or preview each Azure DevOps YAML pipeline against the pinned template
-commit `80a74134d9c6f6ebf0e1545e906685770d316b2a` to verify
+commit `86d0bebe8f591373b2d04b69cb4d372ccc8fbb5d` to verify
 repository-resource authorization, template paths, and parameters.
 
 Run the project contract tests:

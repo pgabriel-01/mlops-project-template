@@ -19,8 +19,8 @@ resource "azurerm_storage_account" "st" {
   is_hns_enabled                = var.hns_enabled
   min_tls_version               = "TLS1_2"
   public_network_access_enabled = var.enable_private_endpoints ? false : true
-  shared_access_key_enabled     = false  # Disable key-based authentication, use managed identity instead
-  
+  shared_access_key_enabled     = false # Disable key-based authentication, use managed identity instead
+
   blob_properties {
     delete_retention_policy {
       days = 7
@@ -31,7 +31,7 @@ resource "azurerm_storage_account" "st" {
   }
 
   tags = var.tags
-  
+
 }
 
 # Virtual Network & Firewall configuration
@@ -85,6 +85,50 @@ resource "azurerm_private_endpoint" "st_file_pe" {
   private_dns_zone_group {
     name                 = "file-dns-zone-group"
     private_dns_zone_ids = [var.private_dns_zone_file_id]
+  }
+
+  tags = var.tags
+}
+
+resource "azurerm_private_endpoint" "st_queue_pe" {
+  count               = var.enable_private_endpoints ? 1 : 0
+  name                = "pe-${azurerm_storage_account.st.name}-queue"
+  location            = var.location
+  resource_group_name = var.rg_name
+  subnet_id           = var.private_endpoint_subnet_id
+
+  private_service_connection {
+    name                           = "psc-${azurerm_storage_account.st.name}-queue"
+    private_connection_resource_id = azurerm_storage_account.st.id
+    subresource_names              = ["queue"]
+    is_manual_connection           = false
+  }
+
+  private_dns_zone_group {
+    name                 = "queue-dns-zone-group"
+    private_dns_zone_ids = [var.private_dns_zone_queue_id]
+  }
+
+  tags = var.tags
+}
+
+resource "azurerm_private_endpoint" "st_table_pe" {
+  count               = var.enable_private_endpoints ? 1 : 0
+  name                = "pe-${azurerm_storage_account.st.name}-table"
+  location            = var.location
+  resource_group_name = var.rg_name
+  subnet_id           = var.private_endpoint_subnet_id
+
+  private_service_connection {
+    name                           = "psc-${azurerm_storage_account.st.name}-table"
+    private_connection_resource_id = azurerm_storage_account.st.id
+    subresource_names              = ["table"]
+    is_manual_connection           = false
+  }
+
+  private_dns_zone_group {
+    name                 = "table-dns-zone-group"
+    private_dns_zone_ids = [var.private_dns_zone_table_id]
   }
 
   tags = var.tags

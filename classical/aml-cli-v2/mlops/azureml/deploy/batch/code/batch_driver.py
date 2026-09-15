@@ -1,11 +1,85 @@
+import logging
 import os
+from pathlib import Path
+
 import mlflow
 import pandas as pd
-import logging
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+def _resolve_mlflow_model_path(model_dir):
+    model_root = Path(model_dir)
+    if (model_root / "MLmodel").is_file():
+        return model_root
+
+    if not model_root.is_dir():
+        raise FileNotFoundError(f"Model directory does not exist: {model_root}")
+
+    candidates = sorted(
+        child
+        for child in model_root.iterdir()
+        if child.is_dir() and (child / "MLmodel").is_file()
+    )
+    if len(candidates) == 1:
+        return candidates[0]
+    if not candidates:
+        raise FileNotFoundError(
+            f"No MLflow model root containing MLmodel was found in "
+            f"{model_root} or its immediate child directories"
+        )
+
+    candidate_paths = ", ".join(str(candidate) for candidate in candidates)
+    raise RuntimeError(
+        f"Multiple MLflow model roots were found under {model_root}: "
+        f"{candidate_paths}"
+    )
+
+
+def _get_expected_feature_names(loaded_model):
+    metadata = getattr(loaded_model, "metadata", None)
+    if metadata is not None:
+        input_schema = metadata.get_input_schema()
+        if input_schema is not None:
+            input_names = input_schema.input_names()
+            if input_names and all(input_names):
+                return list(input_names)
+
+    model_impl = getattr(loaded_model, "_model_impl", None)
+    sklearn_model = getattr(model_impl, "sklearn_model", None)
+    feature_names = getattr(sklearn_model, "feature_names_in_", None)
+    if feature_names is not None:
+        return list(feature_names)
+
+    return None
+
+
+def _select_model_features(data, loaded_model):
+    expected_features = _get_expected_feature_names(loaded_model)
+    if expected_features is None:
+        return data
+
+    missing_features = [
+        feature for feature in expected_features if feature not in data.columns
+    ]
+    if missing_features:
+        raise ValueError(
+            "Batch input is missing model features: "
+            + ", ".join(missing_features)
+        )
+
+    ignored_columns = [
+        column for column in data.columns if column not in expected_features
+    ]
+    if ignored_columns:
+        logger.info(
+            "Ignoring batch input columns not used by the model: %s",
+            ", ".join(ignored_columns),
+        )
+
+    return data[expected_features]
 
 
 def init():
@@ -21,17 +95,15 @@ def init():
     logger.info(f"AZUREML_MODEL_DIR: {model_dir}")
     
     if model_dir:
-        # List contents to debug
         logger.info(f"Contents of model directory: {os.listdir(model_dir)}")
-        
-        # The MLflow model should be directly in the model directory
-        model_path = model_dir
     else:
-        model_path = "./model"
+        model_dir = "./model"
+
+    model_path = _resolve_mlflow_model_path(model_dir)
     
     # Load the MLflow model
     try:
-        model = mlflow.pyfunc.load_model(model_path)
+        model = mlflow.pyfunc.load_model(str(model_path))
         logger.info(f"Model loaded successfully from {model_path}")
     except Exception as e:
         logger.error(f"Failed to load model from {model_path}: {str(e)}")
@@ -61,7 +133,7 @@ def run(mini_batch):
             logger.info(f"Read {len(data)} rows from {file_path}")
             
             # Make predictions
-            predictions = model.predict(data)
+            predictions = model.predict(_select_model_features(data, model))
             logger.info(f"Generated {len(predictions)} predictions")
             
             # Append predictions as rows (for append_row output action)

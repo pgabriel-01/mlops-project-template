@@ -131,9 +131,10 @@ def main(args):
 
     # Define explicit pip requirements to control dependencies
     # Include pyarrow and scipy with compatible wheel versions to avoid source build
-    # NOTE: These are the ONLY packages needed for inference - no Azure ML training packages
+    # Include AML monitoring required by the generated MLflow scoring script
     pip_reqs = [
         "mlflow==2.22.4",
+        "azureml-ai-monitoring==1.0.0",
         "scikit-learn==1.7.2",
         "numpy==2.2.6",
         "cloudpickle==3.1.1",

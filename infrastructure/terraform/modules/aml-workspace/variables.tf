@@ -51,6 +51,7 @@ variable "container_registry_id" {
 
 variable "enable_aml_computecluster" {
   description = "Variable to enable or disable AML compute cluster"
+  type        = bool
   default     = false
 }
 
@@ -89,8 +90,8 @@ variable "private_dns_zone_aml_notebooks_id" {
   default     = ""
 }
 
-variable "github_actions_service_principal_id" {
+variable "cicd_principal_object_id" {
   type        = string
-  description = "The object ID of the GitHub Actions service principal for role assignments"
+  description = "The object ID of the CI/CD principal for role assignments"
   default     = ""
 }

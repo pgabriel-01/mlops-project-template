@@ -30,15 +30,32 @@ output "endpoints_subnet_name" {
 
 output "private_dns_zone_ids" {
   value = {
-    aml_api      = azurerm_private_dns_zone.aml_api.id
+    aml_api       = azurerm_private_dns_zone.aml_api.id
     aml_notebooks = azurerm_private_dns_zone.aml_notebooks.id
-    blob         = azurerm_private_dns_zone.blob.id
-    file         = azurerm_private_dns_zone.file.id
-    dfs          = azurerm_private_dns_zone.dfs.id
-    keyvault     = azurerm_private_dns_zone.keyvault.id
-    acr          = azurerm_private_dns_zone.acr.id
+    blob          = azurerm_private_dns_zone.blob.id
+    file          = azurerm_private_dns_zone.file.id
+    dfs           = azurerm_private_dns_zone.dfs.id
+    queue         = azurerm_private_dns_zone.queue.id
+    table         = azurerm_private_dns_zone.table.id
+    keyvault      = azurerm_private_dns_zone.keyvault.id
+    acr           = azurerm_private_dns_zone.acr.id
   }
   description = "Map of private DNS zone IDs"
+}
+
+output "private_dns_zone_names" {
+  value = {
+    aml_api       = azurerm_private_dns_zone.aml_api.name
+    aml_notebooks = azurerm_private_dns_zone.aml_notebooks.name
+    blob          = azurerm_private_dns_zone.blob.name
+    file          = azurerm_private_dns_zone.file.name
+    dfs           = azurerm_private_dns_zone.dfs.name
+    queue         = azurerm_private_dns_zone.queue.name
+    table         = azurerm_private_dns_zone.table.name
+    keyvault      = azurerm_private_dns_zone.keyvault.name
+    acr           = azurerm_private_dns_zone.acr.name
+  }
+  description = "Private DNS zone names created for workload services"
 }
 
 output "nsg_id" {

@@ -24,6 +24,18 @@ resource "azurerm_role_assignment" "mlw_uai_storage_account_contributor" {
   principal_id         = azurerm_user_assigned_identity.mlw_uai.principal_id
 }
 
+resource "azurerm_role_assignment" "mlw_uai_storage_queue_data_contributor" {
+  scope                = var.storage_account_id
+  role_definition_name = "Storage Queue Data Contributor"
+  principal_id         = azurerm_user_assigned_identity.mlw_uai.principal_id
+}
+
+resource "azurerm_role_assignment" "mlw_uai_storage_table_data_contributor" {
+  scope                = var.storage_account_id
+  role_definition_name = "Storage Table Data Contributor"
+  principal_id         = azurerm_user_assigned_identity.mlw_uai.principal_id
+}
+
 # Grant the user-assigned managed identity access to Key Vault
 resource "azurerm_role_assignment" "mlw_uai_keyvault_reader" {
   scope                = var.key_vault_id
@@ -56,10 +68,38 @@ resource "azurerm_role_assignment" "mlw_uai_acr_push" {
   principal_id         = azurerm_user_assigned_identity.mlw_uai.principal_id
 }
 
+resource "azurerm_role_assignment" "mlw_uai_storage_network_connection_approver" {
+  count                = var.enable_private_endpoints ? 1 : 0
+  scope                = var.storage_account_id
+  role_definition_name = "Azure AI Enterprise Network Connection Approver"
+  principal_id         = azurerm_user_assigned_identity.mlw_uai.principal_id
+}
+
+resource "azurerm_role_assignment" "mlw_uai_keyvault_network_connection_approver" {
+  count                = var.enable_private_endpoints ? 1 : 0
+  scope                = var.key_vault_id
+  role_definition_name = "Azure AI Enterprise Network Connection Approver"
+  principal_id         = azurerm_user_assigned_identity.mlw_uai.principal_id
+}
+
+resource "azurerm_role_assignment" "mlw_uai_acr_network_connection_approver" {
+  count                = var.enable_private_endpoints ? 1 : 0
+  scope                = var.container_registry_id
+  role_definition_name = "Azure AI Enterprise Network Connection Approver"
+  principal_id         = azurerm_user_assigned_identity.mlw_uai.principal_id
+}
+
+resource "azurerm_role_assignment" "mlw_uai_acr_reader" {
+  count                = var.enable_private_endpoints ? 1 : 0
+  scope                = var.container_registry_id
+  role_definition_name = "Reader"
+  principal_id         = azurerm_user_assigned_identity.mlw_uai.principal_id
+}
+
 # Wait for RBAC propagation - Azure typically needs 60-120 seconds
 resource "time_sleep" "wait_for_rbac_propagation" {
   create_duration = "120s"
-  
+
   depends_on = [
     azurerm_role_assignment.mlw_uai_storage_blob_data_reader,
     azurerm_role_assignment.mlw_uai_storage_blob_data_contributor,
@@ -81,10 +121,10 @@ resource "azurerm_machine_learning_workspace" "mlw" {
   storage_account_id      = var.storage_account_id
   container_registry_id   = var.container_registry_id
 
-  sku_name                          = "Basic"
-  public_network_access_enabled     = true
-  image_build_compute_name          = "cpu-cluster"
-  v1_legacy_mode_enabled            = false
+  sku_name                      = "Basic"
+  public_network_access_enabled = !var.enable_private_endpoints
+  image_build_compute_name      = "cpu-cluster"
+  v1_legacy_mode_enabled        = false
   # Note: system_datastores_auth_mode was removed from azurerm provider
   # Configure datastore auth via azurerm_machine_learning_datastore_blobstorage instead
 
@@ -96,10 +136,51 @@ resource "azurerm_machine_learning_workspace" "mlw" {
   primary_user_assigned_identity = azurerm_user_assigned_identity.mlw_uai.id
 
   tags = var.tags
-  
+
   # Wait for RBAC permissions to propagate
   depends_on = [
     time_sleep.wait_for_rbac_propagation
+  ]
+}
+
+resource "azapi_update_resource" "identity_based_system_datastores" {
+  type        = "Microsoft.MachineLearningServices/workspaces@2025-06-01"
+  resource_id = azurerm_machine_learning_workspace.mlw.id
+
+  body = {
+    properties = merge(
+      {
+        systemDatastoresAuthMode = "identity"
+      },
+      var.enable_private_endpoints ? {
+        managedNetwork = {
+          isolationMode = "AllowInternetOutbound"
+          outboundRules = {
+            workspaceStorageQueue = {
+              type = "PrivateEndpoint"
+              destination = {
+                serviceResourceId = var.storage_account_id
+                sparkEnabled      = false
+                subresourceTarget = "queue"
+              }
+            }
+            workspaceStorageTable = {
+              type = "PrivateEndpoint"
+              destination = {
+                serviceResourceId = var.storage_account_id
+                sparkEnabled      = false
+                subresourceTarget = "table"
+              }
+            }
+          }
+        }
+      } : {}
+    )
+  }
+
+  depends_on = [
+    time_sleep.wait_for_managed_network_rbac,
+    time_sleep.wait_for_workspace_network_rbac
   ]
 }
 
@@ -107,6 +188,18 @@ resource "azurerm_machine_learning_workspace" "mlw" {
 resource "azurerm_role_assignment" "mlw_system_storage_blob_data_contributor" {
   scope                = var.storage_account_id
   role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = azurerm_machine_learning_workspace.mlw.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "mlw_system_storage_queue_data_contributor" {
+  scope                = var.storage_account_id
+  role_definition_name = "Storage Queue Data Contributor"
+  principal_id         = azurerm_machine_learning_workspace.mlw.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "mlw_system_storage_table_data_contributor" {
+  scope                = var.storage_account_id
+  role_definition_name = "Storage Table Data Contributor"
   principal_id         = azurerm_machine_learning_workspace.mlw.identity[0].principal_id
 }
 
@@ -124,27 +217,123 @@ resource "azurerm_role_assignment" "mlw_system_acr_push" {
   principal_id         = azurerm_machine_learning_workspace.mlw.identity[0].principal_id
 }
 
-# Grant GitHub Actions service principal access to storage account (for CI/CD pipelines)
-resource "azurerm_role_assignment" "github_actions_storage_blob_data_reader" {
-  count                = var.github_actions_service_principal_id != "" ? 1 : 0
+resource "azurerm_role_assignment" "mlw_system_storage_network_connection_approver" {
+  count                = var.enable_private_endpoints ? 1 : 0
+  scope                = var.storage_account_id
+  role_definition_name = "Azure AI Enterprise Network Connection Approver"
+  principal_id         = azurerm_machine_learning_workspace.mlw.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "mlw_system_keyvault_network_connection_approver" {
+  count                = var.enable_private_endpoints ? 1 : 0
+  scope                = var.key_vault_id
+  role_definition_name = "Azure AI Enterprise Network Connection Approver"
+  principal_id         = azurerm_machine_learning_workspace.mlw.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "mlw_system_acr_network_connection_approver" {
+  count                = var.enable_private_endpoints ? 1 : 0
+  scope                = var.container_registry_id
+  role_definition_name = "Azure AI Enterprise Network Connection Approver"
+  principal_id         = azurerm_machine_learning_workspace.mlw.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "mlw_system_acr_reader" {
+  count                = var.enable_private_endpoints ? 1 : 0
+  scope                = var.container_registry_id
+  role_definition_name = "Reader"
+  principal_id         = azurerm_machine_learning_workspace.mlw.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "mlw_uai_workspace_network_connection_approver" {
+  count                = var.enable_private_endpoints ? 1 : 0
+  scope                = azurerm_machine_learning_workspace.mlw.id
+  role_definition_name = "Azure AI Enterprise Network Connection Approver"
+  principal_id         = azurerm_user_assigned_identity.mlw_uai.principal_id
+}
+
+resource "azurerm_role_assignment" "mlw_system_workspace_network_connection_approver" {
+  count                = var.enable_private_endpoints ? 1 : 0
+  scope                = azurerm_machine_learning_workspace.mlw.id
+  role_definition_name = "Azure AI Enterprise Network Connection Approver"
+  principal_id         = azurerm_machine_learning_workspace.mlw.identity[0].principal_id
+}
+
+resource "time_sleep" "wait_for_workspace_network_rbac" {
+  count           = var.enable_private_endpoints ? 1 : 0
+  create_duration = "120s"
+
+  depends_on = [
+    azurerm_role_assignment.mlw_uai_workspace_network_connection_approver,
+    azurerm_role_assignment.mlw_system_workspace_network_connection_approver
+  ]
+}
+
+resource "time_sleep" "wait_for_managed_network_rbac" {
+  count           = var.enable_private_endpoints ? 1 : 0
+  create_duration = "120s"
+
+  triggers = {
+    approval_contract = "target-scoped-approver-acr-reader-storage-data-v2"
+    approval_scopes = jsonencode(sort([
+      var.container_registry_id,
+      var.key_vault_id,
+      var.storage_account_id
+    ]))
+  }
+
+  depends_on = [
+    azurerm_role_assignment.mlw_uai_storage_network_connection_approver,
+    azurerm_role_assignment.mlw_uai_storage_queue_data_contributor,
+    azurerm_role_assignment.mlw_uai_storage_table_data_contributor,
+    azurerm_role_assignment.mlw_uai_keyvault_network_connection_approver,
+    azurerm_role_assignment.mlw_uai_acr_network_connection_approver,
+    azurerm_role_assignment.mlw_uai_acr_reader,
+    azurerm_role_assignment.mlw_system_storage_network_connection_approver,
+    azurerm_role_assignment.mlw_system_storage_queue_data_contributor,
+    azurerm_role_assignment.mlw_system_storage_table_data_contributor,
+    azurerm_role_assignment.mlw_system_keyvault_network_connection_approver,
+    azurerm_role_assignment.mlw_system_acr_network_connection_approver,
+    azurerm_role_assignment.mlw_system_acr_reader
+  ]
+}
+
+# Grant the Azure DevOps service connection principal access for CI/CD pipelines.
+moved {
+  from = azurerm_role_assignment.github_actions_storage_blob_data_reader
+  to   = azurerm_role_assignment.cicd_storage_blob_data_reader
+}
+
+resource "azurerm_role_assignment" "cicd_storage_blob_data_reader" {
+  count                = var.cicd_principal_object_id != "" ? 1 : 0
   scope                = var.storage_account_id
   role_definition_name = "Storage Blob Data Reader"
-  principal_id         = var.github_actions_service_principal_id
+  principal_id         = var.cicd_principal_object_id
 }
 
-resource "azurerm_role_assignment" "github_actions_storage_blob_data_contributor" {
-  count                = var.github_actions_service_principal_id != "" ? 1 : 0
+moved {
+  from = azurerm_role_assignment.github_actions_storage_blob_data_contributor
+  to   = azurerm_role_assignment.cicd_storage_blob_data_contributor
+}
+
+resource "azurerm_role_assignment" "cicd_storage_blob_data_contributor" {
+  count                = var.cicd_principal_object_id != "" ? 1 : 0
   scope                = var.storage_account_id
   role_definition_name = "Storage Blob Data Contributor"
-  principal_id         = var.github_actions_service_principal_id
+  principal_id         = var.cicd_principal_object_id
 }
 
-# Grant GitHub Actions service principal Contributor role on ML workspace (for endpoint deployments)
-resource "azurerm_role_assignment" "github_actions_workspace_contributor" {
-  count                = var.github_actions_service_principal_id != "" ? 1 : 0
+# Grant the CI/CD principal Contributor on the workspace for AML asset and endpoint operations.
+moved {
+  from = azurerm_role_assignment.github_actions_workspace_contributor
+  to   = azurerm_role_assignment.cicd_workspace_contributor
+}
+
+resource "azurerm_role_assignment" "cicd_workspace_contributor" {
+  count                = var.cicd_principal_object_id != "" ? 1 : 0
   scope                = azurerm_machine_learning_workspace.mlw.id
   role_definition_name = "Contributor"
-  principal_id         = var.github_actions_service_principal_id
+  principal_id         = var.cicd_principal_object_id
 }
 
 # Compute cluster
@@ -156,11 +345,18 @@ resource "azurerm_machine_learning_compute_cluster" "adl_aml_ws_compute_cluster"
   vm_size                       = var.aml_compute_sku
   machine_learning_workspace_id = azurerm_machine_learning_workspace.mlw.id
   count                         = var.enable_aml_computecluster ? 1 : 0
+  node_public_ip_enabled        = !var.enable_private_endpoints
 
   identity {
     type         = "UserAssigned"
     identity_ids = [azurerm_user_assigned_identity.mlw_uai.id]
   }
+
+  depends_on = [
+    azapi_update_resource.identity_based_system_datastores,
+    azurerm_private_endpoint.mlw_pe,
+    azapi_resource_action.provision_managed_network
+  ]
 
   scale_settings {
     min_node_count                       = 0
@@ -193,4 +389,23 @@ resource "azurerm_private_endpoint" "mlw_pe" {
   }
 
   tags = var.tags
+}
+
+resource "azapi_resource_action" "provision_managed_network" {
+  count = var.enable_private_endpoints ? 1 : 0
+
+  type        = "Microsoft.MachineLearningServices/workspaces@2025-06-01"
+  resource_id = azurerm_machine_learning_workspace.mlw.id
+  action      = "provisionManagedNetwork"
+  method      = "POST"
+
+  body = {
+    includeSpark = false
+  }
+
+  depends_on = [
+    azapi_update_resource.identity_based_system_datastores,
+    azurerm_private_endpoint.mlw_pe,
+    time_sleep.wait_for_managed_network_rbac
+  ]
 }

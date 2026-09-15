@@ -237,6 +237,38 @@ resource "azurerm_private_dns_zone_virtual_network_link" "file" {
   tags                  = var.tags
 }
 
+# Private DNS zone for Storage Queue
+resource "azurerm_private_dns_zone" "queue" {
+  name                = "privatelink.queue.core.windows.net"
+  resource_group_name = var.rg_name
+  tags                = var.tags
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "queue" {
+  name                  = "link-queue"
+  resource_group_name   = var.rg_name
+  private_dns_zone_name = azurerm_private_dns_zone.queue.name
+  virtual_network_id    = azurerm_virtual_network.vnet.id
+  registration_enabled  = false
+  tags                  = var.tags
+}
+
+# Private DNS zone for Storage Table
+resource "azurerm_private_dns_zone" "table" {
+  name                = "privatelink.table.core.windows.net"
+  resource_group_name = var.rg_name
+  tags                = var.tags
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "table" {
+  name                  = "link-table"
+  resource_group_name   = var.rg_name
+  private_dns_zone_name = azurerm_private_dns_zone.table.name
+  virtual_network_id    = azurerm_virtual_network.vnet.id
+  registration_enabled  = false
+  tags                  = var.tags
+}
+
 # Private DNS zone for Storage DFS (Data Lake Gen2)
 resource "azurerm_private_dns_zone" "dfs" {
   name                = "privatelink.dfs.core.windows.net"

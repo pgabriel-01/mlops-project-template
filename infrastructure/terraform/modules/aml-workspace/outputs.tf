@@ -1,5 +1,9 @@
 output "name" {
   value = azurerm_machine_learning_workspace.mlw.name
+
+  depends_on = [
+    azapi_update_resource.identity_based_system_datastores
+  ]
 }
 
 output "user_assigned_identity_id" {
@@ -15,4 +19,9 @@ output "user_assigned_identity_principal_id" {
 output "user_assigned_identity_client_id" {
   value       = azurerm_user_assigned_identity.mlw_uai.client_id
   description = "The client ID of the user-assigned managed identity"
+}
+
+output "training_compute_name" {
+  value       = try(azurerm_machine_learning_compute_cluster.adl_aml_ws_compute_cluster[0].name, null)
+  description = "The name of the Terraform-managed training compute cluster"
 }

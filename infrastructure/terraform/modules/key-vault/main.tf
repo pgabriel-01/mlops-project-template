@@ -8,8 +8,8 @@ resource "azurerm_key_vault" "kv" {
   sku_name                   = "standard"
   purge_protection_enabled   = true
   soft_delete_retention_days = 90
-  rbac_authorization_enabled  = true
-  
+  rbac_authorization_enabled = true
+
   # Network ACL configured inline
   network_acls {
     default_action             = var.enable_private_endpoints ? "Deny" : "Allow"
@@ -32,6 +32,15 @@ resource "azurerm_role_assignment" "kv_crypto_officer" {
   scope                = azurerm_key_vault.kv.id
   role_definition_name = "Key Vault Crypto Officer"
   principal_id         = data.azurerm_client_config.current.object_id
+}
+
+resource "time_sleep" "wait_for_rbac_propagation" {
+  create_duration = "120s"
+
+  depends_on = [
+    azurerm_role_assignment.kv_secrets_officer,
+    azurerm_role_assignment.kv_crypto_officer
+  ]
 }
 
 # Private endpoint for Key Vault

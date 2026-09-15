@@ -1,0 +1,87 @@
+# Copyright (c) Microsoft Corporation. All rights reserved.
+# Licensed under the MIT License.
+
+name: platform-ado-bootstrap
+
+parameters:
+  - name: environment
+    displayName: Target environment
+    type: string
+    default: dev
+    values:
+      - dev
+      - test
+      - prod
+  - name: agentPoolName
+    displayName: Managed DevOps Pool name override
+    type: string
+    default: ''
+  - name: mlopsTemplatesRef
+    displayName: mlops-templates branch, tag, or commit
+    type: string
+    default: refs/heads/main
+
+variables:
+  - ${{ if eq(parameters.environment, 'dev') }}:
+    - template: ../../../config-infra-dev.yml
+  - ${{ if eq(parameters.environment, 'test') }}:
+    - template: ../../../config-infra-test.yml
+  - ${{ if eq(parameters.environment, 'prod') }}:
+    - template: ../../../config-infra-prod.yml
+  - ${{ if ne(parameters.agentPoolName, '') }}:
+    - name: managed_devops_pool_name
+      value: ${{ parameters.agentPoolName }}
+    - name: managed_devops_pool_alias
+      value: ${{ parameters.agentPoolName }}
+
+trigger: none
+
+# Platform bootstrap must not depend on the private pool it creates.
+pool:
+  vmImage: $(ap_vm_image)
+
+resources:
+  repositories:
+    - repository: mlops-templates
+      name: mlops-templates
+      type: git
+      ref: ${{ parameters.mlopsTemplatesRef }}
+
+stages:
+  - stage: BootstrapPlatform
+    displayName: Bootstrap deployment platform
+    jobs:
+      - job: BootstrapPlatform
+        displayName: Bootstrap network, pool, and Terraform state
+        steps:
+          - checkout: none
+          - template: templates/infra/platform-bootstrap.yml@mlops-templates
+            parameters:
+              environment: ${{ parameters.environment }}
+              ${{ if eq(parameters.environment, 'dev') }}:
+                devAzureServiceConnection: $(platform_service_connection_name)
+                devCicdPrincipalObjectId: $(cicd_principal_object_id)
+              ${{ if eq(parameters.environment, 'test') }}:
+                testAzureServiceConnection: $(platform_service_connection_name)
+                testCicdPrincipalObjectId: $(cicd_principal_object_id)
+              ${{ if eq(parameters.environment, 'prod') }}:
+                prodAzureServiceConnection: $(platform_service_connection_name)
+                prodCicdPrincipalObjectId: $(cicd_principal_object_id)
+              devOpsInfrastructurePrincipalObjectId: $(devops_infrastructure_principal_object_id)
+              location: $(location)
+              resourceGroup: $(managed_devops_pool_resource_group)
+              networkMode: $(network_mode)
+              virtualNetworkName: $(platform_vnet_name)
+              virtualNetworkAddressPrefix: $(platform_vnet_address_prefix)
+              managedPoolSubnetName: $(managed_devops_pool_subnet_name)
+              managedPoolSubnetPrefix: $(managed_devops_pool_subnet_address_prefix)
+              privateEndpointSubnetName: $(platform_private_endpoint_subnet_name)
+              privateEndpointSubnetPrefix: $(platform_private_endpoint_subnet_address_prefix)
+              stateStorageAccountName: $(terraform_st_storage_account)
+              stateContainerName: $(terraform_st_container_name)
+              managedDevOpsPoolName: $(managed_devops_pool_name)
+              managedDevOpsPoolAlias: $(managed_devops_pool_alias)
+              managedDevOpsPoolSku: $(managed_devops_pool_vm_sku)
+              managedDevOpsPoolImage: $(managed_devops_pool_image)
+              maximumConcurrency: ${{ variables.managed_devops_pool_maximum_concurrency }}
+              devCenterProjectResourceId: $(devcenter_project_resource_id)

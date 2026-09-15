@@ -20,6 +20,11 @@ This repository follows the architecture linked below:
 
 Please visit [MLOps v2](https://github.com/Azure/mlops-v2) for the initial deployment of this inner loop pattern.
 
+For this repository's supported Azure DevOps and Terraform deployment, use the
+AML CLI v2 implementation under `classical/aml-cli-v2` and follow the
+[Azure DevOps deployment runbook](../docs/azure-devops-deployment.md). The
+`classical/python-sdk-v2` implementation is not part of that deployment path.
+
 
 ## ‼️ Feedback or Issues
 

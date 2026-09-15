@@ -11,7 +11,7 @@ resource "azurerm_container_registry" "cr" {
   admin_enabled                 = false
   public_network_access_enabled = var.enable_private_endpoints ? false : true
   zone_redundancy_enabled       = false
-  
+
   # Network rules configured inline
   # When using private endpoints, default action is Deny and access comes through private endpoint
   # When not using private endpoints, default action is Allow

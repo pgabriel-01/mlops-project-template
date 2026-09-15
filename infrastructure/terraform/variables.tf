@@ -18,8 +18,15 @@ variable "postfix" {
   description = "Postfix for module names"
 }
 
+variable "project_number" {
+  type        = string
+  description = "Project number included in resource names"
+  default     = "001"
+}
+
 variable "enable_aml_computecluster" {
   description = "Variable to enable or disable AML compute cluster"
+  type        = bool
 }
 
 variable "aml_compute_sku" {
@@ -34,9 +41,9 @@ variable "enable_monitoring" {
   default     = false
 }
 
-variable "github_actions_service_principal_id" {
+variable "cicd_principal_object_id" {
   type        = string
-  description = "The object ID of the GitHub Actions service principal for role assignments"
+  description = "The object ID of the Azure DevOps service connection principal for role assignments"
   default     = ""
 }
 
@@ -44,6 +51,36 @@ variable "enable_private_endpoints" {
   type        = bool
   description = "Enable private endpoints and VNet isolation for Azure ML workspace and dependent services"
   default     = false
+}
+
+variable "platform_resource_group_name" {
+  type        = string
+  description = "Existing platform resource group containing the Managed DevOps Pool VNet"
+  default     = ""
+}
+
+variable "platform_virtual_network_name" {
+  type        = string
+  description = "Existing platform virtual network peered with the workload VNet"
+  default     = ""
+}
+
+variable "import_existing_platform_connectivity" {
+  type        = bool
+  description = "Import pre-existing platform/workload peerings and AML DNS links into Terraform state"
+  default     = false
+}
+
+variable "existing_cicd_key_vault_secrets_officer_role_assignment_id" {
+  type        = string
+  description = "Optional full resource ID of an existing CI Key Vault Secrets Officer role assignment to import"
+  default     = ""
+}
+
+variable "existing_cicd_key_vault_crypto_officer_role_assignment_id" {
+  type        = string
+  description = "Optional full resource ID of an existing CI Key Vault Crypto Officer role assignment to import"
+  default     = ""
 }
 
 variable "vnet_address_space" {

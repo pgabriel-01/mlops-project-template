@@ -3,69 +3,90 @@
 
 name: tf-ado-deploy-infra
 
+parameters:
+  - name: environment
+    displayName: Target environment
+    type: string
+    default: dev
+    values:
+      - dev
+      - test
+      - prod
+  - name: agentPoolName
+    displayName: Agent pool override (empty uses environment default)
+    type: string
+    default: ''
+  - name: mlopsTemplatesRef
+    displayName: mlops-templates branch, tag, or commit
+    type: string
+    default: refs/heads/main
+  - name: importExistingPlatformConnectivity
+    displayName: Import existing platform peerings and DNS links
+    type: boolean
+    default: false
+  - name: applyTerraform
+    displayName: Apply the saved Terraform plan
+    type: boolean
+    default: true
+
 variables:
-  - ${{ if eq(variables['Build.SourceBranchName'], 'main') }}:
-      # 'main' branch: PRD environment
-      - template: ../../../config-infra-prod.yml
-  - ${{ if ne(variables['Build.SourceBranchName'], 'main') }}:
-      # 'develop' or feature branches: DEV environment
-      - template: ../../../config-infra-dev.yml
+  - ${{ if eq(parameters.environment, 'dev') }}:
+    - template: ../../../config-infra-dev.yml
+  - ${{ if eq(parameters.environment, 'test') }}:
+    - template: ../../../config-infra-test.yml
+  - ${{ if eq(parameters.environment, 'prod') }}:
+    - template: ../../../config-infra-prod.yml
+  - ${{ if ne(parameters.agentPoolName, '') }}:
+    - name: managed_devops_pool_alias
+      value: ${{ parameters.agentPoolName }}
 
 trigger: none
 
 pool:
-  vmImage: ubuntu-latest
+  name: $(managed_devops_pool_alias)
 
 resources:
   repositories:
-    - repository: mlops-templates # Template Repo
+    - repository: mlops-templates
       name: mlops-templates
       type: git
-      ref: main
+      ref: ${{ parameters.mlopsTemplatesRef }}
 
 stages:
-  - stage: CreateStorageAccountForTerraformState
-    displayName: Create Storage for Terraform
+  - stage: DeployAzureMachineLearning
+    displayName: Deploy Azure Machine Learning
     jobs:
-      - job: CreateStorageForTerraform
-        displayName: Create Storage for Terraform
-        steps:
-          - checkout: self
-            path: s/
-          - task: Bash@3
-            displayName: "Create checkout repository folder(s)"
-            inputs:
-              targetType: "inline"
-              script: |
-                set -e
-                mkdir "$(Build.Repository.Name)"
-                mkdir "mlops-templates"
-          - checkout: mlops-templates
-            path: s/templates/
-          - template: templates/infra/create-resource-group.yml@mlops-templates
-          - template: templates/infra/create-storage-account.yml@mlops-templates
-          - template: templates/infra/create-storage-container.yml@mlops-templates
-  - stage: DeployAzureMachineLearningRG
-    displayName: Deploy AML Workspace
-    jobs:
-      - job: DeployAMLWorkspace
+      - job: DeployAzureMachineLearning
         displayName: Deploy Terraform
         steps:
           - checkout: self
             path: s/
-          - task: Bash@3
-            displayName: "Create checkout repository folder(s)"
-            inputs:
-              targetType: "inline"
-              script: |
-                set -e
-                mkdir "$(Build.Repository.Name)"
-                mkdir "mlops-templates"
-          - checkout: mlops-templates
-            path: s/templates/
-          - template: templates/infra/create-sp-variables.yml@mlops-templates
-          - template: templates/infra/install-terraform.yml@mlops-templates
-          - template: templates/infra/run-terraform-init.yml@mlops-templates
-          - template: templates/infra/run-terraform-validate.yml@mlops-templates
-          - template: templates/infra/run-terraform-plan.yml@mlops-templates
-          - template: templates/infra/run-terraform-apply.yml@mlops-templates
+          - template: templates/infra/terraform-deploy.yml@mlops-templates
+            parameters:
+              azureServiceConnection: $(ado_service_connection_rg)
+              terraformVersion: $(terraform_version)
+              workingDirectory: $(System.DefaultWorkingDirectory)/$(terraform_workingdir)
+              backendResourceGroup: $(terraform_st_resource_group)
+              backendStorageAccount: $(terraform_st_storage_account)
+              backendContainer: $(terraform_st_container_name)
+              backendKey: $(terraform_st_key)
+              location: $(location)
+              prefix: $(namespace)
+              postfix: $(postfix)
+              projectNumber: $(project_number)
+              environment: $(environment)
+              enableAmlComputeCluster: ${{ eq(variables.enable_aml_computecluster, 'true') }}
+              amlComputeSku: $(aml_compute_sku)
+              enableMonitoring: ${{ eq(variables.enable_monitoring, 'true') }}
+              cicdPrincipalObjectId: $(cicd_principal_object_id)
+              enablePrivateEndpoints: ${{ eq(variables.enable_private_endpoints, 'true') }}
+              platformResourceGroupName: $(managed_devops_pool_resource_group)
+              platformVirtualNetworkName: $(platform_vnet_name)
+              importExistingPlatformConnectivity: ${{ parameters.importExistingPlatformConnectivity }}
+              existingCicdKeyVaultSecretsOfficerRoleAssignmentId: $(existing_cicd_key_vault_secrets_officer_role_assignment_id)
+              existingCicdKeyVaultCryptoOfficerRoleAssignmentId: $(existing_cicd_key_vault_crypto_officer_role_assignment_id)
+              vnetAddressSpace: $(vnet_address_space)
+              trainingSubnetAddressPrefix: $(training_subnet_address_prefix)
+              endpointsSubnetAddressPrefix: $(endpoints_subnet_address_prefix)
+              planFile: tfplan
+              apply: ${{ parameters.applyTerraform }}

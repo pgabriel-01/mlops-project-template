@@ -100,14 +100,16 @@ Review these values before deployment:
 stable patch in the Terraform 1.16 release line before invoking
 `TerraformInstaller@1`.
 
-DEV defaults to public endpoints and Microsoft-hosted agents. Test and Prod
-default to private endpoints and the environment's
-`managed_devops_pool_alias`. `agentPoolName` overrides that default when a
-different authorized pool is required. Review VNet/subnet CIDRs for overlap
-before platform bootstrap. Private environments use separate platform and
-workload VNets: Terraform peers them, links workload private DNS zones to the
-platform VNet, and reuses the platform Blob private DNS zone for both state and
-workload storage. Terraform enables the AML managed VNet in
+DEV defaults to public workload endpoints, while Test and Prod default to
+private endpoints. All workload pipelines use the environment's
+`managed_devops_pool_alias` because the Terraform state backend is private;
+`agentPoolName` overrides that default when a different authorized pool is
+required. Platform bootstrap remains on a Microsoft-hosted agent because the
+managed pool may not exist yet. Review VNet/subnet CIDRs for overlap before
+platform bootstrap. Private environments use separate platform and workload
+VNets: Terraform peers them, links workload private DNS zones to the platform
+VNet, and reuses the platform Blob private DNS zone for both state and workload
+storage. Terraform enables the AML managed VNet in
 `AllowInternetOutbound` mode through an in-place Azure API workspace update,
 avoiding workspace replacement and soft-delete name retention. AML-managed
 network provisioning runs only after the workspace private endpoint completes.

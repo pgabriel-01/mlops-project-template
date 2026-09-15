@@ -36,16 +36,13 @@ variables:
     - template: ../../../../config-infra-test.yml
   - ${{ if eq(parameters.environment, 'prod') }}:
     - template: ../../../../config-infra-prod.yml
+  - name: selected_agent_pool
+    value: ${{ coalesce(parameters.agentPoolName, variables.managed_devops_pool_alias) }}
 
 trigger: none
 
 pool:
-  ${{ if ne(parameters.agentPoolName, '') }}:
-    name: ${{ parameters.agentPoolName }}
-  ${{ elseif eq(variables.network_mode, 'private') }}:
-    name: $(managed_devops_pool_alias)
-  ${{ else }}:
-    vmImage: $(ap_vm_image)
+  name: $(selected_agent_pool)
 
 resources:
   repositories:

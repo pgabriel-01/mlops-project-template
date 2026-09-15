@@ -60,9 +60,16 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
                     content,
                 )
             else:
-                self.assertIn("name: ${{ parameters.agentPoolName }}", content)
-                self.assertIn("name: $(managed_devops_pool_alias)", content)
-                self.assertIn("vmImage: $(ap_vm_image)", content)
+                self.assertIn(
+                    "value: ${{ coalesce(parameters.agentPoolName, "
+                    "variables.managed_devops_pool_alias) }}",
+                    content,
+                )
+                self.assertIn("name: $(selected_agent_pool)", content)
+                self.assertNotIn(
+                    "${{ elseif eq(variables.network_mode, 'private') }}",
+                    content,
+                )
 
     def test_factory_manifest_variables_are_available(self):
         common = (ROOT / "config-infra-common.yml").read_text()

@@ -110,9 +110,11 @@ platform VNet, and reuses the platform Blob private DNS zone for both state and
 workload storage. Terraform enables the AML managed VNet in
 `AllowInternetOutbound` mode through an in-place Azure API workspace update,
 avoiding workspace replacement and soft-delete name retention. AML-managed
-compute uses that network with node public IPs disabled; it is not attached to
-the user-managed training subnet. Existing computes must still be deleted and
-recreated when migrating them to AML managed networking.
+network provisioning runs only after the workspace private endpoint completes.
+AML-managed compute then waits for both operations, uses the managed network
+with node public IPs disabled, and is not attached to the user-managed training
+subnet. Existing computes must still be deleted and recreated when migrating
+them to AML managed networking.
 
 ## Pipeline entrypoints
 

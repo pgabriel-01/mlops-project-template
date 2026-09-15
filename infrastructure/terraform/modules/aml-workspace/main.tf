@@ -197,7 +197,9 @@ resource "azurerm_machine_learning_compute_cluster" "adl_aml_ws_compute_cluster"
   }
 
   depends_on = [
-    azapi_update_resource.identity_based_system_datastores
+    azapi_update_resource.identity_based_system_datastores,
+    azurerm_private_endpoint.mlw_pe,
+    azapi_resource_action.provision_managed_network
   ]
 
   scale_settings {
@@ -231,4 +233,22 @@ resource "azurerm_private_endpoint" "mlw_pe" {
   }
 
   tags = var.tags
+}
+
+resource "azapi_resource_action" "provision_managed_network" {
+  count = var.enable_private_endpoints ? 1 : 0
+
+  type        = "Microsoft.MachineLearningServices/workspaces@2025-06-01"
+  resource_id = azurerm_machine_learning_workspace.mlw.id
+  action      = "provisionManagedNetwork"
+  method      = "POST"
+
+  body = {
+    includeSpark = false
+  }
+
+  depends_on = [
+    azapi_update_resource.identity_based_system_datastores,
+    azurerm_private_endpoint.mlw_pe
+  ]
 }

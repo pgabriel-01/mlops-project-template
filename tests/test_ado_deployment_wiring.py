@@ -192,6 +192,41 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
         self.assertIn('isolationMode = "AllowInternetOutbound"', workspace)
         self.assertIn("var.enable_private_endpoints ? {", workspace)
         self.assertIn(
+            'resource "azapi_resource_action" "provision_managed_network" {\n'
+            "  count = var.enable_private_endpoints ? 1 : 0",
+            workspace,
+        )
+        self.assertIn(
+            'type        = "Microsoft.MachineLearningServices/workspaces@2025-06-01"',
+            workspace,
+        )
+        self.assertIn('action      = "provisionManagedNetwork"', workspace)
+        self.assertIn('method      = "POST"', workspace)
+        self.assertIn(
+            "body = {\n    includeSpark = false\n  }",
+            workspace,
+        )
+        self.assertIn(
+            "depends_on = [\n"
+            "    azapi_update_resource.identity_based_system_datastores,\n"
+            "    azurerm_private_endpoint.mlw_pe\n"
+            "  ]",
+            workspace,
+        )
+        self.assertIn(
+            "node_public_ip_enabled        = !var.enable_private_endpoints\n\n"
+            "  identity {",
+            workspace,
+        )
+        self.assertIn(
+            "depends_on = [\n"
+            "    azapi_update_resource.identity_based_system_datastores,\n"
+            "    azurerm_private_endpoint.mlw_pe,\n"
+            "    azapi_resource_action.provision_managed_network\n"
+            "  ]",
+            workspace,
+        )
+        self.assertIn(
             "public_network_access_enabled = !var.enable_private_endpoints",
             workspace,
         )

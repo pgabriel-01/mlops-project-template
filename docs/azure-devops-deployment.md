@@ -120,7 +120,9 @@ before provisioning the managed network. AML-managed compute then waits for the
 private endpoint and managed-network provisioning, uses the managed network with
 node public IPs disabled, and is not attached to the user-managed training
 subnet. Existing computes must still be deleted and recreated when migrating
-them to AML managed networking.
+them to AML managed networking. Private online deployment definitions omit
+`egress_public_network_access`, which Azure ML no longer accepts when the
+workspace uses a managed VNet.
 
 ## Pipeline entrypoints
 

@@ -305,7 +305,7 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
             / "classical/aml-cli-v2/mlops/azureml/deploy/online/online-deployment-private.yml"
         ).read_text()
         self.assertIn("instance_type: Standard_D2ds_v5", private_online)
-        self.assertIn("egress_public_network_access: disabled", private_online)
+        self.assertNotIn("egress_public_network_access", private_online)
         self.assertIn("egress_public_network_access: enabled", online)
 
         online_pipeline = (

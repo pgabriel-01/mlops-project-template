@@ -53,6 +53,24 @@ variable "enable_private_endpoints" {
   default     = false
 }
 
+variable "platform_resource_group_name" {
+  type        = string
+  description = "Existing platform resource group containing the Managed DevOps Pool VNet"
+  default     = ""
+}
+
+variable "platform_virtual_network_name" {
+  type        = string
+  description = "Existing platform virtual network peered with the workload VNet"
+  default     = ""
+}
+
+variable "import_existing_platform_connectivity" {
+  type        = bool
+  description = "Import pre-existing platform/workload peerings and AML DNS links into Terraform state"
+  default     = false
+}
+
 variable "vnet_address_space" {
   type        = string
   description = "Address space for the virtual network (only used if enable_private_endpoints is true)"

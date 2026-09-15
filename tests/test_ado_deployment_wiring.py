@@ -127,20 +127,53 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
         for resource in (
             'azurerm_virtual_network_peering" "platform_to_workload',
             'azurerm_virtual_network_peering" "workload_to_platform',
-            'azurerm_private_dns_zone_virtual_network_link" "workload_zones_to_platform',
+            'azurerm_private_dns_zone_virtual_network_link" "workload_aml_zones_to_platform',
+            'azurerm_private_dns_zone_virtual_network_link" "workload_service_zones_to_platform',
             'azurerm_private_dns_zone_virtual_network_link" "platform_blob_to_workload',
         ):
             self.assertIn(resource, terraform)
+
+        self.assertIn('name                      = "peer-agents-to-workload"', terraform)
+        self.assertIn('name                      = "peer-workload-to-agents"', terraform)
+        self.assertIn(
+            'name                  = "link-agents-${replace(each.value, ".", "_")}"',
+            terraform,
+        )
+        self.assertEqual(terraform.count("import {\n"), 3)
+        self.assertIn("var.import_existing_platform_connectivity", terraform)
 
         vnet_module = (
             ROOT / "infrastructure/terraform/modules/vnet/main.tf"
         ).read_text()
         self.assertIn("external_blob_private_dns_zone_id", vnet_module)
 
+        variables = (ROOT / "infrastructure/terraform/variables.tf").read_text()
+        self.assertIn('variable "platform_resource_group_name"', variables)
+        self.assertIn('variable "platform_virtual_network_name"', variables)
+        self.assertIn(
+            'variable "import_existing_platform_connectivity"',
+            variables,
+        )
+
+        pipeline = PIPELINES[1].read_text()
+        self.assertIn(
+            "platformResourceGroupName: $(managed_devops_pool_resource_group)",
+            pipeline,
+        )
+        self.assertIn(
+            "platformVirtualNetworkName: $(platform_vnet_name)",
+            pipeline,
+        )
+        self.assertIn(
+            "importExistingPlatformConnectivity: "
+            "${{ eq(variables.import_existing_platform_connectivity, 'true') }}",
+            pipeline,
+        )
+
     def test_documentation_names_immutable_template_dependency(self):
         documentation = (ROOT / "docs/azure-devops-deployment.md").read_text()
         self.assertIn(
-            "8efc772476c1cbd7f7010ca1b00801229f897d4b",
+            "80a74134d9c6f6ebf0e1545e906685770d316b2a",
             documentation,
         )
 

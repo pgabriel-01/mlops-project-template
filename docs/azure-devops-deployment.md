@@ -20,7 +20,7 @@ templates for platform bootstrap, Terraform, and AML CLI v2. Pipeline parameter
 `mlopsTemplatesRef` defaults to `refs/heads/main`; before
 `pgabriel-01/mlops-templates#1` is merged, queue pipelines with its documented
 immutable commit SHA,
-`8efc772476c1cbd7f7010ca1b00801229f897d4b`. Release tags or commit SHAs are
+`80a74134d9c6f6ebf0e1545e906685770d316b2a`. Release tags or commit SHAs are
 recommended for controlled promotion.
 
 ## Prerequisites
@@ -109,7 +109,11 @@ managed pool may not exist yet. Review VNet/subnet CIDRs for overlap before
 platform bootstrap. Private environments use separate platform and workload
 VNets: Terraform peers them, links workload private DNS zones to the platform
 VNet, and reuses the platform Blob private DNS zone for both state and workload
-storage. Terraform enables the AML managed VNet in
+storage. The platform resource group and VNet names are explicit inputs so an
+existing Managed DevOps Pool network can be adopted without encoding live
+resource IDs. Set `import_existing_platform_connectivity` for a one-time import
+of existing bidirectional peerings and AML API/notebooks DNS links. Terraform
+enables the AML managed VNet in
 `AllowInternetOutbound` mode through an in-place Azure API workspace update,
 avoiding workspace replacement and soft-delete name retention. AML-managed
 network provisioning runs only after the workspace private endpoint completes.
@@ -196,7 +200,7 @@ python3 -m compileall classical/aml-cli-v2/data-science/src \
 ```
 
 Compile or preview each Azure DevOps YAML pipeline against the pinned template
-commit `8efc772476c1cbd7f7010ca1b00801229f897d4b` to verify
+commit `80a74134d9c6f6ebf0e1545e906685770d316b2a` to verify
 repository-resource authorization, template paths, and parameters.
 
 Run the project contract tests:

@@ -71,6 +71,9 @@ stages:
               enableMonitoring: ${{ eq(variables.enable_monitoring, 'true') }}
               cicdPrincipalObjectId: $(cicd_principal_object_id)
               enablePrivateEndpoints: ${{ eq(variables.enable_private_endpoints, 'true') }}
+              platformResourceGroupName: $(managed_devops_pool_resource_group)
+              platformVirtualNetworkName: $(platform_vnet_name)
+              importExistingPlatformConnectivity: ${{ eq(variables.import_existing_platform_connectivity, 'true') }}
               vnetAddressSpace: $(vnet_address_space)
               trainingSubnetAddressPrefix: $(training_subnet_address_prefix)
               endpointsSubnetAddressPrefix: $(endpoints_subnet_address_prefix)

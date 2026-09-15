@@ -52,7 +52,7 @@ module "vnet" {
 resource "azurerm_virtual_network_peering" "platform_to_workload" {
   count = var.enable_private_endpoints ? 1 : 0
 
-  name                      = "peer-platform-to-workload"
+  name                      = "peer-agents-to-workload"
   resource_group_name       = local.platform_resource_group_name
   virtual_network_name      = data.azurerm_virtual_network.platform[0].name
   remote_virtual_network_id = module.vnet[0].vnet_id
@@ -61,14 +61,31 @@ resource "azurerm_virtual_network_peering" "platform_to_workload" {
 resource "azurerm_virtual_network_peering" "workload_to_platform" {
   count = var.enable_private_endpoints ? 1 : 0
 
-  name                      = "peer-workload-to-platform"
+  name                      = "peer-workload-to-agents"
   resource_group_name       = module.resource_group.name
   virtual_network_name      = module.vnet[0].vnet_name
   remote_virtual_network_id = data.azurerm_virtual_network.platform[0].id
 }
 
-resource "azurerm_private_dns_zone_virtual_network_link" "workload_zones_to_platform" {
-  for_each = var.enable_private_endpoints ? module.vnet[0].private_dns_zone_names : {}
+resource "azurerm_private_dns_zone_virtual_network_link" "workload_aml_zones_to_platform" {
+  for_each = var.enable_private_endpoints ? {
+    aml_api       = module.vnet[0].private_dns_zone_names.aml_api
+    aml_notebooks = module.vnet[0].private_dns_zone_names.aml_notebooks
+  } : {}
+
+  name                  = "link-agents-${replace(each.value, ".", "_")}"
+  resource_group_name   = module.resource_group.name
+  private_dns_zone_name = each.value
+  virtual_network_id    = data.azurerm_virtual_network.platform[0].id
+  registration_enabled  = false
+  tags                  = local.tags
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "workload_service_zones_to_platform" {
+  for_each = var.enable_private_endpoints ? {
+    for key, name in module.vnet[0].private_dns_zone_names : key => name
+    if !contains(["aml_api", "aml_notebooks"], key)
+  } : {}
 
   name                  = "link-${each.key}-platform"
   resource_group_name   = module.resource_group.name
@@ -76,6 +93,34 @@ resource "azurerm_private_dns_zone_virtual_network_link" "workload_zones_to_plat
   virtual_network_id    = data.azurerm_virtual_network.platform[0].id
   registration_enabled  = false
   tags                  = local.tags
+}
+
+import {
+  for_each = var.enable_private_endpoints && var.import_existing_platform_connectivity ? {
+    platform_to_workload = true
+  } : {}
+
+  to = azurerm_virtual_network_peering.platform_to_workload[0]
+  id = "${data.azurerm_virtual_network.platform[0].id}/virtualNetworkPeerings/peer-agents-to-workload"
+}
+
+import {
+  for_each = var.enable_private_endpoints && var.import_existing_platform_connectivity ? {
+    workload_to_platform = true
+  } : {}
+
+  to = azurerm_virtual_network_peering.workload_to_platform[0]
+  id = "${module.vnet[0].vnet_id}/virtualNetworkPeerings/peer-workload-to-agents"
+}
+
+import {
+  for_each = var.enable_private_endpoints && var.import_existing_platform_connectivity ? {
+    aml_api       = "privatelink.api.azureml.ms"
+    aml_notebooks = "privatelink.notebooks.azure.net"
+  } : {}
+
+  to = azurerm_private_dns_zone_virtual_network_link.workload_aml_zones_to_platform[each.key]
+  id = "${module.resource_group.id}/providers/Microsoft.Network/privateDnsZones/${each.value}/virtualNetworkLinks/link-agents-${replace(each.value, ".", "_")}"
 }
 
 resource "azurerm_private_dns_zone_virtual_network_link" "platform_blob_to_workload" {

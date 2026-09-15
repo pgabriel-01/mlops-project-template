@@ -147,6 +147,8 @@ module "storage_account_aml" {
   private_dns_zone_blob_id   = var.enable_private_endpoints ? module.vnet[0].private_dns_zone_ids.blob : ""
   private_dns_zone_file_id   = var.enable_private_endpoints ? module.vnet[0].private_dns_zone_ids.file : ""
   private_dns_zone_dfs_id    = var.enable_private_endpoints ? module.vnet[0].private_dns_zone_ids.dfs : ""
+  private_dns_zone_queue_id  = var.enable_private_endpoints ? module.vnet[0].private_dns_zone_ids.queue : ""
+  private_dns_zone_table_id  = var.enable_private_endpoints ? module.vnet[0].private_dns_zone_ids.table : ""
 
   tags = local.tags
 

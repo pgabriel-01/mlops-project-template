@@ -72,3 +72,15 @@ variable "private_dns_zone_dfs_id" {
   description = "Private DNS zone ID for DFS storage"
   default     = ""
 }
+
+variable "private_dns_zone_queue_id" {
+  type        = string
+  description = "Private DNS zone ID for queue storage"
+  default     = ""
+}
+
+variable "private_dns_zone_table_id" {
+  type        = string
+  description = "Private DNS zone ID for table storage"
+  default     = ""
+}

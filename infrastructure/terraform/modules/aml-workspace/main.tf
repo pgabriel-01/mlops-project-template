@@ -24,6 +24,18 @@ resource "azurerm_role_assignment" "mlw_uai_storage_account_contributor" {
   principal_id         = azurerm_user_assigned_identity.mlw_uai.principal_id
 }
 
+resource "azurerm_role_assignment" "mlw_uai_storage_queue_data_contributor" {
+  scope                = var.storage_account_id
+  role_definition_name = "Storage Queue Data Contributor"
+  principal_id         = azurerm_user_assigned_identity.mlw_uai.principal_id
+}
+
+resource "azurerm_role_assignment" "mlw_uai_storage_table_data_contributor" {
+  scope                = var.storage_account_id
+  role_definition_name = "Storage Table Data Contributor"
+  principal_id         = azurerm_user_assigned_identity.mlw_uai.principal_id
+}
+
 # Grant the user-assigned managed identity access to Key Vault
 resource "azurerm_role_assignment" "mlw_uai_keyvault_reader" {
   scope                = var.key_vault_id
@@ -143,6 +155,24 @@ resource "azapi_update_resource" "identity_based_system_datastores" {
       var.enable_private_endpoints ? {
         managedNetwork = {
           isolationMode = "AllowInternetOutbound"
+          outboundRules = {
+            workspaceStorageQueue = {
+              type = "PrivateEndpoint"
+              destination = {
+                serviceResourceId = var.storage_account_id
+                sparkEnabled      = false
+                subresourceTarget = "queue"
+              }
+            }
+            workspaceStorageTable = {
+              type = "PrivateEndpoint"
+              destination = {
+                serviceResourceId = var.storage_account_id
+                sparkEnabled      = false
+                subresourceTarget = "table"
+              }
+            }
+          }
         }
       } : {}
     )
@@ -153,6 +183,18 @@ resource "azapi_update_resource" "identity_based_system_datastores" {
 resource "azurerm_role_assignment" "mlw_system_storage_blob_data_contributor" {
   scope                = var.storage_account_id
   role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = azurerm_machine_learning_workspace.mlw.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "mlw_system_storage_queue_data_contributor" {
+  scope                = var.storage_account_id
+  role_definition_name = "Storage Queue Data Contributor"
+  principal_id         = azurerm_machine_learning_workspace.mlw.identity[0].principal_id
+}
+
+resource "azurerm_role_assignment" "mlw_system_storage_table_data_contributor" {
+  scope                = var.storage_account_id
+  role_definition_name = "Storage Table Data Contributor"
   principal_id         = azurerm_machine_learning_workspace.mlw.identity[0].principal_id
 }
 
@@ -203,7 +245,7 @@ resource "time_sleep" "wait_for_managed_network_rbac" {
   create_duration = "120s"
 
   triggers = {
-    approval_contract = "target-scoped-approver-plus-acr-reader-v1"
+    approval_contract = "target-scoped-approver-acr-reader-storage-data-v2"
     approval_scopes = jsonencode(sort([
       var.container_registry_id,
       var.key_vault_id,
@@ -213,10 +255,14 @@ resource "time_sleep" "wait_for_managed_network_rbac" {
 
   depends_on = [
     azurerm_role_assignment.mlw_uai_storage_network_connection_approver,
+    azurerm_role_assignment.mlw_uai_storage_queue_data_contributor,
+    azurerm_role_assignment.mlw_uai_storage_table_data_contributor,
     azurerm_role_assignment.mlw_uai_keyvault_network_connection_approver,
     azurerm_role_assignment.mlw_uai_acr_network_connection_approver,
     azurerm_role_assignment.mlw_uai_acr_reader,
     azurerm_role_assignment.mlw_system_storage_network_connection_approver,
+    azurerm_role_assignment.mlw_system_storage_queue_data_contributor,
+    azurerm_role_assignment.mlw_system_storage_table_data_contributor,
     azurerm_role_assignment.mlw_system_keyvault_network_connection_approver,
     azurerm_role_assignment.mlw_system_acr_network_connection_approver,
     azurerm_role_assignment.mlw_system_acr_reader

@@ -124,7 +124,12 @@ them to AML managed networking. Private online deployment definitions omit
 `egress_public_network_access`, which Azure ML no longer accepts when the
 workspace uses a managed VNet. Batch endpoint validation invokes the registered
 `azureml:taxi-data@latest` URI file rather than uploading a local file, so the
-request uses the identity-accessible AML datastore path.
+request uses the identity-accessible AML datastore path. Private environments
+also provision Queue and Table private endpoints and managed-network outbound
+rules for the workspace storage account. Both workspace identities receive
+`Storage Queue Data Contributor` and `Storage Table Data Contributor`, which
+allows ParallelRun batch jobs to create their control-plane queue and table
+resources when shared-key access and public storage access are disabled.
 
 ## Pipeline entrypoints
 
@@ -202,10 +207,12 @@ For live environment validation, confirm:
 
 - the second Terraform plan has no unintended changes;
 - the platform and workload VNet peerings are connected, and the private pool
-  resolves the AML, registry, vault, and storage private endpoint names;
+  resolves the AML, registry, vault, and Blob/File/Queue/Table storage private
+  endpoint names;
 - workspace connection and Azure ML asset registration succeed;
 - training completes and the configured model is registered;
-- online scoring returns a response and/or batch scoring reaches `Completed`;
+- online scoring returns a response and/or batch scoring reaches `Completed`
+  without ParallelRun Queue/Table authorization or network failures;
 - repeated deployment updates or reuses resources without duplicate-name
   failures;
 - a failed AML job or scoring invocation fails the Azure DevOps pipeline.

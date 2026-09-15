@@ -174,6 +174,70 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
             workspace,
         )
 
+    def test_private_storage_supports_parallel_run_queue_and_table_services(self):
+        root = (ROOT / "infrastructure/terraform/aml_deploy.tf").read_text()
+        storage = (
+            ROOT / "infrastructure/terraform/modules/storage-account/main.tf"
+        ).read_text()
+        storage_variables = (
+            ROOT / "infrastructure/terraform/modules/storage-account/variables.tf"
+        ).read_text()
+        vnet = (ROOT / "infrastructure/terraform/modules/vnet/main.tf").read_text()
+        vnet_outputs = (
+            ROOT / "infrastructure/terraform/modules/vnet/outputs.tf"
+        ).read_text()
+        workspace = (
+            ROOT / "infrastructure/terraform/modules/aml-workspace/main.tf"
+        ).read_text()
+
+        for service in ("queue", "table"):
+            self.assertIn(
+                f"private_dns_zone_{service}_id",
+                root,
+            )
+            self.assertIn(
+                f'variable "private_dns_zone_{service}_id"',
+                storage_variables,
+            )
+            self.assertIn(
+                f'resource "azurerm_private_endpoint" "st_{service}_pe"',
+                storage,
+            )
+            self.assertIn(f'subresource_names              = ["{service}"]', storage)
+            self.assertIn(
+                f'name                = "privatelink.{service}.core.windows.net"',
+                vnet,
+            )
+            self.assertIn(
+                f"{service}         = azurerm_private_dns_zone.{service}.id",
+                vnet_outputs,
+            )
+            self.assertIn(
+                f"{service}         = azurerm_private_dns_zone.{service}.name",
+                vnet_outputs,
+            )
+            self.assertIn(
+                f'subresourceTarget = "{service}"',
+                workspace,
+            )
+
+        for identity in ("mlw_uai", "mlw_system"):
+            for service, role in (
+                ("queue", "Storage Queue Data Contributor"),
+                ("table", "Storage Table Data Contributor"),
+            ):
+                assignment = (
+                    f'resource "azurerm_role_assignment" '
+                    f'"{identity}_storage_{service}_data_contributor"'
+                )
+                self.assertIn(assignment, workspace)
+                self.assertIn(f'role_definition_name = "{role}"', workspace)
+                self.assertIn(
+                    f"azurerm_role_assignment."
+                    f"{identity}_storage_{service}_data_contributor",
+                    workspace,
+                )
+
     def test_private_workspace_uses_managed_network_without_public_compute_ips(self):
         root = (ROOT / "infrastructure/terraform/aml_deploy.tf").read_text()
         self.assertNotIn("training_subnet_id                =", root)
@@ -236,7 +300,7 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
         )
         self.assertNotIn("scope                = var.rg_id", workspace)
         self.assertIn(
-            'approval_contract = "target-scoped-approver-plus-acr-reader-v1"',
+            'approval_contract = "target-scoped-approver-acr-reader-storage-data-v2"',
             workspace,
         )
         self.assertIn(

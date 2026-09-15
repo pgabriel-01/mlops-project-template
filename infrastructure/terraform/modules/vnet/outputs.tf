@@ -35,6 +35,8 @@ output "private_dns_zone_ids" {
     blob          = var.external_blob_private_dns_zone_id != "" ? var.external_blob_private_dns_zone_id : azurerm_private_dns_zone.blob[0].id
     file          = azurerm_private_dns_zone.file.id
     dfs           = azurerm_private_dns_zone.dfs.id
+    queue         = azurerm_private_dns_zone.queue.id
+    table         = azurerm_private_dns_zone.table.id
     keyvault      = azurerm_private_dns_zone.keyvault.id
     acr           = azurerm_private_dns_zone.acr.id
   }
@@ -47,6 +49,8 @@ output "private_dns_zone_names" {
     aml_notebooks = azurerm_private_dns_zone.aml_notebooks.name
     file          = azurerm_private_dns_zone.file.name
     dfs           = azurerm_private_dns_zone.dfs.name
+    queue         = azurerm_private_dns_zone.queue.name
+    table         = azurerm_private_dns_zone.table.name
     keyvault      = azurerm_private_dns_zone.keyvault.name
     acr           = azurerm_private_dns_zone.acr.name
   }

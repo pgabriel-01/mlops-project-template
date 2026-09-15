@@ -120,7 +120,7 @@ import {
   } : {}
 
   to = azurerm_private_dns_zone_virtual_network_link.workload_aml_zones_to_platform[each.key]
-  id = "${module.resource_group.id}/providers/Microsoft.Network/privateDnsZones/${each.value}/virtualNetworkLinks/link-agents-${replace(each.value, ".", "_")}"
+  id = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/${module.resource_group.name}/providers/Microsoft.Network/privateDnsZones/${each.value}/virtualNetworkLinks/link-agents-${replace(each.value, ".", "_")}"
 }
 
 import {
@@ -129,7 +129,7 @@ import {
   } : {}
 
   to = azurerm_private_dns_zone_virtual_network_link.workload_blob_to_platform[0]
-  id = "${module.resource_group.id}/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net/virtualNetworkLinks/link-agents-privatelink_blob_core_windows_net"
+  id = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/${module.resource_group.name}/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net/virtualNetworkLinks/link-agents-privatelink_blob_core_windows_net"
 }
 
 # Azure Machine Learning workspace

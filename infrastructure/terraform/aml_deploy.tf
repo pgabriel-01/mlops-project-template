@@ -123,15 +123,6 @@ import {
   id = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/${module.resource_group.name}/providers/Microsoft.Network/privateDnsZones/${each.value}/virtualNetworkLinks/link-agents-${replace(each.value, ".", "_")}"
 }
 
-import {
-  for_each = var.enable_private_endpoints && var.import_existing_platform_connectivity ? {
-    blob = true
-  } : {}
-
-  to = azurerm_private_dns_zone_virtual_network_link.workload_blob_to_platform[0]
-  id = "/subscriptions/${data.azurerm_client_config.current.subscription_id}/resourceGroups/${module.resource_group.name}/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net/virtualNetworkLinks/link-agents-privatelink_blob_core_windows_net"
-}
-
 # Azure Machine Learning workspace
 
 module "aml_workspace" {

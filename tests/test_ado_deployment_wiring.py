@@ -136,7 +136,7 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
             'name                  = "link-agents-${replace(each.value, ".", "_")}"',
             terraform,
         )
-        self.assertEqual(terraform.count("import {\n"), 4)
+        self.assertEqual(terraform.count("import {\n"), 3)
         self.assertIn("var.import_existing_platform_connectivity", terraform)
 
         vnet_module = (

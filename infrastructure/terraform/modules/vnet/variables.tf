@@ -41,12 +41,6 @@ variable "endpoints_subnet_address_prefix" {
   default     = "10.0.1.0/24"
 }
 
-variable "external_blob_private_dns_zone_id" {
-  type        = string
-  description = "Existing Blob private DNS zone ID to reuse instead of creating a duplicate zone"
-  default     = ""
-}
-
 variable "tags" {
   type        = map(string)
   description = "Tags to apply to resources"

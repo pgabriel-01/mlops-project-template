@@ -20,6 +20,14 @@ parameters:
     displayName: mlops-templates branch, tag, or commit
     type: string
     default: refs/heads/main
+  - name: importExistingPlatformConnectivity
+    displayName: Import existing platform peerings and DNS links
+    type: boolean
+    default: false
+  - name: applyTerraform
+    displayName: Apply the saved Terraform plan
+    type: boolean
+    default: true
 
 variables:
   - ${{ if eq(parameters.environment, 'dev') }}:
@@ -73,9 +81,9 @@ stages:
               enablePrivateEndpoints: ${{ eq(variables.enable_private_endpoints, 'true') }}
               platformResourceGroupName: $(managed_devops_pool_resource_group)
               platformVirtualNetworkName: $(platform_vnet_name)
-              importExistingPlatformConnectivity: ${{ eq(variables.import_existing_platform_connectivity, 'true') }}
+              importExistingPlatformConnectivity: ${{ parameters.importExistingPlatformConnectivity }}
               vnetAddressSpace: $(vnet_address_space)
               trainingSubnetAddressPrefix: $(training_subnet_address_prefix)
               endpointsSubnetAddressPrefix: $(endpoints_subnet_address_prefix)
               planFile: tfplan
-              apply: true
+              apply: ${{ parameters.applyTerraform }}

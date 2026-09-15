@@ -107,13 +107,14 @@ pipelines use the environment's
 required. Platform bootstrap remains on a Microsoft-hosted agent because the
 managed pool may not exist yet. Review VNet/subnet CIDRs for overlap before
 platform bootstrap. Private environments use separate platform and workload
-VNets: Terraform peers them, links workload private DNS zones to the platform
-VNet, and reuses the platform Blob private DNS zone for both state and workload
-storage. The platform resource group and VNet names are explicit inputs so an
-existing Managed DevOps Pool network can be adopted without encoding live
-resource IDs. Set `import_existing_platform_connectivity` for a one-time import
-of existing bidirectional peerings and AML API/notebooks DNS links. Terraform
-enables the AML managed VNet in
+VNets: Terraform peers them and links workload private DNS zones to the platform
+VNet. The Terraform backend and AML workload storage retain separate Blob
+private DNS zones, each linked only where it is consumed. The platform resource
+group and VNet names are explicit inputs so an existing Managed DevOps Pool
+network can be adopted without encoding live resource IDs. Queue the
+infrastructure pipeline once with `importExistingPlatformConnectivity=true` to
+adopt existing bidirectional peerings and AML API/notebooks/Blob DNS links, then
+return it to `false`. Terraform enables the AML managed VNet in
 `AllowInternetOutbound` mode through an in-place Azure API workspace update,
 avoiding workspace replacement and soft-delete name retention. AML-managed
 network provisioning runs only after the workspace private endpoint completes.

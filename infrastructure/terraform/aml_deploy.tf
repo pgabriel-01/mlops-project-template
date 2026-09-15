@@ -21,13 +21,6 @@ data "azurerm_virtual_network" "platform" {
   resource_group_name = local.platform_resource_group_name
 }
 
-data "azurerm_private_dns_zone" "platform_blob" {
-  count = var.enable_private_endpoints ? 1 : 0
-
-  name                = "privatelink.blob.core.windows.net"
-  resource_group_name = local.platform_resource_group_name
-}
-
 module "vnet" {
   count  = var.enable_private_endpoints ? 1 : 0
   source = "./modules/vnet"
@@ -42,11 +35,7 @@ module "vnet" {
   vnet_address_space              = var.vnet_address_space
   training_subnet_address_prefix  = var.training_subnet_address_prefix
   endpoints_subnet_address_prefix = var.endpoints_subnet_address_prefix
-  external_blob_private_dns_zone_id = (
-    var.enable_private_endpoints ? data.azurerm_private_dns_zone.platform_blob[0].id : ""
-  )
-
-  tags = local.tags
+  tags                            = local.tags
 }
 
 resource "azurerm_virtual_network_peering" "platform_to_workload" {
@@ -84,12 +73,23 @@ resource "azurerm_private_dns_zone_virtual_network_link" "workload_aml_zones_to_
 resource "azurerm_private_dns_zone_virtual_network_link" "workload_service_zones_to_platform" {
   for_each = var.enable_private_endpoints ? {
     for key, name in module.vnet[0].private_dns_zone_names : key => name
-    if !contains(["aml_api", "aml_notebooks"], key)
+    if !contains(["aml_api", "aml_notebooks", "blob"], key)
   } : {}
 
   name                  = "link-${each.key}-platform"
   resource_group_name   = module.resource_group.name
   private_dns_zone_name = each.value
+  virtual_network_id    = data.azurerm_virtual_network.platform[0].id
+  registration_enabled  = false
+  tags                  = local.tags
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "workload_blob_to_platform" {
+  count = var.enable_private_endpoints ? 1 : 0
+
+  name                  = "link-agents-privatelink_blob_core_windows_net"
+  resource_group_name   = module.resource_group.name
+  private_dns_zone_name = module.vnet[0].private_dns_zone_names.blob
   virtual_network_id    = data.azurerm_virtual_network.platform[0].id
   registration_enabled  = false
   tags                  = local.tags
@@ -123,15 +123,13 @@ import {
   id = "${module.resource_group.id}/providers/Microsoft.Network/privateDnsZones/${each.value}/virtualNetworkLinks/link-agents-${replace(each.value, ".", "_")}"
 }
 
-resource "azurerm_private_dns_zone_virtual_network_link" "platform_blob_to_workload" {
-  count = var.enable_private_endpoints ? 1 : 0
+import {
+  for_each = var.enable_private_endpoints && var.import_existing_platform_connectivity ? {
+    blob = true
+  } : {}
 
-  name                  = "link-blob-workload-${var.environment}"
-  resource_group_name   = local.platform_resource_group_name
-  private_dns_zone_name = data.azurerm_private_dns_zone.platform_blob[0].name
-  virtual_network_id    = module.vnet[0].vnet_id
-  registration_enabled  = false
-  tags                  = local.tags
+  to = azurerm_private_dns_zone_virtual_network_link.workload_blob_to_platform[0]
+  id = "${module.resource_group.id}/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net/virtualNetworkLinks/link-agents-privatelink_blob_core_windows_net"
 }
 
 # Azure Machine Learning workspace
@@ -221,10 +219,6 @@ module "key_vault" {
   firewall_virtual_network_subnet_ids = var.enable_private_endpoints ? [module.vnet[0].training_subnet_id] : []
 
   tags = local.tags
-
-  depends_on = [
-    module.vnet
-  ]
 }
 
 # Application insights

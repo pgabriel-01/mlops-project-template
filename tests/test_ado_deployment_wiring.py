@@ -126,7 +126,7 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
             'azurerm_virtual_network_peering" "workload_to_platform',
             'azurerm_private_dns_zone_virtual_network_link" "workload_aml_zones_to_platform',
             'azurerm_private_dns_zone_virtual_network_link" "workload_service_zones_to_platform',
-            'azurerm_private_dns_zone_virtual_network_link" "platform_blob_to_workload',
+            'azurerm_private_dns_zone_virtual_network_link" "workload_blob_to_platform',
         ):
             self.assertIn(resource, terraform)
 
@@ -136,13 +136,13 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
             'name                  = "link-agents-${replace(each.value, ".", "_")}"',
             terraform,
         )
-        self.assertEqual(terraform.count("import {\n"), 3)
+        self.assertEqual(terraform.count("import {\n"), 4)
         self.assertIn("var.import_existing_platform_connectivity", terraform)
 
         vnet_module = (
             ROOT / "infrastructure/terraform/modules/vnet/main.tf"
         ).read_text()
-        self.assertIn("external_blob_private_dns_zone_id", vnet_module)
+        self.assertNotIn("external_blob_private_dns_zone_id", vnet_module)
 
         variables = (ROOT / "infrastructure/terraform/variables.tf").read_text()
         self.assertIn('variable "platform_resource_group_name"', variables)
@@ -163,9 +163,10 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
         )
         self.assertIn(
             "importExistingPlatformConnectivity: "
-            "${{ eq(variables.import_existing_platform_connectivity, 'true') }}",
+            "${{ parameters.importExistingPlatformConnectivity }}",
             pipeline,
         )
+        self.assertIn("apply: ${{ parameters.applyTerraform }}", pipeline)
 
     def test_documentation_names_immutable_template_dependency(self):
         documentation = (ROOT / "docs/azure-devops-deployment.md").read_text()

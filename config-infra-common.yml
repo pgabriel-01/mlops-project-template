@@ -31,7 +31,6 @@ variables:
   managed_devops_pool_image: ubuntu-24.04
   managed_devops_pool_maximum_concurrency: 2
   platform_vnet_name: vnet-$(namespace)-$(postfix)$(project_number)$(environment)-platform
-  import_existing_platform_connectivity: false
   platform_vnet_address_prefix: '10.20.0.0/16'
   managed_devops_pool_subnet_name: snet-managed-devops
   managed_devops_pool_subnet_address_prefix: '10.20.1.0/24'

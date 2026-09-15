@@ -82,7 +82,7 @@ resource "azurerm_machine_learning_workspace" "mlw" {
   container_registry_id   = var.container_registry_id
 
   sku_name                      = "Basic"
-  public_network_access_enabled = true
+  public_network_access_enabled = !var.enable_private_endpoints
   image_build_compute_name      = "cpu-cluster"
   v1_legacy_mode_enabled        = false
   # Note: system_datastores_auth_mode was removed from azurerm provider
@@ -94,6 +94,15 @@ resource "azurerm_machine_learning_workspace" "mlw" {
   }
 
   primary_user_assigned_identity = azurerm_user_assigned_identity.mlw_uai.id
+
+  dynamic "managed_network" {
+    for_each = var.enable_private_endpoints ? [1] : []
+
+    content {
+      isolation_mode                = "AllowInternetOutbound"
+      provision_on_creation_enabled = true
+    }
+  }
 
   tags = var.tags
 
@@ -182,7 +191,6 @@ resource "azurerm_machine_learning_compute_cluster" "adl_aml_ws_compute_cluster"
   vm_size                       = var.aml_compute_sku
   machine_learning_workspace_id = azurerm_machine_learning_workspace.mlw.id
   count                         = var.enable_aml_computecluster ? 1 : 0
-  subnet_resource_id            = var.enable_private_endpoints ? var.training_subnet_id : null
   node_public_ip_enabled        = !var.enable_private_endpoints
 
   identity {

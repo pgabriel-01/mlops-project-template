@@ -174,27 +174,26 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
             workspace,
         )
 
-    def test_private_compute_uses_training_subnet_without_public_ips(self):
+    def test_private_workspace_uses_managed_network_without_public_compute_ips(self):
         root = (ROOT / "infrastructure/terraform/aml_deploy.tf").read_text()
-        self.assertIn(
-            "training_subnet_id                = "
-            "var.enable_private_endpoints ? module.vnet[0].training_subnet_id : \"\"",
-            root,
-        )
+        self.assertNotIn("training_subnet_id                =", root)
 
         variables = (
             ROOT / "infrastructure/terraform/modules/aml-workspace/variables.tf"
         ).read_text()
-        self.assertIn('variable "training_subnet_id"', variables)
+        self.assertNotIn('variable "training_subnet_id"', variables)
 
         workspace = (
             ROOT / "infrastructure/terraform/modules/aml-workspace/main.tf"
         ).read_text()
+        self.assertIn('dynamic "managed_network"', workspace)
+        self.assertIn('isolation_mode                = "AllowInternetOutbound"', workspace)
+        self.assertIn("provision_on_creation_enabled = true", workspace)
         self.assertIn(
-            "subnet_resource_id            = "
-            "var.enable_private_endpoints ? var.training_subnet_id : null",
+            "public_network_access_enabled = !var.enable_private_endpoints",
             workspace,
         )
+        self.assertNotIn("subnet_resource_id", workspace)
         self.assertIn(
             "node_public_ip_enabled        = !var.enable_private_endpoints",
             workspace,
@@ -207,6 +206,21 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
         ).read_text()
         self.assertIn("instance_type: Standard_D2ds_v5", online)
         self.assertNotIn("Standard_D4s_v5", online)
+
+        private_online = (
+            ROOT
+            / "classical/aml-cli-v2/mlops/azureml/deploy/online/online-deployment-private.yml"
+        ).read_text()
+        self.assertIn("instance_type: Standard_D2ds_v5", private_online)
+        self.assertIn("egress_public_network_access: disabled", private_online)
+        self.assertIn("egress_public_network_access: enabled", online)
+
+        online_pipeline = (
+            ROOT
+            / "classical/aml-cli-v2/mlops/devops-pipelines/deploy-online-endpoint-pipeline.yml"
+        ).read_text()
+        self.assertIn("online-deployment-private.yml", online_pipeline)
+        self.assertIn("deployment_file: $(online_deployment_file)", online_pipeline)
 
         batch = (
             ROOT

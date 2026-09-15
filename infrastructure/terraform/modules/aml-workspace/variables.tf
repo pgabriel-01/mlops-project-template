@@ -78,12 +78,6 @@ variable "private_endpoint_subnet_id" {
   default     = ""
 }
 
-variable "training_subnet_id" {
-  type        = string
-  description = "Subnet ID for AML compute in private environments"
-  default     = ""
-}
-
 variable "private_dns_zone_aml_api_id" {
   type        = string
   description = "Private DNS zone ID for Azure ML API"

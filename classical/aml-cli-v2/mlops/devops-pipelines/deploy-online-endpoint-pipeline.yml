@@ -32,6 +32,12 @@ variables:
     value: $(online_endpoint_name)
   - name: endpoint_type
     value: online
+  - ${{ if eq(variables.network_mode, 'private') }}:
+    - name: online_deployment_file
+      value: classical/aml-cli-v2/mlops/azureml/deploy/online/online-deployment-private.yml
+  - ${{ else }}:
+    - name: online_deployment_file
+      value: classical/aml-cli-v2/mlops/azureml/deploy/online/online-deployment.yml
 
 trigger: none
 
@@ -80,7 +86,7 @@ stages:
               endpoint_type: online
               endpoint_name: $(endpoint_name)
               deployment_name: $(online_deployment_name)
-              deployment_file: classical/aml-cli-v2/mlops/azureml/deploy/online/online-deployment.yml
+              deployment_file: $(online_deployment_file)
           - template: templates/aml-cli-v2/allocate-traffic.yml@mlops-templates
             parameters:
               azure_service_connection: $(ado_service_connection_aml_ws)

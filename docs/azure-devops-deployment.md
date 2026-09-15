@@ -107,10 +107,11 @@ different authorized pool is required. Review VNet/subnet CIDRs for overlap
 before platform bootstrap. Private environments use separate platform and
 workload VNets: Terraform peers them, links workload private DNS zones to the
 platform VNet, and reuses the platform Blob private DNS zone for both state and
-workload storage. Terraform also places the AML training compute in the workload
-training subnet and disables node public IPs. Enabling private endpoints on an
-existing public compute cluster replaces that cluster because both settings are
-immutable.
+workload storage. The AML workspace additionally provisions its managed VNet in
+`AllowInternetOutbound` mode. AML-managed compute uses that network with node
+public IPs disabled; it is not attached to the user-managed training subnet.
+Enabling managed VNet or changing node public IP behavior replaces existing
+compute resources.
 
 ## Pipeline entrypoints
 
@@ -154,9 +155,11 @@ All pipelines are manual (`trigger: none`). At queue time select:
    Endpoint deployment requires the registered model from step 4.
 6. Re-run Terraform plan and the selected AML pipelines to confirm idempotency.
 
-Online deployment uses `Standard_D2ds_v5`. Batch deployment reuses the
-Terraform-managed `cpu-cluster`, preserving its private subnet and no-public-IP
-configuration instead of creating a separate pipeline-owned compute cluster.
+Online deployment uses `Standard_D2ds_v5`; private environments select a
+deployment definition with public egress disabled. Batch deployment reuses the
+Terraform-managed `cpu-cluster`, preserving its managed-network and
+no-public-IP configuration instead of creating a separate pipeline-owned
+compute cluster.
 Reusable templates fail the Azure DevOps job when setup, training, deployment,
 polling, or scoring fails.
 

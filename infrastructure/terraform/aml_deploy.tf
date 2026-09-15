@@ -114,7 +114,6 @@ module "aml_workspace" {
 
   # Private endpoints configuration
   enable_private_endpoints          = var.enable_private_endpoints
-  training_subnet_id                = var.enable_private_endpoints ? module.vnet[0].training_subnet_id : ""
   private_endpoint_subnet_id        = var.enable_private_endpoints ? module.vnet[0].endpoints_subnet_id : ""
   private_dns_zone_aml_api_id       = var.enable_private_endpoints ? module.vnet[0].private_dns_zone_ids.aml_api : ""
   private_dns_zone_aml_notebooks_id = var.enable_private_endpoints ? module.vnet[0].private_dns_zone_ids.aml_notebooks : ""

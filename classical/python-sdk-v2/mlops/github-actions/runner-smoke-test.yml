@@ -65,9 +65,6 @@ jobs:
           curl --version
           python3 --version
           az version
-          test -x /kaniko/executor
-          test -w /kaniko
-          /kaniko/executor version
           test ! -S /var/run/docker.sock
           for url in \
             https://github.com \

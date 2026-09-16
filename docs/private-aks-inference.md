@@ -67,9 +67,10 @@ aks_cluster_resource_id: "/subscriptions/<subscription>/resourceGroups/<aks-rg>/
 aks_node_subnet_resource_id: "/subscriptions/<subscription>/resourceGroups/<network-rg>/providers/Microsoft.Network/virtualNetworks/<vnet>/subnets/<node-subnet>"
 runner_hub_vnet_resource_id: "/subscriptions/<subscription>/resourceGroups/<network-rg>/providers/Microsoft.Network/virtualNetworks/<aks-runner-hub-vnet>"
 online_compute: aks-inference
-online_environment_name: taxi-inference
-online_environment_version: "1"
-online_environment_image: "<registry>.azurecr.io/mlops/online-runtime@sha256:<64-hex-digest>"
+online_mlflow_no_code: true
+online_environment_name: ""
+online_environment_version: ""
+online_environment_image: ""
 online_instance_type: cpu-small
 online_namespace: azureml-inference
 online_service_account: default
@@ -89,9 +90,24 @@ aml_kubernetes_extension_ssl_cname: <private-scoring-fqdn>
 
 `online_instance_type` is an AML Kubernetes instance type, not an Azure VM SKU.
 The reusable online workflow consumes `online_compute`,
-`online_environment_name`, `online_environment_version`, and
-`online_instance_type`. Namespace, service account, UAMI, node pool, and AKS
-credentials remain infrastructure-only.
+`online_mlflow_no_code`, and `online_instance_type`. In the default MLflow no-code
+mode, the generated caller passes `mlflow_no_code: true` and omits the environment
+name and version inputs. Bicep also skips workspace environment creation.
+Namespace, service account, UAMI, node pool, and AKS credentials remain
+infrastructure-only.
+
+For compatibility with an approved external image supply chain, set
+`online_mlflow_no_code: false` and provide all three values together:
+
+```yaml
+online_environment_name: taxi-inference
+online_environment_version: "1"
+online_environment_image: "<registry>.azurecr.io/mlops/online-runtime@sha256:<64-hex-digest>"
+```
+
+The image-only path registers that exact workspace environment version. Partial
+triples, mutable image references, and any environment input combined with
+no-code mode fail validation.
 
 ## Consumer deployment prerequisites
 
@@ -158,25 +174,17 @@ Before enabling the feature:
    server certificate. A matching legacy certificate Common Name alone is not
    sufficient. The deployment workflow rejects certificates with no DNS SAN or
    a hostname mismatch before sending the secure Bicep parameters.
-8. First deploy the workspace and private ACR with this feature disabled. Run
-   `publish-online-runtime.yml` on the private runner after rebuilding and
-   redeploying the digest-pinned ARC runner image described in
-   `runner-bootstrap/README.md`. The runner image includes a digest-pinned
-   Kaniko executor. The workflow uses its federated Azure identity to request a
-   short-lived ACR token, masks it, writes it to an ephemeral mode-0600 Docker
-   config, and removes that config on exit. Kaniko builds and pushes through the
-   private ACR endpoint without a Docker daemon, privileged pod, socket mount,
-   registry admin credentials, ACR managed builder, or AML workspace build.
-   The runtime workflow must not install Docker, Buildah, Kaniko, or other build
-   tools at job time and must not use `sudo` or `apt-get`; tool provisioning is
-   confined to the reviewed, digest-pinned runner image.
-   After Kaniko publishes the source-SHA tag, the workflow independently queries
-   the manifest and requires it to match Kaniko's SHA-256 digest. Copy the
-   reported `<login-server>/mlops/online-runtime@sha256:<64-hex-digest>` URI
-   into `online_environment_image`, then enable this feature. The source-SHA tag
-   is only the build lookup key; the final environment reference is always the
-   immutable digest URI. Bicep registers the named/versioned environment as
-   image-only; it has no build context or conda file.
+8. Use the default `online_mlflow_no_code: true` for registered MLflow models.
+   Azure ML supplies the curated serving environment, so the project does not
+   create a workspace environment, publish a runtime image, or carry a custom
+   online runtime Dockerfile. Non-root Kaniko runtime builds were tested and are
+   conclusively unsupported by the enforced runner policy because the executor
+   attempts `chown /` and fails with `operation not permitted`. Do not weaken
+   the runner, mount a Docker socket, or introduce another in-cluster builder.
+   If an organization already has an approved external image supply chain, use
+   the immutable image-only compatibility configuration above. Bicep registers
+   the supplied named/versioned environment with only the digest-pinned image;
+   it has no build context or Conda file.
 9. Run read-only preflight checks for AKS 1.35 patch support, extension stable
    versions, OIDC issuer, Workload ID, private DNS, node quota, and TLS material.
    Validate in nonproduction because Microsoft does not explicitly document the

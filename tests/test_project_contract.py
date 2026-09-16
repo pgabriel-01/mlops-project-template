@@ -13,17 +13,20 @@ ROOT = Path(__file__).resolve().parents[1]
 PATTERN_ROOT = ROOT / "classical" / "python-sdk-v2"
 SCRIPT_ROOT = PATTERN_ROOT / "mlops" / "scripts"
 TEMPLATE_REPOSITORY = "pgabriel-01/mlops-templates"
-TEMPLATE_REF = "360ea52eb7802b636ff0e9ccaf0b831a500d9a77"
+TEMPLATE_REF = "a8e5fcb5240e20e912cb1760adddec7efde57006"
 BATCH_ENVIRONMENT = (
     "azureml://registries/azureml/environments/sklearn-1.5/versions/53"
 )
 TEMPLATE_BLOBS = {
-    "src/python-sdk-v2/aml_client.py": ("6ee33702a5b892069916057e3add9ee16e912c21"),
+    "src/python-sdk-v2/aml_client.py": ("d65c7d1fbf7287a9b1ab64a7025eb320dfac3a68"),
     ".github/workflows/python-sdk-v2-train-register.yml": (
         "16504df1fca114dcb8f5105f51baa115b2814527"
     ),
     ".github/workflows/python-sdk-v2-batch.yml": (
         "4a9532ed02a6c3ff6eedb66617a4f7c5b67adbd7"
+    ),
+    ".github/workflows/python-sdk-v2-online.yml": (
+        "aa82d72db8fcb5c0fd60303d40efb7a38c55a623"
     ),
     "src/python-sdk-v2/create_batch_endpoint.py": (
         "c8be7b6e9f15c4f80a0980156eeaba45319459bc"
@@ -34,7 +37,13 @@ TEMPLATE_BLOBS = {
     "src/python-sdk-v2/test_batch_endpoint.py": (
         "de162e28504f710fe02b8380fadf631ce3456269"
     ),
-    "tests/test_python_sdk_v2.py": "e672c13dd9109679c4103cb53165aade87757707",
+    "src/python-sdk-v2/create_online_endpoint.py": (
+        "388c0bef31c2ee2647dddca2fe91f5335c28284d"
+    ),
+    "src/python-sdk-v2/create_online_deployment.py": (
+        "2d635b99fe710e458a466154eceba852c4670e96"
+    ),
+    "tests/test_python_sdk_v2.py": "f1fad04c0d3b93b113624474a98db2ad9374e264",
 }
 sys.path.insert(0, str(SCRIPT_ROOT))
 
@@ -239,6 +248,11 @@ class ProjectContractTests(unittest.TestCase):
         self.assertIn("job_file: mlops/azureml/train/job.yml", training)
         self.assertIn("request_file: data/taxi-request.json", online)
         self.assertIn("request_batch_file: data/taxi-batch.csv", batch)
+        self.assertIn(
+            f"deployment_environment: {CURATED_BATCH_ENVIRONMENT}",
+            batch,
+        )
+        self.assertNotIn("conda_file:", batch)
 
         for content in (training, online, batch):
             self.assertIn("mlops/scripts/export_config.py", content)
@@ -435,13 +449,16 @@ class ProjectContractTests(unittest.TestCase):
         os.environ.get("VERIFY_REMOTE_TEMPLATES") == "1",
         "set VERIFY_REMOTE_TEMPLATES=1 to verify immutable shared assets",
     )
-    def test_pinned_templates_preserve_batch_and_diagnostics_contracts(self):
+    def test_pinned_templates_preserve_deployment_contracts_and_diagnostics(self):
         aml_client = load_pinned_template("src/python-sdk-v2/aml_client.py")
         training_workflow = load_pinned_template(
             ".github/workflows/python-sdk-v2-train-register.yml"
         )
         batch_workflow = load_pinned_template(
             ".github/workflows/python-sdk-v2-batch.yml"
+        )
+        online_workflow = load_pinned_template(
+            ".github/workflows/python-sdk-v2-online.yml"
         )
         batch_endpoint = load_pinned_template(
             "src/python-sdk-v2/create_batch_endpoint.py"
@@ -451,6 +468,12 @@ class ProjectContractTests(unittest.TestCase):
         )
         batch_invocation = load_pinned_template(
             "src/python-sdk-v2/test_batch_endpoint.py"
+        )
+        online_endpoint = load_pinned_template(
+            "src/python-sdk-v2/create_online_endpoint.py"
+        )
+        online_deployment = load_pinned_template(
+            "src/python-sdk-v2/create_online_deployment.py"
         )
         template_tests = load_pinned_template("tests/test_python_sdk_v2.py")
 
@@ -487,8 +510,24 @@ class ProjectContractTests(unittest.TestCase):
             "ref: ${{ inputs.sdk_ref }}",
             batch_workflow,
         )
+        self.assertIn(
+            f"default: {BATCH_ENVIRONMENT}",
+            batch_workflow,
+        )
+        self.assertIn(
+            "DEPLOYMENT_ENVIRONMENT: ${{ inputs.deployment_environment }}",
+            batch_workflow,
+        )
+        self.assertIn('--environment "$DEPLOYMENT_ENVIRONMENT"', batch_workflow)
         self.assertIn("wait_for_resource_create_or_update(", batch_endpoint)
         self.assertIn("wait_for_resource_create_or_update(", batch_deployment)
+        self.assertIn("DEFAULT_BATCH_ENVIRONMENT", batch_deployment)
+        self.assertIn("type=validate_immutable_environment_reference", batch_deployment)
+        self.assertIn("default=DEFAULT_BATCH_ENVIRONMENT", batch_deployment)
+        self.assertIn("environment=environment", batch_deployment)
+        self.assertIn("IMMUTABLE_ENVIRONMENT_PATTERNS", batch_deployment)
+        self.assertNotIn("conda_file", batch_deployment)
+        self.assertNotIn("Environment(", batch_deployment)
         self.assertIn(
             "DEPLOYMENT_ENVIRONMENT: ${{ inputs.deployment_environment }}",
             batch_workflow,
@@ -527,6 +566,45 @@ class ProjectContractTests(unittest.TestCase):
             "test_batch_deployment_uses_explicit_immutable_environment",
             "test_batch_deployment_rejects_mutable_environment_reference",
             "test_batch_workflow_uses_pinned_curated_environment",
+            "test_batch_cli_defaults_to_immutable_prebuilt_environment",
+        ):
+            self.assertIn(test_name, template_tests)
+        self.assertIn(
+            '"image" not in batch_deployment_type.call_args.kwargs', template_tests
+        )
+        self.assertIn(
+            '"code_configuration" not in batch_deployment_type.call_args.kwargs',
+            template_tests,
+        )
+        self.assertIn("/versions/latest", template_tests)
+        self.assertIn('"conda.yml"', template_tests)
+        self.assertIn("create_client.assert_not_called()", template_tests)
+
+        for required_input in (
+            "compute:",
+            "environment_name:",
+            "environment_version:",
+            "instance_type:",
+        ):
+            self.assertIn(required_input, online_workflow)
+        self.assertNotIn("Standard_DS2_v2", online_workflow)
+        self.assertNotIn("ubuntu-24.04", online_workflow)
+        self.assertIn('--compute "$COMPUTE"', online_workflow)
+        self.assertIn('--environment_name "$ENVIRONMENT_NAME"', online_workflow)
+        self.assertIn('--environment_version "$ENVIRONMENT_VERSION"', online_workflow)
+        self.assertIn("KubernetesOnlineEndpoint", online_endpoint)
+        self.assertIn("get_kubernetes_online_compute", online_endpoint)
+        self.assertIn("KubernetesOnlineDeployment", online_deployment)
+        self.assertIn("get_prebuilt_environment", online_deployment)
+        self.assertNotIn("ManagedOnlineEndpoint", online_endpoint)
+        self.assertNotIn("ManagedOnlineDeployment", online_deployment)
+        for test_name in (
+            "test_online_workflow_requires_private_kubernetes_contract",
+            "test_online_endpoint_uses_attached_arc_kubernetes_compute",
+            "test_online_compute_requires_dedicated_namespace_and_uami",
+            "test_prebuilt_environment_contract_requires_digest_and_no_build",
+            "test_online_deployment_uses_kubernetes_and_exact_environment",
+            "test_online_endpoint_completes_before_deployment_begins",
         ):
             self.assertIn(test_name, template_tests)
         self.assertIn(

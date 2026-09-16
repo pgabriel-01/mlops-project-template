@@ -419,16 +419,17 @@ verify each propagation. Do not describe a change as factory-regenerated unless
 an external factory was actually used and recorded separately.
 
 The reviewed reusable-workflow propagation is pinned in that contract to
-`pgabriel-01/mlops-templates@d4bec7598d11c79d5140c654888c3289693674d6`.
+`pgabriel-01/mlops-templates@8f8a8d5f33b88df5109a9c950bba19b616c15ea8`.
 Generated Python SDK v2 workflows bind both the reusable workflow and its
 checked-out SDK helpers to that same immutable ref. It supports MLflow no-code
 online deployment while preserving the explicit immutable image-only mode. For
-batch deployment, the pin derives a full ARM environment ID from the registry
-operation scope, verifies it against the exact environment lookup, waits for
-endpoint completion and confirmed successful provisioning before deployment,
-waits for deployment before invocation, retries boundedly when an existing
-operation conflicts, and propagates terminal failures and timeouts. The batch
-caller exposes an immutable deployment environment input that defaults to
+batch deployment, the pin applies the registry operation scope's validated full
+ARM ID to the fetched `Environment` entity so Azure ML SDK dependency upload
+extracts the supported value. It also waits for endpoint completion and
+confirmed successful provisioning before deployment, waits for deployment
+before invocation, retries boundedly when an existing operation conflicts, and
+propagates terminal failures and timeouts. The batch caller exposes an immutable
+deployment environment input that defaults to
 `azureml://registries/azureml/environments/sklearn-1.5/versions/53`. The reusable
 workflow validates that the value is a versioned Azure ML environment reference
 with a numeric version and passes the full ID into `BatchDeployment`; mutable

@@ -328,7 +328,11 @@ The generated `update-runner-image.yml` accepts only this repository's immutable
 GHCR runner digest and targets the AKS resource ID configured in the DEV GitHub
 Environment variable `ARC_AKS_CLUSTER_RESOURCE_ID`. Its shared AKS Run Command
 wrapper rejects remote nonzero `exitCode` values even when Azure CLI exits zero,
-prints sanitized logs only on failure, and uses POSIX remote shell options.
+prints sanitized logs only on failure, and uses POSIX remote shell options. The
+image update dynamically resolves exactly one container named `runner`, applies
+a one-operation JSON Patch only to its `image` field, and verifies the exact
+immutable digest by reading the resource back. It does not read Helm release
+Secrets or expand the OIDC principal's secret access.
 
 Endpoint, deployment, model, and request names remain workload-owned. Namespace,
 service account, workload UAMI, node pool, and AKS credentials remain

@@ -19,13 +19,37 @@ RUNNER_NAMESPACE=arc-runners
   echo "ARC_GITHUB_CONFIG_URL is required, for example https://github.com/owner/repository" >&2
   exit 1
 }
+[[ ${ARC_OPERATOR_PRINCIPAL_OBJECT_ID:-} =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]] || {
+  echo "ARC_OPERATOR_PRINCIPAL_OBJECT_ID is required and must be a Microsoft Entra object ID UUID" >&2
+  exit 1
+}
 RENDERED_VALUES=$(mktemp)
-trap 'rm -f "$RENDERED_VALUES"' EXIT
+RENDERED_OPERATOR_RBAC=$(mktemp)
+trap 'rm -f "$RENDERED_VALUES" "$RENDERED_OPERATOR_RBAC"' EXIT
 python3 "$ROOT_DIR/scripts/render_runner_values.py" \
   "$ROOT_DIR/helm/runner-set-values.yaml" \
   "$RENDERED_VALUES" \
   --image "$ARC_RUNNER_IMAGE" \
   --github-config-url "$ARC_GITHUB_CONFIG_URL"
+python3 - \
+  "$ROOT_DIR/manifests/arc-operator-rbac.json" \
+  "$RENDERED_OPERATOR_RBAC" \
+  "$ARC_OPERATOR_PRINCIPAL_OBJECT_ID" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+source = Path(sys.argv[1])
+destination = Path(sys.argv[2])
+principal = sys.argv[3]
+template = source.read_text(encoding="utf-8")
+placeholder = "__ARC_OPERATOR_PRINCIPAL_OBJECT_ID__"
+if template.count(placeholder) != 1:
+    raise SystemExit("ARC operator RBAC template must contain one principal placeholder")
+rendered = template.replace(placeholder, principal)
+json.loads(rendered)
+destination.write_text(rendered, encoding="utf-8")
+PY
 
 [[ -f "$METADATA_PATH" ]] || { echo "Missing verified App metadata: $METADATA_PATH" >&2; exit 1; }
 APP_VALUES=$(python3 - "$METADATA_PATH" <<'PY'
@@ -53,6 +77,10 @@ command="kubectl create namespace $RUNNER_NAMESPACE --dry-run=client -o yaml | k
 "${INVOKE_AKS[@]}" --resource-group "$RESOURCE_GROUP" --name "$AKS_NAME" \
   --command "$command" \
   --file "$PEM_PATH"
+
+"${INVOKE_AKS[@]}" --resource-group "$RESOURCE_GROUP" --name "$AKS_NAME" \
+  --command "kubectl apply -f $(basename "$RENDERED_OPERATOR_RBAC")" \
+  --file "$RENDERED_OPERATOR_RBAC"
 
 "${INVOKE_AKS[@]}" --resource-group "$RESOURCE_GROUP" --name "$AKS_NAME" \
   --command "helm upgrade --install arc --namespace $CONTROLLER_NAMESPACE --create-namespace --version $CHART_VERSION -f controller-values.yaml oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller" \

@@ -18,6 +18,17 @@ from validate_project import validate_config_values
 
 class PrivateAksInferenceContractTests(unittest.TestCase):
     @staticmethod
+    def _runner_update_script():
+        update = (
+            PATTERN_ROOT / "mlops" / "github-actions" / "update-runner-image.yml"
+        ).read_text()
+        update_step = update.split(
+            "      - name: Update immutable ARC runner image",
+            1,
+        )[1].split("\n\n  reconcile:", 1)[0]
+        return textwrap.dedent(update_step.split("        run: |\n", 1)[1])
+
+    @staticmethod
     def _runtime_publish_script():
         publish = (
             PATTERN_ROOT / "mlops" / "github-actions" / "publish-online-runtime.yml"
@@ -442,12 +453,57 @@ class PrivateAksInferenceContractTests(unittest.TestCase):
         self.assertNotIn("--output none", update)
         self.assertNotIn("az aks command invoke", update)
         self.assertIn("trap 'rm -f", update)
-        self.assertIn("helm get values", update)
+        self.assertNotIn("helm get values", update)
+        self.assertNotIn("helm upgrade", update)
+        self.assertNotIn("kubectl get secret", update)
+        self.assertNotIn("kubectl get secrets", update)
+        self.assertNotIn("rolebinding", update.lower())
+        self.assertNotIn("clusterrole", update.lower())
         self.assertIn(
-            ".template.spec.containers |= map("
-            'if .name == \\"runner\\" then .image = \\$image else . end)',
+            "AutoscalingRunnerSet must contain exactly one runner container",
             update,
         )
+        self.assertIn(
+            "runner_count=\\$(jq "
+            "'[.spec.template.spec.containers | to_entries[] | "
+            'select(.value.name == \\"runner\\")] | length\'',
+            update,
+        )
+        self.assertIn(
+            "runner_index=\\$(jq -r "
+            "'.spec.template.spec.containers | to_entries[] | "
+            'select(.value.name == \\"runner\\") | .key\'',
+            update,
+        )
+        self.assertIn(
+            "case \\\"\\$runner_index\\\" in ''|*[!0-9]*)",
+            update,
+        )
+        self.assertIn(
+            "jq -cn --arg image '$RUNNER_IMAGE' "
+            '--argjson index \\"\\$runner_index\\"',
+            update,
+        )
+        self.assertIn(
+            '\\"op\\":\\"replace\\",\\"path\\":('
+            '\\"/spec/template/spec/containers/\\" + '
+            '(\\$index | tostring) + \\"/image\\"),'
+            '\\"value\\":\\$image',
+            update,
+        )
+        self.assertIn(
+            "kubectl patch autoscalingrunnerset mlops-private "
+            "--namespace arc-runners --type json --patch-file",
+            update,
+        )
+        self.assertIn(
+            "kubectl get autoscalingrunnerset mlops-private "
+            "--namespace arc-runners --output json | jq -r "
+            '--argjson index \\"\\$runner_index\\" '
+            "'.spec.template.spec.containers[\\$index].image // empty'",
+            update,
+        )
+        self.assertIn("test \\\"\\$actual\\\" = '$RUNNER_IMAGE'", update)
         self.assertIn('"provisioningState"', helper)
         self.assertIn('"exitCode"', helper)
         self.assertIn("capture_output=True", helper)
@@ -455,6 +511,308 @@ class PrivateAksInferenceContractTests(unittest.TestCase):
         for content in scripts.values():
             self.assertIn("invoke_aks_command.py", content)
             self.assertNotIn("az aks command invoke", content)
+
+    def test_runner_update_patches_only_unique_runner_image(self):
+        script = self._runner_update_script()
+        # The macOS system Bash predates the lowercase expansion used on Ubuntu.
+        executable_script = script.replace(
+            "${GITHUB_REPOSITORY,,}",
+            "${GITHUB_REPOSITORY}",
+        ).replace(
+            "${AKS_CLUSTER_RESOURCE_ID,,}",
+            "${AKS_CLUSTER_RESOURCE_ID}",
+        )
+        digest = "a" * 64
+        immutable_image = (
+            "ghcr.io/example/mlops-project-template-arc-runner@sha256:" + digest
+        )
+        base_resource = {
+            "apiVersion": "actions.github.com/v1alpha1",
+            "kind": "AutoscalingRunnerSet",
+            "metadata": {"name": "mlops-private", "namespace": "arc-runners"},
+            "spec": {
+                "template": {
+                    "spec": {
+                        "containers": [
+                            {
+                                "name": "sidecar",
+                                "image": "example/sidecar@sha256:" + "b" * 64,
+                            },
+                            {
+                                "name": "runner",
+                                "image": "ghcr.io/example/old@sha256:" + "c" * 64,
+                                "command": ["/home/runner/run.sh"],
+                                "resources": {"requests": {"cpu": "500m"}},
+                                "securityContext": {
+                                    "allowPrivilegeEscalation": False,
+                                    "readOnlyRootFilesystem": True,
+                                },
+                            },
+                        ]
+                    }
+                }
+            },
+        }
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            state = root / "resource.json"
+            patch_log = root / "patch.json"
+            state.write_text(json.dumps(base_resource))
+            fake_python = root / "python3"
+            fake_python.write_text(
+                textwrap.dedent(
+                    """\
+                    #!/bin/sh
+                    command=
+                    while [ "$#" -gt 0 ]; do
+                      if [ "$1" = "--command" ]; then
+                        command=$2
+                        shift 2
+                      else
+                        shift
+                      fi
+                    done
+                    test -n "$command"
+                    /bin/sh -c "$command"
+                    """
+                )
+            )
+            fake_python.chmod(0o755)
+            fake_kubectl = root / "kubectl"
+            fake_kubectl.write_text(
+                textwrap.dedent(
+                    """\
+                    #!/bin/sh
+                    set -eu
+                    operation=$1
+                    shift
+                    case "$operation" in
+                      get)
+                        cat "$FAKE_KUBECTL_STATE"
+                        ;;
+                      patch)
+                        patch_file=
+                        while [ "$#" -gt 0 ]; do
+                          if [ "$1" = "--patch-file" ]; then
+                            patch_file=$2
+                            shift 2
+                          else
+                            shift
+                          fi
+                        done
+                        test -n "$patch_file"
+                        cp "$patch_file" "$FAKE_KUBECTL_PATCH_LOG"
+                        index=$(jq -r '.[0].path | capture(
+                          "^/spec/template/spec/containers/(?<index>[0-9]+)/image$"
+                        ).index | tonumber' "$patch_file")
+                        image=$(jq -r '.[0].value' "$patch_file")
+                        updated=$(mktemp)
+                        jq --argjson index "$index" --arg image "$image" \
+                          '.spec.template.spec.containers[$index].image = $image' \
+                          "$FAKE_KUBECTL_STATE" > "$updated"
+                        mv "$updated" "$FAKE_KUBECTL_STATE"
+                        ;;
+                      *)
+                        exit 2
+                        ;;
+                    esac
+                    """
+                )
+            )
+            fake_kubectl.chmod(0o755)
+            environment = {
+                **os.environ,
+                "PATH": f"{root}:{os.environ['PATH']}",
+                "AKS_CLUSTER_RESOURCE_ID": (
+                    "/subscriptions/00000000-0000-0000-0000-000000000001/"
+                    "resourcegroups/runner/providers/microsoft.containerservice/"
+                    "managedclusters/private"
+                ),
+                "RUNNER_IMAGE": immutable_image,
+                "GITHUB_REPOSITORY": "example/mlops-project-template",
+                "FAKE_KUBECTL_STATE": str(state),
+                "FAKE_KUBECTL_PATCH_LOG": str(patch_log),
+            }
+
+            subprocess.run(["bash", "-n"], input=script, text=True, check=True)
+            subprocess.run(
+                ["bash"],
+                input=executable_script,
+                text=True,
+                check=True,
+                cwd=PATTERN_ROOT,
+                env=environment,
+            )
+
+            self.assertEqual(
+                [
+                    {
+                        "op": "replace",
+                        "path": "/spec/template/spec/containers/1/image",
+                        "value": immutable_image,
+                    }
+                ],
+                json.loads(patch_log.read_text()),
+            )
+            expected = json.loads(json.dumps(base_resource))
+            expected["spec"]["template"]["spec"]["containers"][1][
+                "image"
+            ] = immutable_image
+            self.assertEqual(expected, json.loads(state.read_text()))
+
+            invalid_containers = (
+                [base_resource["spec"]["template"]["spec"]["containers"][0]],
+                [
+                    base_resource["spec"]["template"]["spec"]["containers"][1],
+                    {
+                        "name": "runner",
+                        "image": "ghcr.io/example/duplicate@sha256:" + "d" * 64,
+                    },
+                ],
+            )
+            for containers in invalid_containers:
+                with self.subTest(runner_count=len(containers)):
+                    resource = json.loads(json.dumps(base_resource))
+                    resource["spec"]["template"]["spec"]["containers"] = containers
+                    state.write_text(json.dumps(resource))
+                    patch_log.unlink(missing_ok=True)
+                    result = subprocess.run(
+                        ["bash"],
+                        input=executable_script,
+                        text=True,
+                        cwd=PATTERN_ROOT,
+                        env=environment,
+                        capture_output=True,
+                    )
+                    self.assertNotEqual(0, result.returncode)
+                    self.assertFalse(patch_log.exists())
+                    self.assertEqual(resource, json.loads(state.read_text()))
+
+    def test_arc_operator_rbac_is_exact_and_installed_fail_closed(self):
+        bootstrap = PATTERN_ROOT / "runner-bootstrap"
+        install_path = bootstrap / "scripts" / "install_arc.sh"
+        install = install_path.read_text()
+        manifest = json.loads(
+            (bootstrap / "manifests" / "arc-operator-rbac.json").read_text()
+        )
+        role, binding = manifest["items"]
+
+        self.assertEqual("Role", role["kind"])
+        self.assertEqual(
+            {"name": "arc-image-update-operator", "namespace": "arc-runners"},
+            role["metadata"],
+        )
+        self.assertEqual(
+            [
+                {
+                    "apiGroups": ["actions.github.com"],
+                    "resources": ["autoscalingrunnersets"],
+                    "verbs": ["get", "patch"],
+                },
+                {
+                    "apiGroups": ["actions.github.com"],
+                    "resources": ["ephemeralrunnersets"],
+                    "verbs": ["get", "list", "delete"],
+                },
+                {
+                    "apiGroups": [""],
+                    "resources": ["pods"],
+                    "verbs": ["get", "list", "delete"],
+                },
+            ],
+            role["rules"],
+        )
+        allowed_resources = {
+            resource for rule in role["rules"] for resource in rule["resources"]
+        }
+        allowed_verbs = {verb for rule in role["rules"] for verb in rule["verbs"]}
+        self.assertTrue(
+            {
+                "secrets",
+                "serviceaccounts",
+                "pods/exec",
+                "nodes",
+                "roles",
+                "rolebindings",
+            }.isdisjoint(allowed_resources)
+        )
+        self.assertTrue(
+            {"create", "update", "bind", "escalate", "impersonate"}.isdisjoint(
+                allowed_verbs
+            )
+        )
+
+        self.assertEqual("RoleBinding", binding["kind"])
+        self.assertEqual(
+            {
+                "apiGroup": "rbac.authorization.k8s.io",
+                "kind": "Role",
+                "name": "arc-image-update-operator",
+            },
+            binding["roleRef"],
+        )
+        self.assertEqual(
+            [
+                {
+                    "apiGroup": "rbac.authorization.k8s.io",
+                    "kind": "User",
+                    "name": "__ARC_OPERATOR_PRINCIPAL_OBJECT_ID__",
+                }
+            ],
+            binding["subjects"],
+        )
+        self.assertIn(
+            "[[ ${ARC_OPERATOR_PRINCIPAL_OBJECT_ID:-} =~ " "^[0-9a-fA-F]{8}-",
+            install,
+        )
+        self.assertIn(
+            '--command "kubectl apply -f $(basename ' '"$RENDERED_OPERATOR_RBAC")"',
+            install,
+        )
+        self.assertIn('--file "$RENDERED_OPERATOR_RBAC"', install)
+        self.assertNotIn("Azure Kubernetes Service RBAC Writer", install)
+        self.assertNotIn("Azure Kubernetes Service RBAC Admin", install)
+
+        base_environment = {
+            **os.environ,
+            "ARC_RUNNER_IMAGE": (
+                "ghcr.io/example/repository-arc-runner@sha256:" + "a" * 64
+            ),
+            "ARC_GITHUB_CONFIG_URL": "https://github.com/example/repository",
+            "ARC_APP_METADATA": str(bootstrap / "missing-app.json"),
+        }
+        for principal in ("", "not-a-uuid"):
+            with self.subTest(principal=principal):
+                result = subprocess.run(
+                    ["bash", install_path],
+                    env={
+                        **base_environment,
+                        "ARC_OPERATOR_PRINCIPAL_OBJECT_ID": principal,
+                    },
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertNotEqual(0, result.returncode)
+                self.assertIn(
+                    "ARC_OPERATOR_PRINCIPAL_OBJECT_ID is required",
+                    result.stderr,
+                )
+
+        result = subprocess.run(
+            ["bash", install_path],
+            env={
+                **base_environment,
+                "ARC_OPERATOR_PRINCIPAL_OBJECT_ID": (
+                    "00000000-0000-4000-8000-000000000001"
+                ),
+            },
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("Missing verified App metadata", result.stderr)
+        self.assertNotIn("ARC_OPERATOR_PRINCIPAL_OBJECT_ID is required", result.stderr)
 
     def test_runner_build_requires_anonymous_public_package(self):
         build = (

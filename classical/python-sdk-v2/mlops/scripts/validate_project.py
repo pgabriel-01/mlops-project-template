@@ -142,6 +142,8 @@ def generated_paths() -> list[Path]:
         *[CONFIG_ROOT / f"config-infra-{environment}.yml" for environment in ENVIRONMENTS],
         *WORKFLOW_ROOT.glob("*.yml"),
         SCRIPT_ROOT / "export_config.py",
+        PATTERN_ROOT / "runner-bootstrap" / "manifests" / "arc-operator-rbac.json",
+        PATTERN_ROOT / "runner-bootstrap" / "scripts" / "install_arc.sh",
         PATTERN_ROOT / "runner-bootstrap" / "scripts" / "invoke_aks_command.py",
         SCRIPT_ROOT / "project_config.py",
         SCRIPT_ROOT / "render_bicep_parameters.py",

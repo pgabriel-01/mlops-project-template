@@ -103,9 +103,11 @@ image instead.
 For later image-only rollouts, configure the DEV GitHub Environment variable
 `ARC_AKS_CLUSTER_RESOURCE_ID` with the immutable resource ID of the private
 runner AKS cluster and dispatch `Update private runner image` with the new
-digest-pinned GHCR URI. Its first job updates the scale set from an existing
-private runner; its hosted reconciliation job waits for active ephemeral runner
-sets to drain, removes stale generations, and verifies the configured image.
+digest-pinned GHCR URI. Both jobs run on GitHub-hosted runners and use Azure Run
+Command, so a broken or unpullable current ARC image cannot block recovery. The
+first job updates the scale set; the reconciliation job waits for active
+ephemeral runner sets to drain, removes stale generations, and verifies the
+configured image.
 Every AKS Run Command response must report both `provisioningState: Succeeded`
 and `exitCode: 0`. Azure CLI process success alone is not accepted, and remote
 commands use POSIX `set -eu` because AKS Run Command executes them with

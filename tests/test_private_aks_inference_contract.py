@@ -410,8 +410,8 @@ class PrivateAksInferenceContractTests(unittest.TestCase):
         }
 
         self.assertIn("runner_image:", update)
-        self.assertIn("runs-on: mlops-private", update)
-        self.assertIn("runs-on: ubuntu-24.04", update)
+        self.assertEqual(2, update.count("runs-on: ubuntu-24.04"))
+        self.assertNotIn("runs-on: mlops-private", update)
         self.assertIn(
             "AKS_CLUSTER_RESOURCE_ID: ${{ vars.ARC_AKS_CLUSTER_RESOURCE_ID }}",
             update,

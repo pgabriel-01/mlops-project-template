@@ -21,7 +21,11 @@ jobs:
       - id: image
         name: Resolve lowercase image name
         shell: bash
-        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}-arc-runner" >> "$GITHUB_OUTPUT"
+        run: |
+          repository="${GITHUB_REPOSITORY#*/}"
+          package="${repository,,}-arc-runner"
+          echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/$package" >> "$GITHUB_OUTPUT"
+          echo "package=$package" >> "$GITHUB_OUTPUT"
       - id: build
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
         with:
@@ -32,6 +36,31 @@ jobs:
           tags: ${{ steps.image.outputs.name }}:${{ github.sha }}
           provenance: true
           sbom: true
+      - name: Verify anonymous runner image pull
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          IMAGE_NAME: ${{ steps.image.outputs.name }}
+          PACKAGE_NAME: ${{ steps.image.outputs.package }}
+        run: |
+          set -euo pipefail
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          anonymous_config="$(mktemp -d "$RUNNER_TEMP/anonymous-docker.XXXXXX")"
+          cleanup() {
+            rm -f "$anonymous_config/config.json"
+            rmdir "$anonymous_config" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          printf '{"auths":{}}\n' > "$anonymous_config/config.json"
+          chmod 0600 "$anonymous_config/config.json"
+          if ! DOCKER_CONFIG="$anonymous_config" \
+            docker buildx imagetools inspect "$IMAGE_NAME@$DIGEST" >/dev/null; then
+            echo "Runner image is not anonymously pullable." >&2
+            echo "Set the GHCR package visibility to Public, then rerun this workflow." >&2
+            echo "Personal owner settings: https://github.com/users/$GITHUB_REPOSITORY_OWNER/packages/container/$PACKAGE_NAME/settings" >&2
+            echo "Organization settings: https://github.com/orgs/$GITHUB_REPOSITORY_OWNER/packages/container/$PACKAGE_NAME/settings" >&2
+            echo "Do not add an imagePullSecret, PAT, or expiring token." >&2
+            exit 1
+          fi
       - name: Report immutable image
         env:
           DIGEST: ${{ steps.build.outputs.digest }}

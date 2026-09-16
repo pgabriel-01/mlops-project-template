@@ -73,13 +73,18 @@ sequence:
 
 1. Complete review and merge this PR so the build and smoke workflows exist on
    `main`.
-2. Dispatch `Build private runner image` on `main`.
-3. Copy the `ghcr.io/<owner>/<repository>-arc-runner@sha256:...` value from
-   the workflow summary.
-4. In the package settings, change this tooling-only container package to
-   **Public**. GHCR packages are private by default and the package REST API does
-   not provide a visibility-change endpoint.
-5. Verify the digest can be pulled anonymously. `install_arc.sh` repeats this
+2. Dispatch `Build private runner image` on `main`. A new GHCR package defaults
+   to private, so the first run publishes the image and then fails its anonymous
+   pull check with links to the personal-account and organization package
+   settings.
+3. In the package settings, change this tooling-only container package to
+   **Public**. GitHub does not expose a supported REST or GraphQL visibility
+   mutation, so this is an explicit one-time package-administrator prerequisite.
+4. Rerun `Build private runner image`. The workflow uses an empty temporary
+   Docker configuration to inspect the immutable digest without credentials and
+   fails closed unless anonymous access succeeds.
+5. Copy the `ghcr.io/<owner>/<repository>-arc-runner@sha256:...` value from
+   the successful workflow summary. `install_arc.sh` repeats the anonymous pull
    check from AKS and verifies `git`, `curl`, Python, Azure CLI, the Kaniko
    executable, and the absence of `/var/run/docker.sock` before installing ARC.
 

@@ -13,15 +13,25 @@ ROOT = Path(__file__).resolve().parents[1]
 PATTERN_ROOT = ROOT / "classical" / "python-sdk-v2"
 SCRIPT_ROOT = PATTERN_ROOT / "mlops" / "scripts"
 TEMPLATE_REPOSITORY = "pgabriel-01/mlops-templates"
-TEMPLATE_REF = "c710acac35876e4aae66d8c73da2c38e4c4a07eb"
+TEMPLATE_REF = "40e6c55e158d6dc5ecfc4c60f3d5dad03224cb57"
 TEMPLATE_BLOBS = {
-    "src/python-sdk-v2/aml_client.py": (
-        "880ab3a34246069e41152c0584af6d78ac0e6d02"
-    ),
+    "src/python-sdk-v2/aml_client.py": ("6ee33702a5b892069916057e3add9ee16e912c21"),
     ".github/workflows/python-sdk-v2-train-register.yml": (
         "16504df1fca114dcb8f5105f51baa115b2814527"
     ),
-    "tests/test_python_sdk_v2.py": "b7baf26aa859019e3a943c5b32094e3c3067794d",
+    ".github/workflows/python-sdk-v2-batch.yml": (
+        "dbe927633d90812990cc3e21a70487df945d3366"
+    ),
+    "src/python-sdk-v2/create_batch_endpoint.py": (
+        "c8be7b6e9f15c4f80a0980156eeaba45319459bc"
+    ),
+    "src/python-sdk-v2/create_batch_deployment.py": (
+        "73436abb4f3a779e34b76f2d89959ae6164827fd"
+    ),
+    "src/python-sdk-v2/test_batch_endpoint.py": (
+        "de162e28504f710fe02b8380fadf631ce3456269"
+    ),
+    "tests/test_python_sdk_v2.py": "86c22cb49e11b0588c27c5d8115c8fc4e6d99479",
 }
 sys.path.insert(0, str(SCRIPT_ROOT))
 
@@ -41,9 +51,7 @@ def load_pinned_template(path: str) -> str:
         usedforsecurity=False,
     ).hexdigest()
     if git_blob != TEMPLATE_BLOBS[path]:
-        raise AssertionError(
-            f"{path} at {TEMPLATE_REF} has unexpected blob {git_blob}"
-        )
+        raise AssertionError(f"{path} at {TEMPLATE_REF} has unexpected blob {git_blob}")
     return content.decode()
 
 
@@ -85,10 +93,12 @@ class ProjectContractTests(unittest.TestCase):
                 base_config.replace(
                     'runner_hub_vnet_resource_id: ""',
                     f'runner_hub_vnet_resource_id: "{runner_hub_id}"',
-                ).replace(
+                )
+                .replace(
                     "manage_runner_hub_to_workload_peering: false",
                     "manage_runner_hub_to_workload_peering: true",
-                ).replace(
+                )
+                .replace(
                     'shared_private_dns_zone_resource_ids: "{}"',
                     "shared_private_dns_zone_resource_ids: "
                     + json.dumps(json.dumps(shared_zone_ids)),
@@ -165,15 +175,15 @@ class ProjectContractTests(unittest.TestCase):
             "privateDnsZones/privatelink.blob.core.windows.net"
         )
         missing_hub_for_dns = dict(config)
-        missing_hub_for_dns["shared_private_dns_zone_resource_ids"] = (
-            json.dumps({"privatelink.blob.core.windows.net": shared_zone_id})
+        missing_hub_for_dns["shared_private_dns_zone_resource_ids"] = json.dumps(
+            {"privatelink.blob.core.windows.net": shared_zone_id}
         )
         self.assertTrue(validate_config_values(path, missing_hub_for_dns))
 
         invalid_zone_mapping = dict(config)
         invalid_zone_mapping["runner_hub_vnet_resource_id"] = runner_hub_id
-        invalid_zone_mapping["shared_private_dns_zone_resource_ids"] = (
-            json.dumps({"privatelink.blob.core.windows.net": shared_zone_id + "-wrong"})
+        invalid_zone_mapping["shared_private_dns_zone_resource_ids"] = json.dumps(
+            {"privatelink.blob.core.windows.net": shared_zone_id + "-wrong"}
         )
         self.assertTrue(validate_config_values(path, invalid_zone_mapping))
 
@@ -192,16 +202,12 @@ class ProjectContractTests(unittest.TestCase):
                 f"{reusable_name}@__MLOPS_TEMPLATES_REF__"
             )
             self.assertIn(expected, content)
-            self.assertIn(
-                "sdk_repository: __MLOPS_TEMPLATES_REPOSITORY__", content
-            )
+            self.assertIn("sdk_repository: __MLOPS_TEMPLATES_REPOSITORY__", content)
             self.assertIn("sdk_ref: __MLOPS_TEMPLATES_REF__", content)
 
     def test_workflows_use_generated_project_paths(self):
         workflow_root = PATTERN_ROOT / "mlops" / "github-actions"
-        infrastructure = (
-            workflow_root / "deploy-infrastructure.yml"
-        ).read_text()
+        infrastructure = (workflow_root / "deploy-infrastructure.yml").read_text()
         training = (workflow_root / "train-register-model.yml").read_text()
         online = (workflow_root / "deploy-online-endpoint.yml").read_text()
         batch = (workflow_root / "deploy-batch-endpoint.yml").read_text()
@@ -219,12 +225,9 @@ class ProjectContractTests(unittest.TestCase):
             self.assertNotIn("classical/python-sdk-v2/", content)
 
     def test_training_job_uses_immutable_curated_environment(self):
-        job = (
-            PATTERN_ROOT / "mlops" / "azureml" / "train" / "job.yml"
-        ).read_text()
+        job = (PATTERN_ROOT / "mlops" / "azureml" / "train" / "job.yml").read_text()
         environment = (
-            "azureml://registries/azureml/environments/"
-            "sklearn-1.5/versions/53"
+            "azureml://registries/azureml/environments/" "sklearn-1.5/versions/53"
         )
 
         environment_lines = [
@@ -303,12 +306,16 @@ class ProjectContractTests(unittest.TestCase):
             )
 
             infrastructure_workflow = (
-                project / ".github" / "workflows" /
-                "deploy-infrastructure.yml"
+                project / ".github" / "workflows" / "deploy-infrastructure.yml"
             ).read_text()
             training_workflow = (
-                project / ".github" / "workflows" /
-                "train-register-model.yml"
+                project / ".github" / "workflows" / "train-register-model.yml"
+            ).read_text()
+            online_workflow = (
+                project / ".github" / "workflows" / "deploy-online-endpoint.yml"
+            ).read_text()
+            batch_workflow = (
+                project / ".github" / "workflows" / "deploy-batch-endpoint.yml"
             ).read_text()
             training_job = (
                 project / "mlops" / "azureml" / "train" / "job.yml"
@@ -328,10 +335,24 @@ class ProjectContractTests(unittest.TestCase):
                 training_workflow,
             )
             self.assertIn(f"sdk_ref: {template_ref}", training_workflow)
-            self.assertNotIn("__MLOPS_TEMPLATES_", training_workflow)
+            for workflow, reusable_name in (
+                (training_workflow, "python-sdk-v2-train-register.yml"),
+                (online_workflow, "python-sdk-v2-online.yml"),
+                (batch_workflow, "python-sdk-v2-batch.yml"),
+            ):
+                self.assertIn(
+                    f"{template_repository}/.github/workflows/"
+                    f"{reusable_name}@{template_ref}",
+                    workflow,
+                )
+                self.assertIn(
+                    f"sdk_repository: {template_repository}",
+                    workflow,
+                )
+                self.assertIn(f"sdk_ref: {template_ref}", workflow)
+                self.assertNotIn("__MLOPS_TEMPLATES_", workflow)
             curated_environment = (
-                "azureml://registries/azureml/environments/"
-                "sklearn-1.5/versions/53"
+                "azureml://registries/azureml/environments/" "sklearn-1.5/versions/53"
             )
             generated_environment_lines = [
                 line.strip()
@@ -345,14 +366,10 @@ class ProjectContractTests(unittest.TestCase):
             self.assertNotIn("conda_file:", training_job)
             self.assertNotIn(":latest", training_job)
             self.assertTrue(
-                project.joinpath(
-                    "mlops", "azureml", "train", "job.yml"
-                ).is_file()
+                project.joinpath("mlops", "azureml", "train", "job.yml").is_file()
             )
             self.assertTrue(
-                project.joinpath(
-                    "mlops", "scripts", "export_config.py"
-                ).is_file()
+                project.joinpath("mlops", "scripts", "export_config.py").is_file()
             )
             self.assertTrue(
                 project.joinpath(
@@ -381,18 +398,75 @@ class ProjectContractTests(unittest.TestCase):
         os.environ.get("VERIFY_REMOTE_TEMPLATES") == "1",
         "set VERIFY_REMOTE_TEMPLATES=1 to verify immutable shared assets",
     )
-    def test_pinned_templates_preserve_failed_job_diagnostics(self):
+    def test_pinned_templates_preserve_diagnostics_and_batch_sequencing(self):
         aml_client = load_pinned_template("src/python-sdk-v2/aml_client.py")
-        workflow = load_pinned_template(
+        training_workflow = load_pinned_template(
             ".github/workflows/python-sdk-v2-train-register.yml"
         )
+        batch_workflow = load_pinned_template(
+            ".github/workflows/python-sdk-v2-batch.yml"
+        )
+        batch_endpoint = load_pinned_template(
+            "src/python-sdk-v2/create_batch_endpoint.py"
+        )
+        batch_deployment = load_pinned_template(
+            "src/python-sdk-v2/create_batch_deployment.py"
+        )
+        batch_invocation = load_pinned_template(
+            "src/python-sdk-v2/test_batch_endpoint.py"
+        )
         template_tests = load_pinned_template("tests/test_python_sdk_v2.py")
+
+        self.assertIn("wait_for_poller(begin_create_or_update())", aml_client)
+        self.assertIn("except ResourceExistsError as exc:", aml_client)
+        self.assertIn("for attempt in range(1, max_update_attempts + 1):", aml_client)
+        self.assertIn("return wait_for_resource_terminal_state(", aml_client)
+        self.assertIn("if state in SUCCESS_PROVISIONING_STATES:", aml_client)
+        self.assertIn("if state in FAILED_PROVISIONING_STATES:", aml_client)
+        self.assertIn("raise TimeoutError(", aml_client)
+
+        workflow_steps = (
+            "Create or update endpoint",
+            "Create or update default deployment",
+            "Invoke endpoint and require successful completion",
+        )
+        self.assertEqual(
+            sorted(batch_workflow.index(step) for step in workflow_steps),
+            [batch_workflow.index(step) for step in workflow_steps],
+        )
+        self.assertIn(
+            ".mlops-python-sdk/src/python-sdk-v2/create_batch_endpoint.py",
+            batch_workflow,
+        )
+        self.assertIn(
+            ".mlops-python-sdk/src/python-sdk-v2/create_batch_deployment.py",
+            batch_workflow,
+        )
+        self.assertIn(
+            ".mlops-python-sdk/src/python-sdk-v2/test_batch_endpoint.py",
+            batch_workflow,
+        )
+        self.assertIn(
+            "ref: ${{ inputs.sdk_ref }}",
+            batch_workflow,
+        )
+        self.assertIn("wait_for_resource_create_or_update(", batch_endpoint)
+        self.assertIn("wait_for_resource_create_or_update(", batch_deployment)
+        self.assertIn(
+            "return wait_for_job(ml_client, invocation.name)", batch_invocation
+        )
+        for test_name in (
+            "test_batch_endpoint_poller_completes_before_deployment_begin",
+            "test_batch_deployment_poller_completes_before_invocation",
+            "test_batch_endpoint_repeat_update_waits_then_retries",
+            "test_batch_endpoint_terminal_operation_failure_propagates",
+        ):
+            self.assertIn(test_name, template_tests)
 
         self.assertIn("diagnostic_jobs = failed_children or [job]", aml_client)
         self.assertRegex(
             aml_client,
-            r"(?s)ml_client\.jobs\.download\(\s*"
-            r"name=job_name,.*?all=False,\s*\)",
+            r"(?s)ml_client\.jobs\.download\(\s*" r"name=job_name,.*?all=False,\s*\)",
         )
         self.assertIn("No log files found in standard diagnostics", aml_client)
         self.assertRegex(
@@ -420,19 +494,18 @@ class ProjectContractTests(unittest.TestCase):
         self.assertIn("Traceback (most recent call last)", template_tests)
         self.assertIn("error=None", template_tests)
 
-        self.assertIn("if: ${{ failure() }}", workflow)
+        self.assertIn("if: ${{ failure() }}", training_workflow)
         self.assertIn(
-            "actions/upload-artifact@"
-            "ea165f8d65b6e75b540449e92b4886f43607fa02",
-            workflow,
+            "actions/upload-artifact@" "ea165f8d65b6e75b540449e92b4886f43607fa02",
+            training_workflow,
         )
-        self.assertIn("path: aml-diagnostics", workflow)
+        self.assertIn("path: aml-diagnostics", training_workflow)
         self.assertIn(
             "name: aml-diagnostics-${{ "
             "steps.train.outputs.training_job_name || github.run_id }}",
-            workflow,
+            training_workflow,
         )
-        self.assertIn("if-no-files-found: warn", workflow)
+        self.assertIn("if-no-files-found: warn", training_workflow)
 
     def test_readme_documents_environment_oidc_bootstrap(self):
         readme = (PATTERN_ROOT / "README.md").read_text()
@@ -532,9 +605,12 @@ class ProjectContractTests(unittest.TestCase):
             "publicNetworkAccess: enableNetworkIsolation ? 'Disabled' : 'Enabled'",
             workspace,
         )
-        self.assertIn("enableNodePublicIp: empty(subnetId)", (
-            ROOT / "infrastructure/bicep/modules/aml_computecluster.bicep"
-        ).read_text())
+        self.assertIn(
+            "enableNodePublicIp: empty(subnetId)",
+            (
+                ROOT / "infrastructure/bicep/modules/aml_computecluster.bicep"
+            ).read_text(),
+        )
         self.assertNotIn("adoServicePrincipalId", main + workspace)
         self.assertIn("ciPrincipalObjectId", main + workspace)
         for service in ("blob", "file", "queue", "table"):
@@ -548,10 +624,12 @@ class ProjectContractTests(unittest.TestCase):
         self.assertIn("runnerHubVnetResourceId", main)
         self.assertIn("manageRunnerHubToWorkloadPeering", main)
         self.assertIn("runnerHubReciprocalPeeringCommand", main)
-        self.assertIn("registrationEnabled: false", (
-            ROOT
-            / "infrastructure/bicep/modules/private_dns_zone_vnet_link.bicep"
-        ).read_text())
+        self.assertIn(
+            "registrationEnabled: false",
+            (
+                ROOT / "infrastructure/bicep/modules/private_dns_zone_vnet_link.bicep"
+            ).read_text(),
+        )
 
     def test_workspace_and_compute_use_custom_vnet_only(self):
         workspace = (
@@ -585,8 +663,7 @@ class ProjectContractTests(unittest.TestCase):
         self.assertIn(
             "enableNodePublicIp: empty(subnetId)",
             (
-                ROOT
-                / "infrastructure/bicep/modules/aml_computecluster.bicep"
+                ROOT / "infrastructure/bicep/modules/aml_computecluster.bicep"
             ).read_text(),
         )
         self.assertIn("module peMlw './modules/private_endpoint.bicep'", main)
@@ -627,8 +704,7 @@ class ProjectContractTests(unittest.TestCase):
 
         self.assertTrue(
             any(
-                "'Microsoft.Resources/deployments', 'pe-mlw'"
-                in dependency
+                "'Microsoft.Resources/deployments', 'pe-mlw'" in dependency
                 for dependency in compute_deployment["dependsOn"]
             )
         )
@@ -643,9 +719,7 @@ class ProjectContractTests(unittest.TestCase):
 
     def test_key_vault_name_stays_within_exact_azure_boundary(self):
         main = (ROOT / "infrastructure/bicep/main.bicep").read_text()
-        key_vault = (
-            ROOT / "infrastructure/bicep/modules/key_vault.bicep"
-        ).read_text()
+        key_vault = (ROOT / "infrastructure/bicep/modules/key_vault.bicep").read_text()
 
         self.assertIn(
             "var keyVaultPrefix = take(replace(toLower(prefix), '-', ''), 5)",
@@ -668,8 +742,7 @@ class ProjectContractTests(unittest.TestCase):
             ROOT / "infrastructure/bicep/modules/private_dns_zones.bicep"
         ).read_text()
         link = (
-            ROOT
-            / "infrastructure/bicep/modules/private_dns_zone_vnet_link.bicep"
+            ROOT / "infrastructure/bicep/modules/private_dns_zone_vnet_link.bicep"
         ).read_text()
 
         self.assertIn("param sharedPrivateDnsZoneResourceIds object = {}", main)

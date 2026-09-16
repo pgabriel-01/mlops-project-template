@@ -374,12 +374,16 @@ This repository does not contain a standalone project factory. The
 verify each propagation. Do not describe a change as factory-regenerated unless
 an external factory was actually used and recorded separately.
 
-The reviewed failed-job diagnostics propagation is pinned in that contract to
-`pgabriel-01/mlops-templates@c710acac35876e4aae66d8c73da2c38e4c4a07eb`.
-Generated training workflows bind both the reusable workflow and its checked-out
-SDK helpers to that same immutable ref. Set `VERIFY_REMOTE_TEMPLATES=1` when
-running the project contract to verify the pinned AML client, its diagnostics
-tests, and the immutable diagnostics artifact upload directly from that commit.
+The reviewed reusable-workflow propagation is pinned in that contract to
+`pgabriel-01/mlops-templates@40e6c55e158d6dc5ecfc4c60f3d5dad03224cb57`.
+Generated Python SDK v2 workflows bind both the reusable workflow and its
+checked-out SDK helpers to that same immutable ref. For batch deployment, that
+pin waits for endpoint completion and confirmed successful provisioning before
+deployment, waits for deployment before invocation, retries boundedly when an
+existing operation conflicts, and propagates terminal failures and timeouts.
+Set `VERIFY_REMOTE_TEMPLATES=1` when running the project contract to verify the
+pinned AML client, batch workflow and helpers, sequencing tests, failed-job
+diagnostics, and immutable diagnostics artifact upload directly from that commit.
 
 The generated training pipeline uses the immutable curated environment
 `azureml://registries/azureml/environments/sklearn-1.5/versions/53` for prepare,

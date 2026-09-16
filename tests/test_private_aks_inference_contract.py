@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import textwrap
 import unittest
 from pathlib import Path
 
@@ -16,6 +17,15 @@ from validate_project import validate_config_values
 
 
 class PrivateAksInferenceContractTests(unittest.TestCase):
+    @staticmethod
+    def _runtime_publish_script():
+        publish = (
+            PATTERN_ROOT / "mlops" / "github-actions" / "publish-online-runtime.yml"
+        ).read_text()
+        publish_step = publish.split("      - id: publish", 1)[1]
+        script = publish_step.split("        run: |\n", 1)[1]
+        return textwrap.dedent(script)
+
     def test_disabled_defaults_are_safe_and_rendered(self):
         config_path = PATTERN_ROOT / "config-infra-dev.yml"
         config = load_config(config_path)
@@ -104,17 +114,13 @@ class PrivateAksInferenceContractTests(unittest.TestCase):
             "IP instead of tls FQDN": {
                 "aml_kubernetes_extension_ssl_cname": "10.0.0.4"
             },
-            "preview train": {
-                "aml_kubernetes_extension_release_train": "preview"
-            },
+            "preview train": {"aml_kubernetes_extension_release_train": "preview"},
             "undersized production pool": {"online_node_min_count": 2},
             "invalid scale bounds": {
                 "online_node_min_count": 4,
                 "online_node_max_count": 3,
             },
-            "unsupported service account": {
-                "online_service_account": "custom"
-            },
+            "unsupported service account": {"online_service_account": "custom"},
         }
         for name, override in cases.items():
             with self.subTest(name=name):
@@ -128,11 +134,7 @@ class PrivateAksInferenceContractTests(unittest.TestCase):
     def test_bicep_contract_is_isolated_and_keyless(self):
         main = (ROOT / "infrastructure" / "bicep" / "main.bicep").read_text()
         cluster = (
-            ROOT
-            / "infrastructure"
-            / "bicep"
-            / "modules"
-            / "aks_aml_inference.bicep"
+            ROOT / "infrastructure" / "bicep" / "modules" / "aks_aml_inference.bicep"
         ).read_text()
         identity = (
             ROOT
@@ -149,11 +151,7 @@ class PrivateAksInferenceContractTests(unittest.TestCase):
             / "aml_kubernetes_compute.bicep"
         ).read_text()
         environment = (
-            ROOT
-            / "infrastructure"
-            / "bicep"
-            / "modules"
-            / "aml_environment.bicep"
+            ROOT / "infrastructure" / "bicep" / "modules" / "aml_environment.bicep"
         ).read_text()
 
         self.assertIn("enablePrivateAksInference", main)
@@ -196,16 +194,16 @@ class PrivateAksInferenceContractTests(unittest.TestCase):
         dockerfile = (runtime_root / "Dockerfile").read_text()
         requirements = (runtime_root / "requirements.txt").read_text()
         publish = (
-            PATTERN_ROOT
-            / "mlops"
-            / "github-actions"
-            / "publish-online-runtime.yml"
+            PATTERN_ROOT / "mlops" / "github-actions" / "publish-online-runtime.yml"
+        ).read_text()
+        runner_dockerfile = (
+            PATTERN_ROOT / "runner-bootstrap" / "image" / "Dockerfile"
+        ).read_text()
+        runner_smoke = (
+            PATTERN_ROOT / "mlops" / "github-actions" / "runner-smoke-test.yml"
         ).read_text()
         deploy = (
-            PATTERN_ROOT
-            / "mlops"
-            / "github-actions"
-            / "deploy-infrastructure.yml"
+            PATTERN_ROOT / "mlops" / "github-actions" / "deploy-infrastructure.yml"
         ).read_text()
 
         self.assertIn("python:3.10.21-slim-bookworm@sha256:", dockerfile)
@@ -213,9 +211,58 @@ class PrivateAksInferenceContractTests(unittest.TestCase):
         self.assertIn("scikit-learn==1.5.2", requirements)
         self.assertIn("cloudpickle==3.1.2", requirements)
         self.assertIn("runs-on: ${{ needs.config.outputs.runner }}", publish)
-        self.assertIn("docker build --pull=false", publish)
+        self.assertIn(
+            "immutable_image: ${{ steps.publish.outputs.immutable_image }}",
+            publish,
+        )
+        self.assertIn("IMAGE_TAG: ${{ github.sha }}", publish)
+        self.assertIn("KANIKO_EXECUTOR: /kaniko/executor", publish)
+        self.assertIn('"$KANIKO_EXECUTOR" version', publish)
         self.assertIn("az acr login", publish)
+        self.assertIn("--expose-token", publish)
+        self.assertIn('[[ -z "$token" ]]', publish)
+        self.assertIn('echo "::add-mask::$token"', publish)
+        self.assertIn('chmod 0700 "$auth_dir"', publish)
+        self.assertIn("path.chmod(0o600)", publish)
+        self.assertIn('DOCKER_CONFIG="$auth_dir" "$KANIKO_EXECUTOR"', publish)
+        self.assertIn(
+            '--destination "$login_server/mlops/online-runtime:$IMAGE_TAG"',
+            publish,
+        )
+        self.assertIn('--digest-file "$digest_file"', publish)
+        self.assertIn("--cleanup", publish)
+        self.assertIn('rm -f "$auth_dir/config.json" "$digest_file"', publish)
+        self.assertIn("az acr manifest show-metadata", publish)
+        self.assertIn("^sha256:[0-9a-f]{64}$", publish)
+        self.assertIn('"$digest" != "$built_digest"', publish)
         self.assertIn("@$digest", publish)
+        self.assertIn(
+            'echo "immutable_image=$immutable_image" >> "$GITHUB_OUTPUT"',
+            publish,
+        )
+        for prohibited in (
+            "docker login",
+            "docker build",
+            "docker push",
+            "az acr build",
+            "buildah",
+            "apt-get",
+            "sudo",
+        ):
+            self.assertNotIn(prohibited, publish)
+        self.assertIn(
+            "gcr.io/kaniko-project/executor@sha256:"
+            "c3109d5926a997b100c4343944e06c6b30a6804b2f9abe0994d3de6ef92b028e",
+            runner_dockerfile,
+        )
+        self.assertIn(
+            "COPY --from=kaniko /kaniko/executor /kaniko/executor",
+            runner_dockerfile,
+        )
+        self.assertIn("chown -R runner:runner /kaniko", runner_dockerfile)
+        self.assertIn("/kaniko/executor version", runner_dockerfile)
+        self.assertIn("test ! -S /var/run/docker.sock", runner_smoke)
+        self.assertIn("/kaniko/executor version", runner_smoke)
         self.assertIn(
             "AML_KUBERNETES_EXTENSION_TLS_CERT_PEM",
             deploy,
@@ -242,6 +289,115 @@ class PrivateAksInferenceContractTests(unittest.TestCase):
             "Point the private CNAME at the internal",
             documentation,
         )
+
+    def test_runtime_publish_script_outputs_only_verified_digest_uri(self):
+        script = self._runtime_publish_script()
+        digest = "sha256:" + ("a" * 64)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fake_az = root / "az"
+            fake_az.write_text(
+                textwrap.dedent(
+                    """\
+                    #!/usr/bin/env bash
+                    set -euo pipefail
+                    case "$1 $2 $3" in
+                      "ml workspace show")
+                        echo "/subscriptions/test/resourceGroups/test/providers/Microsoft.ContainerRegistry/registries/private"
+                        ;;
+                      "acr show --name")
+                        echo "private.azurecr.io"
+                        ;;
+                      "acr login --name")
+                        echo "refresh-token"
+                        ;;
+                      "acr manifest show-metadata")
+                        echo "$FAKE_DIGEST"
+                        ;;
+                      *)
+                        echo "Unexpected az command: $*" >&2
+                        exit 1
+                        ;;
+                    esac
+                    """
+                )
+            )
+            fake_az.chmod(0o755)
+            fake_kaniko = root / "kaniko-executor"
+            fake_kaniko.write_text(
+                textwrap.dedent(
+                    """\
+                    #!/usr/bin/env bash
+                    set -euo pipefail
+                    if [[ ${1:-} == version ]]; then
+                      echo "Kaniko version v1.23.2"
+                      exit 0
+                    fi
+                    test -f "$DOCKER_CONFIG/config.json"
+                    printf '%s' "$DOCKER_CONFIG" > "$FAKE_AUTH_PATH_LOG"
+                    while (($#)); do
+                      if [[ $1 == --digest-file ]]; then
+                        printf '%s' "$FAKE_DIGEST" > "$2"
+                        exit 0
+                      fi
+                      shift
+                    done
+                    echo "Missing --digest-file" >&2
+                    exit 1
+                    """
+                )
+            )
+            fake_kaniko.chmod(0o755)
+            output = root / "github-output"
+            summary = root / "github-summary"
+            auth_path_log = root / "auth-path"
+            environment = {
+                **os.environ,
+                "PATH": f"{root}:{os.environ['PATH']}",
+                "RESOURCE_GROUP": "test-rg",
+                "WORKSPACE_NAME": "test-workspace",
+                "IMAGE_TAG": "1" * 40,
+                "FAKE_DIGEST": digest,
+                "FAKE_AUTH_PATH_LOG": str(auth_path_log),
+                "KANIKO_EXECUTOR": str(fake_kaniko),
+                "GITHUB_WORKSPACE": str(root),
+                "RUNNER_TEMP": str(root),
+                "GITHUB_OUTPUT": str(output),
+                "GITHUB_STEP_SUMMARY": str(summary),
+            }
+
+            subprocess.run(["bash", "-n"], input=script, text=True, check=True)
+            subprocess.run(
+                ["bash"],
+                input=script,
+                text=True,
+                check=True,
+                env=environment,
+            )
+            immutable_image = f"private.azurecr.io/mlops/online-runtime@{digest}"
+            self.assertEqual(
+                f"immutable_image={immutable_image}\n",
+                output.read_text(),
+            )
+            self.assertIn(immutable_image, summary.read_text())
+            self.assertFalse(Path(auth_path_log.read_text()).exists())
+
+            environment["FAKE_DIGEST"] = "sha256:not-a-valid-digest"
+            output.unlink()
+            result = subprocess.run(
+                ["bash"],
+                input=script,
+                text=True,
+                env=environment,
+                capture_output=True,
+            )
+            self.assertNotEqual(0, result.returncode)
+            self.assertFalse(output.exists())
+            self.assertIn(
+                "Kaniko did not report a SHA-256 manifest digest",
+                result.stderr,
+            )
 
 
 if __name__ == "__main__":

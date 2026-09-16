@@ -21,6 +21,9 @@ jobs:
           curl --version
           python3 --version
           az version
+          test -x /kaniko/executor
+          /kaniko/executor version
+          test ! -S /var/run/docker.sock
           for url in \
             https://github.com \
             https://api.github.com \

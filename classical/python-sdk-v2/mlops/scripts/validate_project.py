@@ -282,9 +282,15 @@ def validate_config_values(path: Path, config: dict[str, object]) -> list[str]:
             errors.append(
                 f"{path.name} private AKS inference requires container registry"
             )
-        if not config.get("aml_kubernetes_extension_ssl_cname"):
+        ssl_cname = str(config.get("aml_kubernetes_extension_ssl_cname", ""))
+        if not re.fullmatch(
+            r"(?=.{1,253}\Z)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+"
+            r"[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?",
+            ssl_cname,
+            re.IGNORECASE,
+        ):
             errors.append(
-                f"{path.name} private AKS inference requires an AML extension TLS CNAME"
+                f"{path.name} private AKS inference requires a valid TLS FQDN"
             )
         if config.get("aml_kubernetes_extension_release_train") != "stable":
             errors.append(

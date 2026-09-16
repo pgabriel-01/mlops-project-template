@@ -33,6 +33,7 @@ jobs:
       location: ${{ steps.config.outputs.location }}
       runner: ${{ steps.config.outputs.runner }}
       private_aks_inference: ${{ steps.config.outputs.enable_private_aks_inference }}
+      ssl_cname: ${{ steps.config.outputs.aml_kubernetes_extension_ssl_cname }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - id: select
@@ -71,12 +72,17 @@ jobs:
       - name: Validate deployment
         env:
           PRIVATE_AKS_INFERENCE: ${{ needs.config.outputs.private_aks_inference }}
+          SSL_CNAME: ${{ needs.config.outputs.ssl_cname }}
           TLS_CERT_PEM: ${{ secrets.AML_KUBERNETES_EXTENSION_TLS_CERT_PEM }}
           TLS_KEY_PEM: ${{ secrets.AML_KUBERNETES_EXTENSION_TLS_KEY_PEM }}
         run: |
           if [[ "$PRIVATE_AKS_INFERENCE" == "true" && ( -z "$TLS_CERT_PEM" || -z "$TLS_KEY_PEM" ) ]]; then
             echo "AML Kubernetes TLS certificate and key GitHub Environment secrets are required" >&2
             exit 1
+          fi
+          if [[ "$PRIVATE_AKS_INFERENCE" == "true" ]]; then
+            printf '%s' "$TLS_CERT_PEM" | openssl x509 -noout -ext subjectAltName | grep -q 'DNS:'
+            printf '%s' "$TLS_CERT_PEM" | openssl x509 -noout -checkhost "$SSL_CNAME"
           fi
           az deployment sub validate \
             --name "mlops-validate-${{ github.run_id }}" \
@@ -108,12 +114,17 @@ jobs:
       - name: Deploy infrastructure
         env:
           PRIVATE_AKS_INFERENCE: ${{ needs.config.outputs.private_aks_inference }}
+          SSL_CNAME: ${{ needs.config.outputs.ssl_cname }}
           TLS_CERT_PEM: ${{ secrets.AML_KUBERNETES_EXTENSION_TLS_CERT_PEM }}
           TLS_KEY_PEM: ${{ secrets.AML_KUBERNETES_EXTENSION_TLS_KEY_PEM }}
         run: |
           if [[ "$PRIVATE_AKS_INFERENCE" == "true" && ( -z "$TLS_CERT_PEM" || -z "$TLS_KEY_PEM" ) ]]; then
             echo "AML Kubernetes TLS certificate and key GitHub Environment secrets are required" >&2
             exit 1
+          fi
+          if [[ "$PRIVATE_AKS_INFERENCE" == "true" ]]; then
+            printf '%s' "$TLS_CERT_PEM" | openssl x509 -noout -ext subjectAltName | grep -q 'DNS:'
+            printf '%s' "$TLS_CERT_PEM" | openssl x509 -noout -checkhost "$SSL_CNAME"
           fi
           az deployment sub create \
             --name "mlops-${{ needs.config.outputs.environment }}-${{ github.run_id }}" \

@@ -28,6 +28,9 @@ jobs:
       deployment_name: ${{ steps.config.outputs.online_deployment_name }}
       model_name: ${{ steps.config.outputs.model_name }}
       instance_type: ${{ steps.config.outputs.online_instance_type }}
+      compute: ${{ steps.config.outputs.online_compute }}
+      environment_name: ${{ steps.config.outputs.online_environment_name }}
+      environment_version: ${{ steps.config.outputs.online_environment_version }}
       python_version: ${{ steps.config.outputs.python_version }}
       runner: ${{ steps.config.outputs.runner }}
     steps:
@@ -51,5 +54,8 @@ jobs:
       model_name: ${{ needs.config.outputs.model_name }}
       model_version: ${{ inputs.model_version }}
       instance_type: ${{ needs.config.outputs.instance_type }}
+      compute: ${{ needs.config.outputs.compute }}
+      environment_name: ${{ needs.config.outputs.environment_name }}
+      environment_version: ${{ needs.config.outputs.environment_version }}
       request_file: data/taxi-request.json
     secrets: inherit

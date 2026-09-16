@@ -16,6 +16,34 @@ param runnerHubVnetResourceId string = ''
 param manageRunnerHubToWorkloadPeering bool = false
 param sharedPrivateDnsZoneResourceIds object = {}
 
+// Private Azure ML Kubernetes online inference on an existing AKS cluster
+param enablePrivateAksInference bool = false
+param aksClusterResourceId string = ''
+param aksNodeSubnetResourceId string = ''
+param onlineComputeName string = 'aks-inference'
+param onlineEnvironmentName string = 'taxi-inference'
+param onlineEnvironmentVersion string = '1'
+param onlineEnvironmentImage string = ''
+param onlineNamespace string = 'azureml-inference'
+param onlineServiceAccountName string = 'default'
+param onlineNodePoolName string = 'mlinference'
+param onlineNodeVmSize string = 'Standard_D4s_v3'
+param onlineNodeMinCount int = 3
+param onlineNodeMaxCount int = 6
+param onlineNodeMaxPods int = 30
+param onlineInstanceTypeName string = 'cpu-small'
+param onlineCpuRequest string = '500m'
+param onlineCpuLimit string = '2'
+param onlineMemoryRequest string = '1Gi'
+param onlineMemoryLimit string = '4Gi'
+param amlKubernetesExtensionName string = 'azureml'
+param amlKubernetesExtensionReleaseTrain string = 'stable'
+param amlKubernetesExtensionSslCname string = ''
+@secure()
+param amlKubernetesExtensionTlsCertPem string = ''
+@secure()
+param amlKubernetesExtensionTlsKeyPem string = ''
+
 // Tier 3 — Governance feature flags
 param enableCMEK bool = false
 param enableDefender bool = false
@@ -74,6 +102,10 @@ var runnerHubToSpokePeeringName = 'peer-workload-${uniqueString(rg.id, runnerHub
 var keyVaultPrefix = take(replace(toLower(prefix), '-', ''), 5)
 var keyVaultEnvironment = take(replace(toLower(env), '-', ''), 3)
 var keyVaultName = 'kv-${keyVaultPrefix}${uniqueString(rg.id)}${keyVaultEnvironment}'
+var aksResourceIdParts = split(aksClusterResourceId, '/')
+var aksSubscriptionId = enablePrivateAksInference ? aksResourceIdParts[2] : subscription().subscriptionId
+var aksResourceGroupName = enablePrivateAksInference ? aksResourceIdParts[4] : resourceGroupName
+var aksClusterName = enablePrivateAksInference ? aksResourceIdParts[8] : ''
 
 // ============================================================
 // Phase 1 — Foundation: Resource Group, Managed Identity, VNet
@@ -376,6 +408,96 @@ module mlwcc './modules/aml_computecluster.bicep' = if (enableComputeCluster) {
   }
 }
 
+resource existingAks 'Microsoft.ContainerService/managedClusters@2025-04-01' existing = if (enablePrivateAksInference) {
+  name: aksClusterName
+  scope: resourceGroup(aksSubscriptionId, aksResourceGroupName)
+}
+
+module amlKubernetesIdentity './modules/aml_kubernetes_identity.bicep' = if (enablePrivateAksInference) {
+  name: 'aml-kubernetes-identity'
+  scope: resourceGroup(rg.name)
+  params: {
+    baseName: baseName
+    location: location
+    tags: tags
+    oidcIssuerUrl: existingAks!.properties.oidcIssuerProfile.issuerURL
+    namespace: onlineNamespace
+    serviceAccountName: onlineServiceAccountName
+    storageAccountId: st.outputs.stoacctOut
+    containerRegistryId: cr!.outputs.crOut
+    workspaceManagedIdentityPrincipalId: mi.outputs.managedIdentityPrincipalId
+  }
+}
+
+module aksNamespaceBootstrapRole './modules/aks_run_command_role.bicep' = if (enablePrivateAksInference) {
+  name: 'aks-run-command-role'
+  scope: subscription(aksSubscriptionId)
+}
+
+module aksAmlInference './modules/aks_aml_inference.bicep' = if (enablePrivateAksInference) {
+  name: 'aks-aml-inference'
+  scope: resourceGroup(aksSubscriptionId, aksResourceGroupName)
+  params: {
+    clusterName: aksClusterName
+    location: location
+    workspaceResourceId: mlw.outputs.amlsId
+    workspaceManagedIdentityResourceId: mi.outputs.managedIdentityId
+    workspaceManagedIdentityPrincipalId: mi.outputs.managedIdentityPrincipalId
+    namespaceBootstrapRoleId: aksNamespaceBootstrapRole!.outputs.roleId
+    inferenceIdentityClientId: amlKubernetesIdentity!.outputs.identityClientId
+    inferenceNamespace: onlineNamespace
+    nodePoolName: onlineNodePoolName
+    nodeSubnetResourceId: aksNodeSubnetResourceId
+    nodeVmSize: onlineNodeVmSize
+    nodeMinCount: onlineNodeMinCount
+    nodeMaxCount: onlineNodeMaxCount
+    nodeMaxPods: onlineNodeMaxPods
+    extensionName: amlKubernetesExtensionName
+    extensionReleaseTrain: amlKubernetesExtensionReleaseTrain
+    extensionTlsCertPem: amlKubernetesExtensionTlsCertPem
+    extensionTlsKeyPem: amlKubernetesExtensionTlsKeyPem
+    extensionSslCname: amlKubernetesExtensionSslCname
+  }
+}
+
+module amlOnlineEnvironment './modules/aml_environment.bicep' = if (enablePrivateAksInference) {
+  name: 'aml-online-environment'
+  scope: resourceGroup(rg.name)
+  params: {
+    workspaceName: mlw.outputs.amlsName
+    environmentName: onlineEnvironmentName
+    environmentVersion: onlineEnvironmentVersion
+    imageUri: onlineEnvironmentImage
+  }
+  dependsOn: [
+    peMlw
+  ]
+}
+
+module amlKubernetesCompute './modules/aml_kubernetes_compute.bicep' = if (enablePrivateAksInference) {
+  name: 'aml-kubernetes-compute'
+  scope: resourceGroup(rg.name)
+  params: {
+    workspaceName: mlw.outputs.amlsName
+    location: location
+    computeName: onlineComputeName
+    clusterResourceId: aksClusterResourceId
+    namespace: onlineNamespace
+    identityId: amlKubernetesIdentity!.outputs.identityId
+    extensionPrincipalId: aksAmlInference!.outputs.extensionPrincipalId
+    extensionReleaseTrain: amlKubernetesExtensionReleaseTrain
+    instanceTypeName: onlineInstanceTypeName
+    cpuRequest: onlineCpuRequest
+    cpuLimit: onlineCpuLimit
+    memoryRequest: onlineMemoryRequest
+    memoryLimit: onlineMemoryLimit
+  }
+  dependsOn: [
+    peMlw
+    amlOnlineEnvironment
+  ]
+}
+
 // AML Registry — cross-workspace model/asset promotion
 module amlReg './modules/aml_registry.bicep' = if (enableAMLRegistry) {
   name: 'aml-registry'
@@ -525,3 +647,10 @@ output containerRegistryName string = enableContainerRegistry ? cr!.outputs.crNa
 output runnerHubIntegrationEnabled bool = enableVNet && hasRunnerHub
 output runnerHubReciprocalPeeringManaged bool = enableVNet && hasRunnerHub && manageRunnerHubToWorkloadPeering
 output runnerHubReciprocalPeeringCommand string = (enableVNet && hasRunnerHub && !manageRunnerHubToWorkloadPeering) ? 'az network vnet peering create --subscription "${runnerHubSubscriptionId}" --resource-group "${runnerHubResourceGroupName}" --vnet-name "${runnerHubVnetName}" --name "${runnerHubToSpokePeeringName}" --remote-vnet "${vnet!.outputs.vnetId}" --allow-vnet-access --allow-forwarded-traffic' : ''
+output privateAksInferenceEnabled bool = enablePrivateAksInference
+output onlineComputeName string = enablePrivateAksInference ? amlKubernetesCompute!.outputs.computeName : ''
+output onlineEnvironmentId string = enablePrivateAksInference ? amlOnlineEnvironment!.outputs.environmentId : ''
+output onlineNamespace string = enablePrivateAksInference ? onlineNamespace : ''
+output onlineInferenceIdentityId string = enablePrivateAksInference ? amlKubernetesIdentity!.outputs.identityId : ''
+output onlineInferenceIdentityClientId string = enablePrivateAksInference ? amlKubernetesIdentity!.outputs.identityClientId : ''
+output onlineInferenceServiceAccountName string = enablePrivateAksInference ? onlineServiceAccountName : ''

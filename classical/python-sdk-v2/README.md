@@ -298,6 +298,26 @@ secret provider in the runner cluster. Do not store the private key, a GitHub PA
 or a GitHub App client secret in this repository, its reusable workflows, or the
 generated project. GitHub App authentication controls ARC runner registration
 only; Azure workload access continues to use the environment-scoped OIDC contract
+
+### Private Azure ML Kubernetes online inference
+
+Managed online deployment is not the fallback for a private-link AML workspace
+whose public network access is disabled. To use an existing private AKS cluster,
+enable the opt-in `enable_private_aks_inference` configuration and follow
+`docs/private-aks-inference.md` in the source template.
+
+The stable generated-workflow contract is:
+
+- `online_compute`: attached AML Kubernetes compute name;
+- `online_environment_name` and `online_environment_version`: immutable,
+  pre-registered environment backed by a prebuilt ACR image;
+- `online_environment_image`: private ACR image URI pinned by SHA-256 digest;
+- `online_instance_type`: AML Kubernetes instance type;
+- `runner`: private ARC runner label.
+
+Endpoint, deployment, model, and request names remain workload-owned. Namespace,
+service account, workload UAMI, node pool, and AKS credentials remain
+infrastructure-only.
 documented above.
 
 For a repository owned by a personal GitHub account, stop before provisioning AKS

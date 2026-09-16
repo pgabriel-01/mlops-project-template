@@ -1,0 +1,75 @@
+name: Publish online runtime image
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: GitHub Environment and configuration to target
+        required: true
+        default: dev
+        type: choice
+        options: [dev, test, prod]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  config:
+    runs-on: ubuntu-24.04
+    outputs:
+      resource_group: ${{ steps.config.outputs.resource_group }}
+      workspace_name: ${{ steps.config.outputs.workspace_name }}
+      runner: ${{ steps.config.outputs.runner }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - id: config
+        run: python3 mlops/scripts/export_config.py config-infra-${{ inputs.environment }}.yml
+
+  publish:
+    needs: config
+    runs-on: ${{ needs.config.outputs.runner }}
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Build and push immutable runtime
+        env:
+          RESOURCE_GROUP: ${{ needs.config.outputs.resource_group }}
+          WORKSPACE_NAME: ${{ needs.config.outputs.workspace_name }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          registry_id="$(az ml workspace show \
+            --resource-group "$RESOURCE_GROUP" \
+            --name "$WORKSPACE_NAME" \
+            --query container_registry \
+            --output tsv)"
+          registry_name="${registry_id##*/}"
+          login_server="$(az acr show \
+            --name "$registry_name" \
+            --query loginServer \
+            --output tsv)"
+          token="$(az acr login --name "$registry_name" --expose-token \
+            --query accessToken --output tsv)"
+          printf '%s' "$token" | docker login "$login_server" \
+            --username 00000000-0000-0000-0000-000000000000 \
+            --password-stdin
+          image="$login_server/mlops/online-runtime:$IMAGE_TAG"
+          docker build --pull=false --tag "$image" mlops/online-runtime
+          docker push "$image"
+          digest="$(az acr repository show \
+            --name "$registry_name" \
+            --image "mlops/online-runtime:$IMAGE_TAG" \
+            --query digest \
+            --output tsv)"
+          immutable_image="$login_server/mlops/online-runtime@$digest"
+          if [[ ! "$immutable_image" =~ @sha256:[0-9a-f]{64}$ ]]; then
+            echo "Pushed image did not resolve to an immutable digest" >&2
+            exit 1
+          fi
+          echo "Set online_environment_image: \"$immutable_image\" in the selected config."

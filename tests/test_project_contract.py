@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PATTERN_ROOT = ROOT / "classical" / "python-sdk-v2"
 SCRIPT_ROOT = PATTERN_ROOT / "mlops" / "scripts"
 TEMPLATE_REPOSITORY = "pgabriel-01/mlops-templates"
-TEMPLATE_REF = "8f8a8d5f33b88df5109a9c950bba19b616c15ea8"
+TEMPLATE_REF = "812be5b654e974b573a0f5a52f2869068226a194"
 BATCH_ENVIRONMENT = "azureml://registries/azureml/environments/sklearn-1.5/versions/53"
 SCORING_CODE_DIRECTORY = "mlops/azureml/deploy/batch"
 SCORING_SCRIPT = "score.py"
@@ -32,7 +32,7 @@ TEMPLATE_BLOBS = {
         "c8be7b6e9f15c4f80a0980156eeaba45319459bc"
     ),
     "src/python-sdk-v2/create_batch_deployment.py": (
-        "b5a8f09de9d9852f3e3c20ed57b6d6d7f1d5768a"
+        "94d171766df06b767963ef4993941bf6c35deccf"
     ),
     "src/python-sdk-v2/test_batch_endpoint.py": (
         "de162e28504f710fe02b8380fadf631ce3456269"
@@ -43,7 +43,7 @@ TEMPLATE_BLOBS = {
     "src/python-sdk-v2/create_online_deployment.py": (
         "9630fa74d44465125df96a9a9fe50ab2f2c8aa59"
     ),
-    "tests/test_python_sdk_v2.py": "0a605ec7e92f3d6ec680c492ddd98fe622f704e5",
+    "tests/test_python_sdk_v2.py": "a70d7f94752a182b10e48731fbafde5bd92979d6",
     "examples/python-sdk-v2/batch-scoring/score.py": (
         "99d2a411ff19c2a80f0290f7c57839e2172df58e"
     ),
@@ -71,6 +71,18 @@ def load_pinned_template(path: str) -> str:
 
 
 class ProjectContractTests(unittest.TestCase):
+    def test_azure_cli_versions_match_their_runtime_support(self):
+        deployment_script = (
+            ROOT / "infrastructure" / "bicep" / "modules" / "aks_aml_inference.bicep"
+        ).read_text()
+        runner_image = (
+            PATTERN_ROOT / "runner-bootstrap" / "image" / "Dockerfile"
+        ).read_text()
+
+        self.assertIn("azCliVersion: '2.89.0'", deployment_script)
+        self.assertNotIn("azCliVersion: '2.90.0'", deployment_script)
+        self.assertIn("ARG AZURE_CLI_VERSION=2.90.0-1~noble", runner_image)
+
     def test_generated_tree_and_workflow_contract(self):
         subprocess.run(
             [sys.executable, SCRIPT_ROOT / "validate_project.py"],

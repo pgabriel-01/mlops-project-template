@@ -101,6 +101,9 @@ class PrivateAksInferenceContractTests(unittest.TestCase):
                 )
             },
             "missing tls cname": {"aml_kubernetes_extension_ssl_cname": ""},
+            "IP instead of tls FQDN": {
+                "aml_kubernetes_extension_ssl_cname": "10.0.0.4"
+            },
             "preview train": {
                 "aml_kubernetes_extension_release_train": "preview"
             },
@@ -224,6 +227,20 @@ class PrivateAksInferenceContractTests(unittest.TestCase):
         self.assertIn(
             'amlKubernetesExtensionTlsCertPem="$TLS_CERT_PEM"',
             deploy,
+        )
+        self.assertIn("openssl x509 -noout -ext subjectAltName", deploy)
+        self.assertIn('openssl x509 -noout -checkhost "$SSL_CNAME"', deploy)
+
+        documentation = (ROOT / "docs" / "private-aks-inference.md").read_text()
+        self.assertIn(
+            ".status.loadBalancer.ingress[0].ip",
+            documentation,
+        )
+        self.assertIn("private DNS **A", documentation)
+        self.assertIn("DNS Subject Alternative Name", documentation)
+        self.assertNotIn(
+            "Point the private CNAME at the internal",
+            documentation,
         )
 
 

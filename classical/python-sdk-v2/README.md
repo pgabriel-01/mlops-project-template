@@ -372,9 +372,12 @@ to an immutable commit SHA.
 
 Bicep disables storage shared-key access, configures identity-authenticated system
 datastores, and grants the workspace identity data-plane access. When private
-networking is enabled, the deployment includes managed network isolation plus
-private endpoints and DNS zones for the workspace, registry, vault, and storage
-blob, file, queue, table, and DFS services.
+networking is enabled, workspace public access is disabled and AML managed-network
+isolation is enabled. The separately deployed AML compute cluster uses the custom
+compute subnet, while private endpoints plus DNS zones cover the workspace,
+registry, vault, and storage blob, file, queue, table, and DFS services. The
+workspace deliberately does not emit `serverlessComputeCustomSubnet`: Azure does
+not allow Managed VNet and Custom VNet workspace values together.
 
 This repository does not apply network changes automatically outside the explicit
 infrastructure workflow.

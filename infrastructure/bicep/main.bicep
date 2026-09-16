@@ -338,7 +338,6 @@ module mlw './modules/aml_workspace.bicep' = {
     managedIdentityPrincipalId: mi.outputs.managedIdentityPrincipalId
     ciPrincipalObjectId: ciPrincipalObjectId
     enableNetworkIsolation: enableVNet
-    computeSubnetId: enableVNet ? vnet!.outputs.computeSubnetId : ''
     tags: tags
   }
 }

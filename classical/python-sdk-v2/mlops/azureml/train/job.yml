@@ -25,9 +25,7 @@ jobs:
     type: command
     display_name: Prepare data
     code: ../../../data-science/src/prep
-    environment:
-      image: mcr.microsoft.com/azureml/openmpi4.1.0-ubuntu22.04:latest
-      conda_file: ../../../data-science/environment/train-conda.yml
+    environment: azureml://registries/azureml/environments/sklearn-1.5/versions/53
     command: >-
       python prep.py
       --raw_data ${{inputs.raw_data}}
@@ -52,9 +50,7 @@ jobs:
     type: command
     display_name: Train model
     code: ../../../data-science/src/train
-    environment:
-      image: mcr.microsoft.com/azureml/openmpi4.1.0-ubuntu22.04:latest
-      conda_file: ../../../data-science/environment/train-conda.yml
+    environment: azureml://registries/azureml/environments/sklearn-1.5/versions/53
     command: >-
       python train.py
       --train_data ${{inputs.train_data}}
@@ -68,9 +64,7 @@ jobs:
     type: command
     display_name: Evaluate model
     code: ../../../data-science/src/evaluate
-    environment:
-      image: mcr.microsoft.com/azureml/openmpi4.1.0-ubuntu22.04:latest
-      conda_file: ../../../data-science/environment/train-conda.yml
+    environment: azureml://registries/azureml/environments/sklearn-1.5/versions/53
     command: >-
       python evaluate.py
       --model_name taxi-model

@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import shutil
@@ -5,15 +6,45 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PATTERN_ROOT = ROOT / "classical" / "python-sdk-v2"
 SCRIPT_ROOT = PATTERN_ROOT / "mlops" / "scripts"
+TEMPLATE_REPOSITORY = "pgabriel-01/mlops-templates"
+TEMPLATE_REF = "c710acac35876e4aae66d8c73da2c38e4c4a07eb"
+TEMPLATE_BLOBS = {
+    "src/python-sdk-v2/aml_client.py": (
+        "880ab3a34246069e41152c0584af6d78ac0e6d02"
+    ),
+    ".github/workflows/python-sdk-v2-train-register.yml": (
+        "16504df1fca114dcb8f5105f51baa115b2814527"
+    ),
+    "tests/test_python_sdk_v2.py": "b7baf26aa859019e3a943c5b32094e3c3067794d",
+}
 sys.path.insert(0, str(SCRIPT_ROOT))
 
 from project_config import load_config
 from validate_project import validate_config_values
+
+
+def load_pinned_template(path: str) -> str:
+    url = (
+        f"https://raw.githubusercontent.com/{TEMPLATE_REPOSITORY}/"
+        f"{TEMPLATE_REF}/{path}"
+    )
+    with urllib.request.urlopen(url, timeout=30) as response:
+        content = response.read()
+    git_blob = hashlib.sha1(
+        f"blob {len(content)}\0".encode() + content,
+        usedforsecurity=False,
+    ).hexdigest()
+    if git_blob != TEMPLATE_BLOBS[path]:
+        raise AssertionError(
+            f"{path} at {TEMPLATE_REF} has unexpected blob {git_blob}"
+        )
+    return content.decode()
 
 
 class ProjectContractTests(unittest.TestCase):
@@ -187,9 +218,30 @@ class ProjectContractTests(unittest.TestCase):
             self.assertIn("mlops/scripts/export_config.py", content)
             self.assertNotIn("classical/python-sdk-v2/", content)
 
+    def test_training_job_uses_immutable_curated_environment(self):
+        job = (
+            PATTERN_ROOT / "mlops" / "azureml" / "train" / "job.yml"
+        ).read_text()
+        environment = (
+            "azureml://registries/azureml/environments/"
+            "sklearn-1.5/versions/53"
+        )
+
+        environment_lines = [
+            line.strip()
+            for line in job.splitlines()
+            if line.strip().startswith("environment:")
+        ]
+        self.assertEqual(
+            [f"environment: {environment}"] * 3,
+            environment_lines,
+        )
+        self.assertNotIn("conda_file:", job)
+        self.assertNotIn(":latest", job)
+
     def test_documented_sparse_checkout_produces_runnable_tree(self):
-        template_repository = "pgabriel-01/mlops-templates"
-        template_ref = "be9755ccfc320fd1f2c1fb4f6b092d745d4fa6b5"
+        template_repository = TEMPLATE_REPOSITORY
+        template_ref = TEMPLATE_REF
 
         with tempfile.TemporaryDirectory() as directory:
             project = Path(directory) / "generated"
@@ -254,11 +306,44 @@ class ProjectContractTests(unittest.TestCase):
                 project / ".github" / "workflows" /
                 "deploy-infrastructure.yml"
             ).read_text()
+            training_workflow = (
+                project / ".github" / "workflows" /
+                "train-register-model.yml"
+            ).read_text()
+            training_job = (
+                project / "mlops" / "azureml" / "train" / "job.yml"
+            ).read_text()
             self.assertIn("infrastructure/main.bicep", infrastructure_workflow)
             self.assertIn(
                 "mlops/scripts/render_bicep_parameters.py",
                 infrastructure_workflow,
             )
+            self.assertIn(
+                f"{template_repository}/.github/workflows/"
+                f"python-sdk-v2-train-register.yml@{template_ref}",
+                training_workflow,
+            )
+            self.assertIn(
+                f"sdk_repository: {template_repository}",
+                training_workflow,
+            )
+            self.assertIn(f"sdk_ref: {template_ref}", training_workflow)
+            self.assertNotIn("__MLOPS_TEMPLATES_", training_workflow)
+            curated_environment = (
+                "azureml://registries/azureml/environments/"
+                "sklearn-1.5/versions/53"
+            )
+            generated_environment_lines = [
+                line.strip()
+                for line in training_job.splitlines()
+                if line.strip().startswith("environment:")
+            ]
+            self.assertEqual(
+                [f"environment: {curated_environment}"] * 3,
+                generated_environment_lines,
+            )
+            self.assertNotIn("conda_file:", training_job)
+            self.assertNotIn(":latest", training_job)
             self.assertTrue(
                 project.joinpath(
                     "mlops", "azureml", "train", "job.yml"
@@ -281,8 +366,8 @@ class ProjectContractTests(unittest.TestCase):
             )
 
     def test_known_template_pin_resolves_all_placeholders(self):
-        repository = "pgabriel-01/mlops-templates"
-        commit = "be9755ccfc320fd1f2c1fb4f6b092d745d4fa6b5"
+        repository = TEMPLATE_REPOSITORY
+        commit = TEMPLATE_REF
         for path in (PATTERN_ROOT / "mlops" / "github-actions").glob("*.yml"):
             rendered = (
                 path.read_text()
@@ -291,6 +376,63 @@ class ProjectContractTests(unittest.TestCase):
             )
             self.assertNotIn("__MLOPS_TEMPLATES_", rendered)
         self.assertEqual(40, len(commit))
+
+    @unittest.skipUnless(
+        os.environ.get("VERIFY_REMOTE_TEMPLATES") == "1",
+        "set VERIFY_REMOTE_TEMPLATES=1 to verify immutable shared assets",
+    )
+    def test_pinned_templates_preserve_failed_job_diagnostics(self):
+        aml_client = load_pinned_template("src/python-sdk-v2/aml_client.py")
+        workflow = load_pinned_template(
+            ".github/workflows/python-sdk-v2-train-register.yml"
+        )
+        template_tests = load_pinned_template("tests/test_python_sdk_v2.py")
+
+        self.assertIn("diagnostic_jobs = failed_children or [job]", aml_client)
+        self.assertRegex(
+            aml_client,
+            r"(?s)ml_client\.jobs\.download\(\s*"
+            r"name=job_name,.*?all=False,\s*\)",
+        )
+        self.assertIn("No log files found in standard diagnostics", aml_client)
+        self.assertRegex(
+            aml_client,
+            r"(?s)No log files found.*?"
+            r"ml_client\.jobs\.download\(\s*"
+            r"name=job_name,.*?all=True,\s*\)",
+        )
+        self.assertIn("Unable to download diagnostics for job", aml_client)
+        self.assertIn("[REDACTED]", aml_client)
+        self.assertIn("diagnostic output truncated", aml_client)
+
+        self.assertIn(
+            "test_failed_job_downloads_child_logs_and_surfaces_root_cause",
+            template_tests,
+        )
+        self.assertIn(
+            "test_failed_job_reports_download_failure_and_falls_back_to_parent",
+            template_tests,
+        )
+        self.assertIn(
+            "test_failed_leaf_retries_full_download_when_standard_download_is_pointer",
+            template_tests,
+        )
+        self.assertIn("Traceback (most recent call last)", template_tests)
+        self.assertIn("error=None", template_tests)
+
+        self.assertIn("if: ${{ failure() }}", workflow)
+        self.assertIn(
+            "actions/upload-artifact@"
+            "ea165f8d65b6e75b540449e92b4886f43607fa02",
+            workflow,
+        )
+        self.assertIn("path: aml-diagnostics", workflow)
+        self.assertIn(
+            "name: aml-diagnostics-${{ "
+            "steps.train.outputs.training_job_name || github.run_id }}",
+            workflow,
+        )
+        self.assertIn("if-no-files-found: warn", workflow)
 
     def test_readme_documents_environment_oidc_bootstrap(self):
         readme = (PATTERN_ROOT / "README.md").read_text()

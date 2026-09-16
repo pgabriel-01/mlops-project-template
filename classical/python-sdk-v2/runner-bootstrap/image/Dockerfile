@@ -7,8 +7,7 @@ USER root
 ARG AZURE_CLI_VERSION=2.90.0-1~noble
 ARG SOURCE_REPOSITORY_URL=https://github.com/example/example
 
-COPY --from=kaniko /kaniko/executor /kaniko/executor
-COPY --from=kaniko /kaniko/ssl/certs/ca-certificates.crt /kaniko/ssl/certs/ca-certificates.crt
+COPY --chown=runner:runner --from=kaniko /kaniko /kaniko
 
 LABEL org.opencontainers.image.source="${SOURCE_REPOSITORY_URL}" \
       org.opencontainers.image.description="Tool-complete ephemeral ARC runner for private MLOps workflows" \
@@ -37,11 +36,12 @@ RUN apt-get update \
       > /etc/apt/sources.list.d/azure-cli.sources \
     && apt-get update \
     && apt-get install -y --no-install-recommends "azure-cli=${AZURE_CLI_VERSION}" \
-    && chmod 0755 /kaniko/executor \
-    && chown -R runner:runner /kaniko \
     && /kaniko/executor version \
     && az version \
     && python3 --version \
     && rm -rf /var/lib/apt/lists/*
 
 USER runner
+
+RUN test -x /kaniko/executor \
+    && test -w /kaniko

@@ -63,7 +63,9 @@ ARC installation fails closed unless `ARC_RUNNER_IMAGE` names the approved image
 by immutable digest. Kaniko is copied from a digest-pinned upstream image into
 the runner image; it runs without a Docker daemon, privileged pod, or socket
 mount. Its executable and CA certificate paths are owned by the non-root runner
-user.
+user. The complete `/kaniko` tree is copied with `runner:runner` ownership at
+image build time because the executor writes working files there; runtime
+`sudo`, root, and privilege escalation are prohibited.
 
 `Build private runner image` uses a GitHub-hosted runner with only
 `contents: read` and `packages: write`. The Dockerfile's
@@ -183,9 +185,13 @@ Storage (`blob`, `file`, `queue`, `table`, and `dfs`), Key Vault, and ACR privat
 endpoint hostnames from a runner pod. Each must resolve to a private address.
 
 Prove autoscaling by manually dispatching `Private runner smoke test`, a harmless
-`mlops-private` job committed at `.github/workflows/runner-smoke-test.yml`:
-observe zero ephemeral runner pods, one pod while the job runs, and zero after the
-job and ARC cleanup complete. Only then dispatch infrastructure validation.
+`mlops-private` job committed at `.github/workflows/runner-smoke-test.yml`, with
+the expected immutable runner image URI. The workflow checks out the shared
+strict AKS Run Command helper, verifies the live pod image from the helper's
+validated log output, and then tests the runner tools and egress. It does not
+parse `az aks command invoke --query logs --output tsv` directly. Observe zero
+ephemeral runner pods, one pod while the job runs, and zero after the job and ARC
+cleanup complete. Only then dispatch infrastructure validation.
 
 ## Cleanup
 

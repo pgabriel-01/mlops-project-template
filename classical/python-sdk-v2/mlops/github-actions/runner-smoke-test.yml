@@ -2,26 +2,71 @@ name: Private runner smoke test
 
 on:
   workflow_dispatch:
+    inputs:
+      runner_image:
+        description: Expected immutable runner image digest
+        required: true
+        type: string
 
 permissions:
+  id-token: write
   contents: read
 
 jobs:
   private-runner:
     runs-on: mlops-private
+    environment: dev
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       - name: Verify runner and required public egress
+        env:
+          AKS_CLUSTER_RESOURCE_ID: ${{ vars.ARC_AKS_CLUSTER_RESOURCE_ID }}
+          EXPECTED_RUNNER_IMAGE: ${{ inputs.runner_image }}
         shell: bash
         run: |
           set -euo pipefail
+          expected_prefix="ghcr.io/${GITHUB_REPOSITORY,,}-arc-runner@sha256:"
+          [[ "$EXPECTED_RUNNER_IMAGE" =~ ^${expected_prefix}[0-9a-f]{64}$ ]] || {
+            echo "runner_image must be this repository's immutable GHCR digest" >&2
+            exit 1
+          }
+          aks_cluster_resource_id_lower="${AKS_CLUSTER_RESOURCE_ID,,}"
+          [[ "$aks_cluster_resource_id_lower" =~ ^/subscriptions/[^/]+/resourcegroups/[^/]+/providers/microsoft\.containerservice/managedclusters/[^/]+$ ]] || {
+            echo "ARC_AKS_CLUSTER_RESOURCE_ID must be the private runner AKS resource ID" >&2
+            exit 1
+          }
           test "$RUNNER_OS" = Linux
+          runner_name="$(hostname)"
+          aks_subscription="$(cut -d/ -f3 <<<"$AKS_CLUSTER_RESOURCE_ID")"
+          aks_resource_group="$(cut -d/ -f5 <<<"$AKS_CLUSTER_RESOURCE_ID")"
+          aks_name="$(cut -d/ -f9 <<<"$AKS_CLUSTER_RESOURCE_ID")"
+          pod_json="$(mktemp "$RUNNER_TEMP/runner-pod.XXXXXX")"
+          trap 'rm -f "$pod_json"' EXIT
+          python3 runner-bootstrap/scripts/invoke_aks_command.py \
+            --subscription "$aks_subscription" \
+            --resource-group "$aks_resource_group" \
+            --name "$aks_name" \
+            --command "kubectl get pod '$runner_name' --namespace arc-runners --output json" \
+            --logs-output "$pod_json"
+          live_image="$(jq -r \
+            '.spec.containers[] | select(.name == "runner") | .image' \
+            "$pod_json")"
+          [[ "$live_image" == "$EXPECTED_RUNNER_IMAGE" ]] || {
+            echo "Runner pod image does not match the expected immutable digest" >&2
+            exit 1
+          }
           git --version
           curl --version
           python3 --version
           az version
           test -x /kaniko/executor
+          test -w /kaniko
           /kaniko/executor version
           test ! -S /var/run/docker.sock
           for url in \

@@ -256,13 +256,28 @@ class PrivateAksInferenceContractTests(unittest.TestCase):
             runner_dockerfile,
         )
         self.assertIn(
-            "COPY --from=kaniko /kaniko/executor /kaniko/executor",
+            "COPY --chown=runner:runner --from=kaniko /kaniko /kaniko",
             runner_dockerfile,
         )
-        self.assertIn("chown -R runner:runner /kaniko", runner_dockerfile)
+        self.assertNotIn("COPY --from=kaniko /kaniko", runner_dockerfile)
+        self.assertIn("USER runner", runner_dockerfile)
+        self.assertIn("test -w /kaniko", runner_dockerfile)
         self.assertIn("/kaniko/executor version", runner_dockerfile)
         self.assertIn("test ! -S /var/run/docker.sock", runner_smoke)
+        self.assertIn("test -w /kaniko", runner_smoke)
         self.assertIn("/kaniko/executor version", runner_smoke)
+        self.assertIn("runner_image:", runner_smoke)
+        self.assertIn(
+            "AKS_CLUSTER_RESOURCE_ID: ${{ vars.ARC_AKS_CLUSTER_RESOURCE_ID }}",
+            runner_smoke,
+        )
+        self.assertIn("invoke_aks_command.py", runner_smoke)
+        self.assertIn("--logs-output", runner_smoke)
+        self.assertIn("trap 'rm -f", runner_smoke)
+        self.assertIn('"$live_image" == "$EXPECTED_RUNNER_IMAGE"', runner_smoke)
+        self.assertNotIn("az aks command invoke", runner_smoke)
+        self.assertNotIn("--query logs", runner_smoke)
+        self.assertNotIn("--output tsv", runner_smoke)
         self.assertIn(
             "AML_KUBERNETES_EXTENSION_TLS_CERT_PEM",
             deploy,

@@ -54,6 +54,22 @@ class InvokeAksCommandTests(unittest.TestCase):
                 text=True,
             )
 
+    def test_success_logs_can_be_written_for_machine_parsing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "logs.json"
+            result = self.run_with_response(
+                '{"provisioningState":"Succeeded","exitCode":0,'
+                '"logs":"{\\"kind\\":\\"Pod\\",\\"token\\":\\"unchanged\\"}"}',
+                extra_args=("--logs-output", str(output)),
+            )
+
+            self.assertEqual(0, result.returncode)
+            self.assertEqual(
+                '{"kind":"Pod","token":"unchanged"}',
+                output.read_text(),
+            )
+            self.assertEqual(0o600, output.stat().st_mode & 0o777)
+
     def test_remote_nonzero_fails_when_azure_cli_returns_zero(self):
         result = self.run_with_response(
             '{"provisioningState":"Succeeded","exitCode":2,'

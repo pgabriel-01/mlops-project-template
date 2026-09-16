@@ -114,7 +114,7 @@ Before enabling the feature:
    sends them to the extension through `configurationProtectedSettings`.
 4. The deployment principal needs Contributor and Role Based Access Control
    Administrator at every resource scope it changes, including the existing AKS
-   and Arc resource groups and inference UAMI.
+   resource group and inference UAMI.
 5. Ensure the runner-hub/AKS VNet has bidirectional routing and private DNS to the
    workload VNet and its AML, ACR, Storage, and Key Vault private endpoints. Keep
    workspace `publicNetworkAccess=Disabled`, storage
@@ -129,8 +129,35 @@ Before enabling the feature:
    template creates a custom role containing only `runCommand/action` and
    `commandResults/read` and assigns it to the workspace UAMI at the AKS scope.
    The deployment principal needs permission to create that role and assignment.
-   Point the private CNAME at the internal `azureml-fe` load-balancer address
-   after deployment.
+   After deployment, read the internal load-balancer IP from
+   `azureml-fe.status.loadBalancer.ingress[0].ip` and create a private DNS **A
+   record** for `aml_kubernetes_extension_ssl_cname`. Do not create a CNAME that
+   points at an IP address:
+
+   ```bash
+   aks_subscription="$(cut -d/ -f3 <<<"$AKS_CLUSTER_RESOURCE_ID")"
+   aks_resource_group="$(cut -d/ -f5 <<<"$AKS_CLUSTER_RESOURCE_ID")"
+   aks_name="$(cut -d/ -f9 <<<"$AKS_CLUSTER_RESOURCE_ID")"
+   frontend_ip="$(az aks command invoke \
+     --subscription "$aks_subscription" \
+     --resource-group "$aks_resource_group" \
+     --name "$aks_name" \
+     --command "kubectl get service azureml-fe -n azureml -o jsonpath='{.status.loadBalancer.ingress[0].ip}'" \
+     --query logs --output tsv)"
+   test -n "$frontend_ip"
+   az network private-dns record-set a add-record \
+     --resource-group "$PRIVATE_DNS_RESOURCE_GROUP" \
+     --zone-name "$PRIVATE_DNS_ZONE" \
+     --record-set-name "$PRIVATE_DNS_RECORD_NAME" \
+     --ipv4-address "$frontend_ip"
+   ```
+
+   For example, FQDN `scoring.internal.example`, zone `internal.example`, and
+   record-set name `scoring` produce the required A record. The same FQDN is
+   supplied as `sslCname`; it must match a DNS Subject Alternative Name in the
+   server certificate. A matching legacy certificate Common Name alone is not
+   sufficient. The deployment workflow rejects certificates with no DNS SAN or
+   a hostname mismatch before sending the secure Bicep parameters.
 8. First deploy the workspace and private ACR with this feature disabled. Run
    `publish-online-runtime.yml` on the private runner to build the checked-in
    Python 3.10 MLflow runtime locally and push it through the private ACR

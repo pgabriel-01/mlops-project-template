@@ -33,7 +33,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - id: config
-        run: python3 scripts/export_config.py config-infra-${{ inputs.environment }}.yml
+        run: python3 mlops/scripts/export_config.py config-infra-${{ inputs.environment }}.yml
 
   online:
     needs: config
@@ -51,5 +51,5 @@ jobs:
       model_name: ${{ needs.config.outputs.model_name }}
       model_version: ${{ inputs.model_version }}
       instance_type: ${{ needs.config.outputs.instance_type }}
-      request_file: classical/python-sdk-v2/data/taxi-request.json
+      request_file: data/taxi-request.json
     secrets: inherit

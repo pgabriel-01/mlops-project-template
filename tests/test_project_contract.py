@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -8,7 +9,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PATTERN_ROOT = ROOT / "classical" / "python-sdk-v2"
-sys.path.insert(0, str(ROOT / "scripts"))
+SCRIPT_ROOT = PATTERN_ROOT / "mlops" / "scripts"
+sys.path.insert(0, str(SCRIPT_ROOT))
 
 from project_config import load_config
 from validate_project import validate_config_values
@@ -17,7 +19,7 @@ from validate_project import validate_config_values
 class ProjectContractTests(unittest.TestCase):
     def test_generated_tree_and_workflow_contract(self):
         subprocess.run(
-            [sys.executable, "scripts/validate_project.py"],
+            [sys.executable, SCRIPT_ROOT / "validate_project.py"],
             cwd=ROOT,
             check=True,
         )
@@ -31,7 +33,7 @@ class ProjectContractTests(unittest.TestCase):
             self.assertFalse(config["manage_runner_hub_to_workload_peering"])
 
     def test_runner_hub_parameters_render_in_disabled_and_enabled_modes(self):
-        script = ROOT / "scripts" / "render_bicep_parameters.py"
+        script = SCRIPT_ROOT / "render_bicep_parameters.py"
         base_config = (PATTERN_ROOT / "config-infra-dev.yml").read_text()
         runner_hub_id = (
             "/subscriptions/subscription-id/"
@@ -126,6 +128,106 @@ class ProjectContractTests(unittest.TestCase):
             )
             self.assertIn("sdk_ref: __MLOPS_TEMPLATES_REF__", content)
 
+    def test_workflows_use_generated_project_paths(self):
+        workflow_root = PATTERN_ROOT / "mlops" / "github-actions"
+        infrastructure = (
+            workflow_root / "deploy-infrastructure.yml"
+        ).read_text()
+        training = (workflow_root / "train-register-model.yml").read_text()
+        online = (workflow_root / "deploy-online-endpoint.yml").read_text()
+        batch = (workflow_root / "deploy-batch-endpoint.yml").read_text()
+
+        self.assertIn("mlops/scripts/export_config.py", infrastructure)
+        self.assertIn("mlops/scripts/render_bicep_parameters.py", infrastructure)
+        self.assertIn("infrastructure/main.bicep", infrastructure)
+        self.assertNotIn("infrastructure/bicep/", infrastructure)
+        self.assertIn("job_file: mlops/azureml/train/job.yml", training)
+        self.assertIn("request_file: data/taxi-request.json", online)
+        self.assertIn("request_batch_file: data/taxi-batch.csv", batch)
+
+        for content in (training, online, batch):
+            self.assertIn("mlops/scripts/export_config.py", content)
+            self.assertNotIn("classical/python-sdk-v2/", content)
+
+    def test_documented_sparse_checkout_produces_runnable_tree(self):
+        template_repository = "pgabriel-01/mlops-templates"
+        template_ref = "be9755ccfc320fd1f2c1fb4f6b092d745d4fa6b5"
+
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory) / "generated"
+            selected = project / "classical" / "python-sdk-v2"
+            shutil.copytree(PATTERN_ROOT, selected)
+            shutil.copytree(
+                ROOT / "infrastructure" / "bicep",
+                project / "infrastructure" / "bicep",
+            )
+            shutil.copytree(
+                ROOT / ".github" / "workflows",
+                project / ".github" / "workflows",
+            )
+            shutil.copy2(ROOT / "README.md", project / "README.md")
+
+            for name in ("data-science", "mlops", "data"):
+                shutil.move(selected / name, project / name)
+            for config in selected.glob("config-infra-*.yml"):
+                shutil.move(config, project / config.name)
+
+            bicep = project / "infrastructure" / "bicep"
+            generated_infrastructure = project / "generated-infrastructure"
+            shutil.move(bicep, generated_infrastructure)
+            shutil.rmtree(project / "infrastructure")
+            shutil.move(
+                generated_infrastructure,
+                project / "infrastructure",
+            )
+
+            shutil.rmtree(project / "mlops" / "devops-pipelines")
+            workflow_source = project / "mlops" / "github-actions"
+            for workflow in workflow_source.iterdir():
+                shutil.move(workflow, project / ".github" / "workflows")
+            workflow_source.rmdir()
+
+            for path in project.rglob("*"):
+                if not path.is_file():
+                    continue
+                try:
+                    content = path.read_text(encoding="utf-8")
+                except UnicodeDecodeError:
+                    continue
+                rendered = content.replace(
+                    "__MLOPS_TEMPLATES_REPOSITORY__",
+                    template_repository,
+                ).replace("__MLOPS_TEMPLATES_REF__", template_ref)
+                path.write_text(rendered, encoding="utf-8")
+
+            validator = project / "mlops" / "scripts" / "validate_project.py"
+            subprocess.run(
+                [sys.executable, validator, "--require-resolved-templates"],
+                cwd=project,
+                check=True,
+                env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+            )
+
+            infrastructure_workflow = (
+                project / ".github" / "workflows" /
+                "deploy-infrastructure.yml"
+            ).read_text()
+            self.assertIn("infrastructure/main.bicep", infrastructure_workflow)
+            self.assertIn(
+                "mlops/scripts/render_bicep_parameters.py",
+                infrastructure_workflow,
+            )
+            self.assertTrue(
+                project.joinpath(
+                    "mlops", "azureml", "train", "job.yml"
+                ).is_file()
+            )
+            self.assertTrue(
+                project.joinpath(
+                    "mlops", "scripts", "export_config.py"
+                ).is_file()
+            )
+
     def test_known_template_pin_resolves_all_placeholders(self):
         repository = "pgabriel-01/mlops-templates"
         commit = "be9755ccfc320fd1f2c1fb4f6b092d745d4fa6b5"
@@ -153,7 +255,7 @@ class ProjectContractTests(unittest.TestCase):
             "AZURE_TENANT_ID",
             "AZURE_SUBSCRIPTION_ID",
             "AZURE_PRINCIPAL_OBJECT_ID",
-            "No client secret or `AZURE_CREDENTIALS`",
+            "No client secret or legacy Azure credentials JSON secret",
             "mlops-private",
             "--query \"[?scope=='$SUBSCRIPTION_SCOPE' && "
             "(roleDefinitionName=='Contributor' || "

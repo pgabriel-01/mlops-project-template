@@ -7,10 +7,19 @@ from pathlib import Path
 from project_config import load_config
 
 
-ROOT = Path(__file__).resolve().parents[1]
-PATTERN_ROOT = ROOT / "classical" / "python-sdk-v2"
-CONFIG_ROOT = PATTERN_ROOT
-WORKFLOW_ROOT = PATTERN_ROOT / "mlops" / "github-actions"
+SCRIPT_ROOT = Path(__file__).resolve().parent
+if SCRIPT_ROOT.parent.parent.name == "python-sdk-v2":
+    ROOT = SCRIPT_ROOT.parents[3]
+    PATTERN_ROOT = SCRIPT_ROOT.parent.parent
+    INFRASTRUCTURE_ROOT = ROOT / "infrastructure" / "bicep"
+    CONFIG_ROOT = PATTERN_ROOT
+    WORKFLOW_ROOT = PATTERN_ROOT / "mlops" / "github-actions"
+else:
+    ROOT = SCRIPT_ROOT.parents[1]
+    PATTERN_ROOT = ROOT
+    INFRASTRUCTURE_ROOT = ROOT / "infrastructure"
+    CONFIG_ROOT = ROOT
+    WORKFLOW_ROOT = ROOT / ".github" / "workflows"
 ENVIRONMENTS = ("dev", "test", "prod")
 REQUIRED_CONFIG = {
     "environment",
@@ -42,7 +51,7 @@ FORBIDDEN_PATH_PARTS = {
     "rai-aml-cli-v2",
 }
 FORBIDDEN_CONTENT = (
-    "AZURE_CREDENTIALS",
+    "AZURE_" + "CREDENTIALS",
     "service connection",
     "variable group",
     "Managed DevOps Pool",
@@ -80,17 +89,25 @@ def generated_paths() -> list[Path]:
     )
     paths = [
         PATTERN_ROOT / "README.md",
+        PATTERN_ROOT / "data-science" / "environment" / "train-conda.yml",
+        PATTERN_ROOT / "data-science" / "src" / "evaluate" / "evaluate.py",
+        PATTERN_ROOT / "data-science" / "src" / "prep" / "prep.py",
+        PATTERN_ROOT / "data-science" / "src" / "register" / "register.py",
+        PATTERN_ROOT / "data-science" / "src" / "train" / "train.py",
+        PATTERN_ROOT / "data" / "taxi-batch.csv",
+        PATTERN_ROOT / "data" / "taxi-data.csv",
+        PATTERN_ROOT / "data" / "taxi-request.json",
         PATTERN_ROOT / "mlops" / "azureml" / "train" / "job.yml",
         *[CONFIG_ROOT / f"config-infra-{environment}.yml" for environment in ENVIRONMENTS],
         *WORKFLOW_ROOT.glob("*.yml"),
-        ROOT / "scripts" / "export_config.py",
-        ROOT / "scripts" / "project_config.py",
-        ROOT / "scripts" / "render_bicep_parameters.py",
-        ROOT / "scripts" / "validate_project.py",
-        ROOT / "infrastructure" / "bicep" / "bicepconfig.json",
-        ROOT / "infrastructure" / "bicep" / "main.bicep",
+        SCRIPT_ROOT / "export_config.py",
+        SCRIPT_ROOT / "project_config.py",
+        SCRIPT_ROOT / "render_bicep_parameters.py",
+        SCRIPT_ROOT / "validate_project.py",
+        INFRASTRUCTURE_ROOT / "bicepconfig.json",
+        INFRASTRUCTURE_ROOT / "main.bicep",
         *[
-            ROOT / "infrastructure" / "bicep" / "modules" / module
+            INFRASTRUCTURE_ROOT / "modules" / module
             for module in bicep_modules
         ],
     ]
@@ -169,7 +186,7 @@ def validate_workflows(require_resolved_templates: bool) -> list[str]:
         content = path.read_text(encoding="utf-8")
         if "environment:" not in content:
             errors.append(f"{name} does not pass a GitHub Environment")
-        if "AZURE_CREDENTIALS" in content:
+        if "AZURE_" + "CREDENTIALS" in content:
             errors.append(f"{name} uses client-secret credentials")
         if "id-token: write" not in content:
             errors.append(f"{name} does not request OIDC")
@@ -195,7 +212,7 @@ def validate_workflows(require_resolved_templates: bool) -> list[str]:
 def validate_content() -> list[str]:
     errors: list[str] = []
     for path in generated_paths():
-        if path == PATTERN_ROOT / "README.md" or path.parent == ROOT / "scripts":
+        if path == PATTERN_ROOT / "README.md" or path.parent == SCRIPT_ROOT:
             continue
         if not path.is_file() or path.suffix not in {
             ".bicep",

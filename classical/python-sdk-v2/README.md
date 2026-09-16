@@ -33,7 +33,7 @@ Configure the workload identity federation with:
 - Test subject: `repo:<owner>/<repo>:environment:test`;
 - Prod subject: `repo:<owner>/<repo>:environment:prod`.
 
-No client secret or `AZURE_CREDENTIALS` secret is created or used.
+No client secret or legacy Azure credentials JSON secret is created or used.
 
 ### Azure bootstrap
 
@@ -353,6 +353,6 @@ infrastructure workflow.
 ```bash
 python -m pip install -r requirements.txt
 python -m unittest discover -s tests
-python scripts/validate_project.py
+python mlops/scripts/validate_project.py
 az bicep build --file infrastructure/bicep/main.bicep
 ```

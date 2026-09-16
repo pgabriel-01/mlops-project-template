@@ -50,6 +50,7 @@ jobs:
 
   validate:
     needs: [config, lint]
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ${{ needs.config.outputs.runner }}
     environment: ${{ needs.config.outputs.environment }}
     steps:

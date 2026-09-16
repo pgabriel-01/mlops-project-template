@@ -1,7 +1,14 @@
 param workspaceName string
+@minLength(1)
 param environmentName string
+@minLength(1)
 param environmentVersion string
+@minLength(1)
 param imageUri string
+
+var validatedImageUri = contains(imageUri, '@sha256:') && length(last(split(imageUri, '@sha256:'))) == 64
+  ? imageUri
+  : fail('The image-only online environment must use an immutable sha256 digest.')
 
 resource workspace 'Microsoft.MachineLearningServices/workspaces@2025-06-01' existing = {
   name: workspaceName
@@ -19,8 +26,8 @@ resource version 'Microsoft.MachineLearningServices/workspaces/environments/vers
   name: environmentVersion
   parent: environment
   properties: {
-    description: 'Python 3.10 MLflow no-code inference runtime pinned by image digest.'
-    image: imageUri
+    description: 'Custom online inference runtime pinned by image digest.'
+    image: validatedImageUri
     isArchived: false
   }
 }

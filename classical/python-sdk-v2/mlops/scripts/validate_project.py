@@ -44,6 +44,7 @@ REQUIRED_CONFIG = {
     "online_deployment_name",
     "online_instance_type",
     "online_compute",
+    "online_mlflow_no_code",
     "online_environment_name",
     "online_environment_version",
     "online_environment_image",
@@ -139,7 +140,10 @@ def generated_paths() -> list[Path]:
         PATTERN_ROOT / "data" / "taxi-request.json",
         PATTERN_ROOT / "mlops" / "azureml" / "deploy" / "batch" / "score.py",
         PATTERN_ROOT / "mlops" / "azureml" / "train" / "job.yml",
-        *[CONFIG_ROOT / f"config-infra-{environment}.yml" for environment in ENVIRONMENTS],
+        *[
+            CONFIG_ROOT / f"config-infra-{environment}.yml"
+            for environment in ENVIRONMENTS
+        ],
         *WORKFLOW_ROOT.glob("*.yml"),
         SCRIPT_ROOT / "export_config.py",
         PATTERN_ROOT / "runner-bootstrap" / "manifests" / "arc-operator-rbac.json",
@@ -150,13 +154,8 @@ def generated_paths() -> list[Path]:
         SCRIPT_ROOT / "validate_project.py",
         INFRASTRUCTURE_ROOT / "bicepconfig.json",
         INFRASTRUCTURE_ROOT / "main.bicep",
-        INFRASTRUCTURE_ROOT
-        / "manifests"
-        / "azureml-inference-namespace.yaml",
-        *[
-            INFRASTRUCTURE_ROOT / "modules" / module
-            for module in bicep_modules
-        ],
+        INFRASTRUCTURE_ROOT / "manifests" / "azureml-inference-namespace.yaml",
+        *[INFRASTRUCTURE_ROOT / "modules" / module for module in bicep_modules],
     ]
     return sorted(paths)
 
@@ -210,13 +209,9 @@ def validate_config_values(path: Path, config: dict[str, object]) -> list[str]:
         )
     except json.JSONDecodeError:
         shared_zone_ids = None
-        errors.append(
-            f"{path.name} shared private DNS zone IDs must be a JSON object"
-        )
+        errors.append(f"{path.name} shared private DNS zone IDs must be a JSON object")
     if shared_zone_ids is not None and not isinstance(shared_zone_ids, dict):
-        errors.append(
-            f"{path.name} shared private DNS zone IDs must be a JSON object"
-        )
+        errors.append(f"{path.name} shared private DNS zone IDs must be a JSON object")
     if isinstance(shared_zone_ids, dict):
         if shared_zone_ids and not runner_hub_vnet_resource_id:
             errors.append(
@@ -261,18 +256,6 @@ def validate_config_values(path: Path, config: dict[str, object]) -> list[str]:
             re.IGNORECASE,
         ):
             errors.append(f"{path.name} has an invalid AKS node subnet resource ID")
-        image = str(config.get("online_environment_image", ""))
-        if not re.fullmatch(
-            r"[a-z0-9]+\.azurecr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}",
-            image,
-        ):
-            errors.append(
-                f"{path.name} online environment image must use an immutable sha256 digest"
-            )
-        if not str(config.get("online_environment_name", "")).strip():
-            errors.append(f"{path.name} requires an online environment name")
-        if not str(config.get("online_environment_version", "")).strip():
-            errors.append(f"{path.name} requires an online environment version")
         if not config.get("private_network"):
             errors.append(f"{path.name} private AKS inference requires private_network")
         if not config.get("enable_vnet"):
@@ -315,6 +298,44 @@ def validate_config_values(path: Path, config: dict[str, object]) -> list[str]:
             errors.append(
                 f"{path.name} inference node maximum must be at least its minimum"
             )
+    mlflow_no_code = config.get("online_mlflow_no_code")
+    if not isinstance(mlflow_no_code, bool):
+        errors.append(f"{path.name} online_mlflow_no_code must be true or false")
+        mlflow_no_code = False
+    environment_name = str(config.get("online_environment_name", "")).strip()
+    environment_version = str(config.get("online_environment_version", "")).strip()
+    environment_image = str(config.get("online_environment_image", "")).strip()
+    environment_values = (
+        environment_name,
+        environment_version,
+        environment_image,
+    )
+    if mlflow_no_code and any(environment_values):
+        errors.append(
+            f"{path.name} MLflow no-code mode cannot define online environment "
+            "name, version, or image"
+        )
+    if not mlflow_no_code and any(environment_values) and not all(environment_values):
+        errors.append(
+            f"{path.name} image-only mode requires online environment name, "
+            "version, and image together"
+        )
+    if (
+        config.get("enable_private_aks_inference")
+        and not mlflow_no_code
+        and not all(environment_values)
+    ):
+        errors.append(
+            f"{path.name} image-only private AKS inference requires online "
+            "environment name, version, and image"
+        )
+    if environment_image and not re.fullmatch(
+        r"[a-z0-9]+\.azurecr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}",
+        environment_image,
+    ):
+        errors.append(
+            f"{path.name} online environment image must use an immutable sha256 digest"
+        )
     return errors
 
 

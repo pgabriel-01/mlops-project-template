@@ -30,8 +30,9 @@ online_deployment_name: blue
 online_instance_type: cpu-small
 aks_node_subnet_resource_id: ""
 online_compute: aks-inference
-online_environment_name: taxi-inference
-online_environment_version: "1"
+online_mlflow_no_code: true
+online_environment_name: ""
+online_environment_version: ""
 online_environment_image: ""
 online_namespace: azureml-inference
 online_service_account: default

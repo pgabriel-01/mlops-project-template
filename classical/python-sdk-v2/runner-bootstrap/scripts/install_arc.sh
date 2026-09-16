@@ -68,7 +68,7 @@ PY
 )
 IFS=$'\t' read -r APP_ID INSTALLATION_ID PEM_PATH <<<"$APP_VALUES"
 
-command="set -eu; cleanup() { kubectl delete pod arc-image-pull-check --ignore-not-found >/dev/null 2>&1 || true; }; trap cleanup EXIT; cleanup; kubectl run arc-image-pull-check --image='$ARC_RUNNER_IMAGE' --restart=Never --command -- sh -ec 'git --version && curl --version && python3 --version && az version && test -x /kaniko/executor && test -w /kaniko && /kaniko/executor version && test ! -S /var/run/docker.sock'; kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/arc-image-pull-check --timeout=300s; kubectl logs arc-image-pull-check"
+command="set -eu; cleanup() { kubectl delete pod arc-image-pull-check --ignore-not-found >/dev/null 2>&1 || true; }; trap cleanup EXIT; cleanup; kubectl run arc-image-pull-check --image='$ARC_RUNNER_IMAGE' --restart=Never --command -- sh -ec 'git --version && curl --version && python3 --version && az version && test ! -S /var/run/docker.sock'; kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/arc-image-pull-check --timeout=300s; kubectl logs arc-image-pull-check"
 "${INVOKE_AKS[@]}" --resource-group "$RESOURCE_GROUP" --name "$AKS_NAME" \
   --command "$command" \
   --print-logs

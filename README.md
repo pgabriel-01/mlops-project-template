@@ -20,4 +20,6 @@ validation.
 
 For the generated Python SDK v2/GitHub Actions project, see
 [Private Azure ML online inference on AKS](docs/private-aks-inference.md) for the
-opt-in, fully private Kubernetes serving infrastructure contract.
+opt-in, fully private Kubernetes serving infrastructure contract. The generated
+online pattern defaults to Azure ML curated MLflow no-code inference and retains
+an explicit immutable image-only compatibility mode.

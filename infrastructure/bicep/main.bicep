@@ -21,8 +21,9 @@ param enablePrivateAksInference bool = false
 param aksClusterResourceId string = ''
 param aksNodeSubnetResourceId string = ''
 param onlineComputeName string = 'aks-inference'
-param onlineEnvironmentName string = 'taxi-inference'
-param onlineEnvironmentVersion string = '1'
+param onlineMlflowNoCode bool = true
+param onlineEnvironmentName string = ''
+param onlineEnvironmentVersion string = ''
 param onlineEnvironmentImage string = ''
 param onlineNamespace string = 'azureml-inference'
 param onlineServiceAccountName string = 'default'
@@ -89,6 +90,19 @@ param tags object = {
   ManagedBy: tagManagedBy
   ProjectNumber: projectNumber
 }
+
+var hasOnlineEnvironmentName = !empty(onlineEnvironmentName)
+var hasOnlineEnvironmentVersion = !empty(onlineEnvironmentVersion)
+var hasOnlineEnvironmentImage = !empty(onlineEnvironmentImage)
+var hasAnyOnlineEnvironmentInput = hasOnlineEnvironmentName || hasOnlineEnvironmentVersion || hasOnlineEnvironmentImage
+var hasCompleteOnlineEnvironment = hasOnlineEnvironmentName && hasOnlineEnvironmentVersion && hasOnlineEnvironmentImage
+
+var mlflowNoCodeEnvironmentValidated = onlineMlflowNoCode && hasAnyOnlineEnvironmentInput
+  ? fail('MLflow no-code mode cannot define an online environment name, version, or image.')
+  : true
+var imageOnlyEnvironmentValidated = !onlineMlflowNoCode && ((enablePrivateAksInference && !hasCompleteOnlineEnvironment) || (hasAnyOnlineEnvironmentInput && !hasCompleteOnlineEnvironment))
+  ? fail('Image-only mode requires an online environment name, version, and immutable image together.')
+  : true
 
 var baseName  = '${prefix}-${postfix}${projectNumber}${env}'
 var resourceGroupName = 'rg-${baseName}'
@@ -460,7 +474,7 @@ module aksAmlInference './modules/aks_aml_inference.bicep' = if (enablePrivateAk
   }
 }
 
-module amlOnlineEnvironment './modules/aml_environment.bicep' = if (enablePrivateAksInference) {
+module amlOnlineEnvironment './modules/aml_environment.bicep' = if (enablePrivateAksInference && !onlineMlflowNoCode) {
   name: 'aml-online-environment'
   scope: resourceGroup(rg.name)
   params: {
@@ -494,7 +508,6 @@ module amlKubernetesCompute './modules/aml_kubernetes_compute.bicep' = if (enabl
   }
   dependsOn: [
     peMlw
-    amlOnlineEnvironment
   ]
 }
 
@@ -649,7 +662,8 @@ output runnerHubReciprocalPeeringManaged bool = enableVNet && hasRunnerHub && ma
 output runnerHubReciprocalPeeringCommand string = (enableVNet && hasRunnerHub && !manageRunnerHubToWorkloadPeering) ? 'az network vnet peering create --subscription "${runnerHubSubscriptionId}" --resource-group "${runnerHubResourceGroupName}" --vnet-name "${runnerHubVnetName}" --name "${runnerHubToSpokePeeringName}" --remote-vnet "${vnet!.outputs.vnetId}" --allow-vnet-access --allow-forwarded-traffic' : ''
 output privateAksInferenceEnabled bool = enablePrivateAksInference
 output onlineComputeName string = enablePrivateAksInference ? amlKubernetesCompute!.outputs.computeName : ''
-output onlineEnvironmentId string = enablePrivateAksInference ? amlOnlineEnvironment!.outputs.environmentId : ''
+output onlineEnvironmentId string = enablePrivateAksInference && !onlineMlflowNoCode ? amlOnlineEnvironment!.outputs.environmentId : ''
+output onlineConfigurationValidated bool = mlflowNoCodeEnvironmentValidated && imageOnlyEnvironmentValidated
 output onlineNamespace string = enablePrivateAksInference ? onlineNamespace : ''
 output onlineInferenceIdentityId string = enablePrivateAksInference ? amlKubernetesIdentity!.outputs.identityId : ''
 output onlineInferenceIdentityClientId string = enablePrivateAksInference ? amlKubernetesIdentity!.outputs.identityClientId : ''

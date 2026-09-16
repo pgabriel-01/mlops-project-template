@@ -18,7 +18,7 @@ ephemeral runners.
 | Egress | dedicated Standard NAT Gateway/public IP |
 | ARC chart | `0.14.2` |
 | Runner base image | `ghcr.io/actions/actions-runner:2.337.0` |
-| Runner tools | Python 3, pinned Azure CLI `2.90.0-1~noble`, and digest-pinned Kaniko `v1.23.2` |
+| Runner tools | Python 3 and pinned Azure CLI `2.90.0-1~noble` |
 | Scale set / workflow label | `mlops-private` |
 | Runner bounds | minimum 0, maximum 2 |
 | Logs | Container Insights and selected AKS control-plane logs, 30 days |
@@ -61,15 +61,13 @@ disabled. Do not substitute a PAT. Store the PEM outside the checkout with mode
 
 ## Publish the runner image
 
-The generated infrastructure and runtime publishing workflows run Python, Azure
-CLI, and Kaniko commands. The stock ARC image does not contain those tools, so
-ARC installation fails closed unless `ARC_RUNNER_IMAGE` names the approved image
-by immutable digest. Kaniko is copied from a digest-pinned upstream image into
-the runner image; it runs without a Docker daemon, privileged pod, or socket
-mount. Its executable and CA certificate paths are owned by the non-root runner
-user. The complete `/kaniko` tree is copied with `runner:runner` ownership at
-image build time because the executor writes working files there; runtime
-`sudo`, root, and privilege escalation are prohibited.
+The generated infrastructure workflows run Python and Azure CLI commands. The
+stock ARC image does not contain those tools, so ARC installation fails closed
+unless `ARC_RUNNER_IMAGE` names the approved image by immutable digest. The image
+does not include an in-cluster container image builder. Non-root Kaniko runtime
+builds are unsupported under the enforced security policy because the executor
+attempts `chown /` and fails with `operation not permitted`; do not add
+privilege, a Docker socket, or a replacement builder to work around that policy.
 
 `Build private runner image` uses a GitHub-hosted runner with only
 `contents: read` and `packages: write`. The Dockerfile's
@@ -91,8 +89,8 @@ sequence:
    fails closed unless anonymous access succeeds.
 5. Copy the `ghcr.io/<owner>/<repository>-arc-runner@sha256:...` value from
    the successful workflow summary. `install_arc.sh` repeats the anonymous pull
-   check from AKS and verifies `git`, `curl`, Python, Azure CLI, the Kaniko
-   executable, and the absence of `/var/run/docker.sock` before installing ARC.
+   check from AKS and verifies `git`, `curl`, Python, Azure CLI, and the absence
+   of `/var/run/docker.sock` before installing ARC.
 
 Do not use a PAT, an expiring GitHub App installation token, or a mutable image tag
 as an image pull credential.
@@ -101,12 +99,15 @@ After any runner Dockerfile change, rebuild on `main`, review the reported GHCR
 digest, and rerun `install_arc.sh` with that new immutable
 `ARC_RUNNER_IMAGE`. This performs a rolling ARC scale-set update without adding
 registry credentials or mutable tags. Run `verify.sh` and the private runner
-smoke test before dispatching `publish-online-runtime.yml`.
-Do not patch the runtime workflow to install Docker, Buildah, Kaniko, or any
-other builder with `apt-get` or `sudo`; rebuild and redeploy the reviewed runner
-image instead.
+smoke test before dispatching private infrastructure or model workflows. Do not
+patch generated workflows to install Docker, Buildah, Kaniko, or any other
+builder with `apt-get` or `sudo`; rebuild and redeploy the reviewed runner image
+instead. Azure ML curated MLflow no-code online inference is the generated
+serving default and requires no custom runtime build. Immutable image-only
+online deployment remains available only when an approved external image supply
+chain provides the complete environment name, version, and digest-pinned image.
 
-For later image-only rollouts, configure the DEV GitHub Environment variable
+For later runner image rollouts, configure the DEV GitHub Environment variable
 `ARC_AKS_CLUSTER_RESOURCE_ID` with the immutable resource ID of the private
 runner AKS cluster and dispatch `Update private runner image` with the new
 digest-pinned GHCR URI. Both jobs run on GitHub-hosted runners and use Azure Run

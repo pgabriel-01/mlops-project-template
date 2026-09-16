@@ -309,20 +309,25 @@ enable the opt-in `enable_private_aks_inference` configuration and follow
 The stable generated-workflow contract is:
 
 - `online_compute`: attached AML Kubernetes compute name;
-- `online_environment_name` and `online_environment_version`: immutable,
-  pre-registered environment backed by a prebuilt ACR image;
-- `online_environment_image`: private ACR image URI pinned by SHA-256 digest;
+- `online_mlflow_no_code: true`: Azure ML supplies the curated environment for
+  the validated MLflow model; the environment name, version, and image settings
+  must all be empty;
+- `online_mlflow_no_code: false`: immutable image-only compatibility mode, which
+  requires `online_environment_name`, `online_environment_version`, and a private
+  ACR `online_environment_image` pinned by SHA-256 digest;
 - `online_instance_type`: AML Kubernetes instance type;
 - `runner`: private ARC runner label.
 
-The digest-pinned ARC runner image includes a digest-pinned Kaniko executor. The
-generated `publish-online-runtime.yml` uses the environment-scoped federated
-Azure identity to create a masked, ephemeral ACR token config for Kaniko; the
-hardened private runner does not need or use a Docker daemon, privileged pod, or
-socket mount. The workflow tags the build with the immutable source commit SHA,
-compares Kaniko's result with the published manifest digest, validates it as
-`sha256:<64-hex-digest>`, cleans up the token config, and outputs only the
-digest-pinned ACR URI for `online_environment_image`.
+The generated MLflow no-code path does not create a workspace environment and
+does not build a custom runtime image. Azure ML resolves its curated MLflow
+serving environment from the registered MLflow model. Non-root Kaniko execution
+is not a supported fallback under the runner security policy because it attempts
+to change ownership at the container root and fails with `chown /: operation not
+permitted`. The generated pattern therefore contains no runtime image publishing
+workflow or custom online runtime Dockerfile, and it does not weaken the
+non-root, unprivileged runner contract. Organizations that already operate an
+approved external image supply chain can select image-only mode and provide the
+complete immutable environment triple directly.
 
 The generated `update-runner-image.yml` accepts only this repository's immutable
 GHCR runner digest and targets the AKS resource ID configured in the DEV GitHub
@@ -414,13 +419,16 @@ verify each propagation. Do not describe a change as factory-regenerated unless
 an external factory was actually used and recorded separately.
 
 The reviewed reusable-workflow propagation is pinned in that contract to
-`pgabriel-01/mlops-templates@8dbe32cab29268ef128ece88ef994927648fc70f`.
+`pgabriel-01/mlops-templates@d4bec7598d11c79d5140c654888c3289693674d6`.
 Generated Python SDK v2 workflows bind both the reusable workflow and its
-checked-out SDK helpers to that same immutable ref. For batch deployment, that
-pin waits for endpoint completion and confirmed successful provisioning before
-deployment, waits for deployment before invocation, retries boundedly when an
-existing operation conflicts, and propagates terminal failures and timeouts. The
-batch caller exposes an immutable deployment environment input that defaults to
+checked-out SDK helpers to that same immutable ref. It supports MLflow no-code
+online deployment while preserving the explicit immutable image-only mode. For
+batch deployment, the pin derives a full ARM environment ID from the registry
+operation scope, verifies it against the exact environment lookup, waits for
+endpoint completion and confirmed successful provisioning before deployment,
+waits for deployment before invocation, retries boundedly when an existing
+operation conflicts, and propagates terminal failures and timeouts. The batch
+caller exposes an immutable deployment environment input that defaults to
 `azureml://registries/azureml/environments/sklearn-1.5/versions/53`. The reusable
 workflow validates that the value is a versioned Azure ML environment reference
 with a numeric version and passes the full ID into `BatchDeployment`; mutable

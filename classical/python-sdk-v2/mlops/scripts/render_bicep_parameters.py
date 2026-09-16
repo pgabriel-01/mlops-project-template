@@ -22,6 +22,7 @@ PARAMETER_MAP = {
     "aks_cluster_resource_id": "aksClusterResourceId",
     "aks_node_subnet_resource_id": "aksNodeSubnetResourceId",
     "online_compute": "onlineComputeName",
+    "online_mlflow_no_code": "onlineMlflowNoCode",
     "online_environment_name": "onlineEnvironmentName",
     "online_environment_version": "onlineEnvironmentVersion",
     "online_environment_image": "onlineEnvironmentImage",
@@ -71,13 +72,10 @@ def main() -> None:
     if not ci_principal_object_id:
         raise SystemExit("AZURE_PRINCIPAL_OBJECT_ID is required")
     parameters = {
-        parameter: {"value": config[key]}
-        for key, parameter in PARAMETER_MAP.items()
+        parameter: {"value": config[key]} for key, parameter in PARAMETER_MAP.items()
     }
     parameters["sharedPrivateDnsZoneResourceIds"] = {
-        "value": json.loads(
-            str(config["shared_private_dns_zone_resource_ids"])
-        )
+        "value": json.loads(str(config["shared_private_dns_zone_resource_ids"]))
     }
     parameters["ciPrincipalObjectId"] = {"value": ci_principal_object_id}
     payload = {
@@ -88,9 +86,7 @@ def main() -> None:
         "contentVersion": "1.0.0.0",
         "parameters": parameters,
     }
-    args.output_file.write_text(
-        json.dumps(payload, indent=2) + "\n", encoding="utf-8"
-    )
+    args.output_file.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

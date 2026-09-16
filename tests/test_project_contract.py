@@ -13,12 +13,12 @@ ROOT = Path(__file__).resolve().parents[1]
 PATTERN_ROOT = ROOT / "classical" / "python-sdk-v2"
 SCRIPT_ROOT = PATTERN_ROOT / "mlops" / "scripts"
 TEMPLATE_REPOSITORY = "pgabriel-01/mlops-templates"
-TEMPLATE_REF = "8dbe32cab29268ef128ece88ef994927648fc70f"
+TEMPLATE_REF = "d4bec7598d11c79d5140c654888c3289693674d6"
 BATCH_ENVIRONMENT = "azureml://registries/azureml/environments/sklearn-1.5/versions/53"
 SCORING_CODE_DIRECTORY = "mlops/azureml/deploy/batch"
 SCORING_SCRIPT = "score.py"
 TEMPLATE_BLOBS = {
-    "src/python-sdk-v2/aml_client.py": ("bac5bed341c5e6658842ed2bf91a73ccdabe83b5"),
+    "src/python-sdk-v2/aml_client.py": ("b91d56f497ec096ce72137094c8b72f97991576e"),
     ".github/workflows/python-sdk-v2-train-register.yml": (
         "16504df1fca114dcb8f5105f51baa115b2814527"
     ),
@@ -26,13 +26,13 @@ TEMPLATE_BLOBS = {
         "280038a670216effda41ad1df234e24e342c4219"
     ),
     ".github/workflows/python-sdk-v2-online.yml": (
-        "6289915fcc151d8550618feac168e64037b8a423"
+        "163c61d99500306e7e15156446ce37db5a2be566"
     ),
     "src/python-sdk-v2/create_batch_endpoint.py": (
         "c8be7b6e9f15c4f80a0980156eeaba45319459bc"
     ),
     "src/python-sdk-v2/create_batch_deployment.py": (
-        "9285133b2725b45cf396ec2c2dadfdb1ebc9f783"
+        "da2bfafc4bd4f6cb3e3ac989312b6640ef840dec"
     ),
     "src/python-sdk-v2/test_batch_endpoint.py": (
         "de162e28504f710fe02b8380fadf631ce3456269"
@@ -41,9 +41,9 @@ TEMPLATE_BLOBS = {
         "f20a1833988d37f7e3732e9e10746ffaf1008b5b"
     ),
     "src/python-sdk-v2/create_online_deployment.py": (
-        "2d635b99fe710e458a466154eceba852c4670e96"
+        "9630fa74d44465125df96a9a9fe50ab2f2c8aa59"
     ),
-    "tests/test_python_sdk_v2.py": "7b89ba3b24152b3b96910307e5b7dbcdd1fd8f48",
+    "tests/test_python_sdk_v2.py": "904f7c7c857cc1c3e20b2d244cd770f42396c948",
     "examples/python-sdk-v2/batch-scoring/score.py": (
         "99d2a411ff19c2a80f0290f7c57839e2172df58e"
     ),
@@ -249,8 +249,6 @@ class ProjectContractTests(unittest.TestCase):
         self.assertIn("request_file: data/taxi-request.json", online)
         for output_name, config_name in (
             ("compute", "online_compute"),
-            ("environment_name", "online_environment_name"),
-            ("environment_version", "online_environment_version"),
             ("instance_type", "online_instance_type"),
         ):
             self.assertIn(
@@ -261,6 +259,27 @@ class ProjectContractTests(unittest.TestCase):
                 f"{output_name}: ${{{{ needs.config.outputs.{output_name} }}}}",
                 online,
             )
+        self.assertIn(
+            "mlflow_no_code: ${{ steps.config.outputs.online_mlflow_no_code }}",
+            online,
+        )
+        self.assertIn("if: needs.config.outputs.mlflow_no_code == 'true'", online)
+        self.assertIn("if: needs.config.outputs.mlflow_no_code == 'false'", online)
+        no_code_job = online.split("  online-mlflow-no-code:", 1)[1].split(
+            "  online-image-only:", 1
+        )[0]
+        image_only_job = online.split("  online-image-only:", 1)[1]
+        self.assertIn("mlflow_no_code: true", no_code_job)
+        self.assertNotIn("environment_name:", no_code_job)
+        self.assertNotIn("environment_version:", no_code_job)
+        self.assertIn(
+            "environment_name: ${{ needs.config.outputs.environment_name }}",
+            image_only_job,
+        )
+        self.assertIn(
+            "environment_version: ${{ needs.config.outputs.environment_version }}",
+            image_only_job,
+        )
         self.assertIn("tls_ca_key_vault_secret_id:", online)
         self.assertIn(
             "tls_ca_key_vault_secret_id: " "${{ inputs.tls_ca_key_vault_secret_id }}",
@@ -471,6 +490,14 @@ class ProjectContractTests(unittest.TestCase):
                     "arc-operator-rbac.json",
                 ).is_file()
             )
+            self.assertFalse(
+                project.joinpath(
+                    ".github",
+                    "workflows",
+                    "publish-online-runtime.yml",
+                ).exists()
+            )
+            self.assertFalse(project.joinpath("mlops", "online-runtime").exists())
             self.assertTrue(
                 project.joinpath(
                     "runner-bootstrap",

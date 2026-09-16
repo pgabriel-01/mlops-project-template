@@ -1,4 +1,4 @@
-name: azureml-cli-v2
+name: classical-python-sdk-v2
 channels:
   - conda-forge
   - defaults

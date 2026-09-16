@@ -7,7 +7,7 @@ param crid string
 param tags object
 param managedIdentityId string
 param managedIdentityPrincipalId string
-param adoServicePrincipalId string = ''
+param ciPrincipalObjectId string = ''
 param enableNetworkIsolation bool = false
 param computeSubnetId string = ''
 
@@ -19,7 +19,7 @@ var containerRegistryName = hasContainerRegistry ? split(crid, '/')[8] : 'none'
 var hasAppInsights = !empty(appinsightid)
 
 // AML workspace with user-assigned managed identity
-resource amls 'Microsoft.MachineLearningServices/workspaces@2024-04-01' = {
+resource amls 'Microsoft.MachineLearningServices/workspaces@2025-06-01' = {
   name: 'mlw-${baseName}'
   location: location
   identity: {
@@ -29,8 +29,8 @@ resource amls 'Microsoft.MachineLearningServices/workspaces@2024-04-01' = {
     }
   }
   sku: {
-    tier: 'basic'
-    name: 'basic'
+    tier: 'Basic'
+    name: 'Basic'
   }
   properties: {
     storageAccount: stoacctid
@@ -40,6 +40,9 @@ resource amls 'Microsoft.MachineLearningServices/workspaces@2024-04-01' = {
     primaryUserAssignedIdentity: managedIdentityId
     systemDatastoresAuthMode: 'identity'  // Use managed identity for datastore auth instead of access keys
     publicNetworkAccess: enableNetworkIsolation ? 'Disabled' : 'Enabled'
+    managedNetwork: enableNetworkIsolation ? {
+      isolationMode: 'AllowInternetOutbound'
+    } : null
     serverlessComputeSettings: enableNetworkIsolation ? {
       serverlessComputeCustomSubnet: computeSubnetId
       serverlessComputeNoPublicIP: true
@@ -78,6 +81,26 @@ resource workspaceMsiStorageBlobContributor 'Microsoft.Authorization/roleAssignm
   scope: storageAccount
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe') // Storage Blob Data Contributor
+    principalId: managedIdentityPrincipalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource workspaceMsiStorageQueueContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(storageAccount.id, managedIdentityPrincipalId, '974c5e8b-45b9-4653-ba55-5f855dd0fb88')
+  scope: storageAccount
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '974c5e8b-45b9-4653-ba55-5f855dd0fb88') // Storage Queue Data Contributor
+    principalId: managedIdentityPrincipalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource workspaceMsiStorageTableContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(storageAccount.id, managedIdentityPrincipalId, '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3')
+  scope: storageAccount
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '0a9a7e1f-b9d0-4cc4-a60d-0319b160aaa3') // Storage Table Data Contributor
     principalId: managedIdentityPrincipalId
     principalType: 'ServicePrincipal'
   }
@@ -127,35 +150,24 @@ resource workspaceMsiAcrPush 'Microsoft.Authorization/roleAssignments@2022-04-01
   }
 }
 
-// RBAC: ADO Service Principal -> Storage Blob Data Reader (for data registration)
-resource adoSpStorageBlobReader 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(adoServicePrincipalId)) {
-  name: guid(storageAccount.id, adoServicePrincipalId, '2a2b9908-6ea1-4ae2-8e65-a410df84e7d1')
-  scope: storageAccount
-  properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '2a2b9908-6ea1-4ae2-8e65-a410df84e7d1') // Storage Blob Data Reader
-    principalId: adoServicePrincipalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
-// RBAC: ADO Service Principal -> Storage Blob Data Contributor (for data registration)
-resource adoSpStorageBlobContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(adoServicePrincipalId)) {
-  name: guid(storageAccount.id, adoServicePrincipalId, 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
+// RBAC: CI workload identity -> Storage Blob Data Contributor
+resource ciStorageBlobContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(ciPrincipalObjectId)) {
+  name: guid(storageAccount.id, ciPrincipalObjectId, 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
   scope: storageAccount
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe') // Storage Blob Data Contributor
-    principalId: adoServicePrincipalId
+    principalId: ciPrincipalObjectId
     principalType: 'ServicePrincipal'
   }
 }
 
-// RBAC: ADO Service Principal -> AzureML Workspace Contributor (for model registration)
-resource adoSpWorkspaceContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(adoServicePrincipalId)) {
-  name: guid(amls.id, adoServicePrincipalId, 'f6c7c914-8db3-469d-8ca1-694a8f32e121')
+// RBAC: CI workload identity -> workspace Contributor
+resource ciWorkspaceContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(ciPrincipalObjectId)) {
+  name: guid(amls.id, ciPrincipalObjectId, 'b24988ac-6180-42a0-ab88-20f7382dd24c')
   scope: amls
   properties: {
-    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'f6c7c914-8db3-469d-8ca1-694a8f32e121') // AzureML Compute Operator
-    principalId: adoServicePrincipalId
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'b24988ac-6180-42a0-ab88-20f7382dd24c') // Contributor
+    principalId: ciPrincipalObjectId
     principalType: 'ServicePrincipal'
   }
 }

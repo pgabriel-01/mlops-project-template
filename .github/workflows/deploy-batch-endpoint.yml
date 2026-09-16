@@ -1,0 +1,56 @@
+name: Deploy, invoke, and test batch endpoint
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: GitHub Environment and configuration to target
+        required: true
+        default: dev
+        type: choice
+        options: [dev, test, prod]
+      model_version:
+        description: Registered model version
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  config:
+    runs-on: ubuntu-24.04
+    outputs:
+      resource_group: ${{ steps.config.outputs.resource_group }}
+      workspace_name: ${{ steps.config.outputs.workspace_name }}
+      endpoint_name: ${{ steps.config.outputs.batch_endpoint_name }}
+      deployment_name: ${{ steps.config.outputs.batch_deployment_name }}
+      model_name: ${{ steps.config.outputs.model_name }}
+      compute: ${{ steps.config.outputs.batch_compute_name }}
+      python_version: ${{ steps.config.outputs.python_version }}
+      runner: ${{ steps.config.outputs.runner }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - id: config
+        run: python3 scripts/export_config.py config-infra-${{ inputs.environment }}.yml
+
+  batch:
+    needs: config
+    uses: __MLOPS_TEMPLATES_REPOSITORY__/.github/workflows/python-sdk-v2-batch.yml@__MLOPS_TEMPLATES_REF__
+    with:
+      environment: ${{ inputs.environment }}
+      sdk_repository: __MLOPS_TEMPLATES_REPOSITORY__
+      sdk_ref: __MLOPS_TEMPLATES_REF__
+      resource_group: ${{ needs.config.outputs.resource_group }}
+      workspace_name: ${{ needs.config.outputs.workspace_name }}
+      python_version: ${{ needs.config.outputs.python_version }}
+      runner: ${{ needs.config.outputs.runner }}
+      endpoint_name: ${{ needs.config.outputs.endpoint_name }}
+      deployment_name: ${{ needs.config.outputs.deployment_name }}
+      model_name: ${{ needs.config.outputs.model_name }}
+      model_version: ${{ inputs.model_version }}
+      compute: ${{ needs.config.outputs.compute }}
+      request_batch_file: classical/python-sdk-v2/data/taxi-batch.csv
+      request_type: uri_file
+    secrets: inherit

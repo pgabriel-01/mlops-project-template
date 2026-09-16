@@ -1,0 +1,44 @@
+name: Train and register model
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: GitHub Environment and configuration to target
+        required: true
+        default: dev
+        type: choice
+        options: [dev, test, prod]
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  config:
+    runs-on: ubuntu-24.04
+    outputs:
+      resource_group: ${{ steps.config.outputs.resource_group }}
+      workspace_name: ${{ steps.config.outputs.workspace_name }}
+      model_name: ${{ steps.config.outputs.model_name }}
+      python_version: ${{ steps.config.outputs.python_version }}
+      runner: ${{ steps.config.outputs.runner }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - id: config
+        run: python3 scripts/export_config.py config-infra-${{ inputs.environment }}.yml
+
+  train:
+    needs: config
+    uses: __MLOPS_TEMPLATES_REPOSITORY__/.github/workflows/python-sdk-v2-train-register.yml@__MLOPS_TEMPLATES_REF__
+    with:
+      environment: ${{ inputs.environment }}
+      sdk_repository: __MLOPS_TEMPLATES_REPOSITORY__
+      sdk_ref: __MLOPS_TEMPLATES_REF__
+      resource_group: ${{ needs.config.outputs.resource_group }}
+      workspace_name: ${{ needs.config.outputs.workspace_name }}
+      python_version: ${{ needs.config.outputs.python_version }}
+      runner: ${{ needs.config.outputs.runner }}
+      job_file: classical/python-sdk-v2/mlops/azureml/train/job.yml
+      model_name: ${{ needs.config.outputs.model_name }}
+    secrets: inherit

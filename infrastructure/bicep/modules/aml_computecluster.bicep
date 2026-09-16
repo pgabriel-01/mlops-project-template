@@ -19,6 +19,7 @@ resource amlci 'Microsoft.MachineLearningServices/workspaces/computes@2025-09-01
     properties: {
       vmSize: vmSku
       osType: 'Linux'
+      enableNodePublicIp: empty(subnetId)
       scaleSettings: {
         maxNodeCount: 4
         minNodeCount: 0

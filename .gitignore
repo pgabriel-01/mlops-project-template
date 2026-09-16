@@ -1,7 +1,5 @@
 *.kab
 *.bak
-infrastructure/terraform/.terraform/
-infrastructure/terraform/terraform.tfvars
 
 # MLflow artifacts
 mlflow.db

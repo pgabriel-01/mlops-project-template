@@ -6,6 +6,9 @@ param vnetId string
 var storageSuffix = environment().suffixes.storage  // e.g. core.windows.net
 var dnsZones = [
   'privatelink.blob.${storageSuffix}'
+  'privatelink.file.${storageSuffix}'
+  'privatelink.queue.${storageSuffix}'
+  'privatelink.table.${storageSuffix}'
   'privatelink.vaultcore.azure.net'
   'privatelink.azurecr.io'
   'privatelink.api.azureml.ms'
@@ -33,7 +36,10 @@ resource vnetLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2024-06
 }]
 
 output blobDnsZoneId string = privateDnsZone[0].id
-output kvDnsZoneId string = privateDnsZone[1].id
-output acrDnsZoneId string = privateDnsZone[2].id
-output amlDnsZoneId string = privateDnsZone[3].id
-output notebookDnsZoneId string = privateDnsZone[4].id
+output fileDnsZoneId string = privateDnsZone[1].id
+output queueDnsZoneId string = privateDnsZone[2].id
+output tableDnsZoneId string = privateDnsZone[3].id
+output kvDnsZoneId string = privateDnsZone[4].id
+output acrDnsZoneId string = privateDnsZone[5].id
+output amlDnsZoneId string = privateDnsZone[6].id
+output notebookDnsZoneId string = privateDnsZone[7].id

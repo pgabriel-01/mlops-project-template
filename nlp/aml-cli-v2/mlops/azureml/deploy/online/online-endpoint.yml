@@ -1,4 +1,0 @@
-$schema: https://azuremlschemas.azureedge.net/latest/managedOnlineEndpoint.schema.json
-name: nlp-summarize-online
-description: summarization model
-auth_mode: key

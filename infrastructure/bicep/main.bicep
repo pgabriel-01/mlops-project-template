@@ -14,6 +14,7 @@ param enableComputeCluster bool = true
 param enableVNet bool = false
 param runnerHubVnetResourceId string = ''
 param manageRunnerHubToWorkloadPeering bool = false
+param sharedPrivateDnsZoneResourceIds object = {}
 
 // Tier 3 — Governance feature flags
 param enableCMEK bool = false
@@ -70,6 +71,9 @@ var runnerHubResourceGroupName = hasRunnerHub ? runnerHubResourceIdParts[4] : re
 var runnerHubVnetName = hasRunnerHub ? runnerHubResourceIdParts[8] : ''
 var spokeToRunnerHubPeeringName = 'peer-runner-${uniqueString(rg.id, runnerHubVnetResourceId)}'
 var runnerHubToSpokePeeringName = 'peer-workload-${uniqueString(rg.id, runnerHubVnetResourceId)}'
+var keyVaultPrefix = take(replace(toLower(prefix), '-', ''), 5)
+var keyVaultEnvironment = take(replace(toLower(env), '-', ''), 3)
+var keyVaultName = 'kv-${keyVaultPrefix}${uniqueString(rg.id)}${keyVaultEnvironment}'
 
 // ============================================================
 // Phase 1 — Foundation: Resource Group, Managed Identity, VNet
@@ -117,6 +121,7 @@ module dnsZones './modules/private_dns_zones.bicep' = if (enableVNet) {
     tags: tags
     vnetId: enableVNet ? vnet!.outputs.vnetId : ''
     runnerHubVnetId: (enableVNet && hasRunnerHub) ? runnerHubVnetResourceId : ''
+    sharedPrivateDnsZoneResourceIds: sharedPrivateDnsZoneResourceIds
   }
 }
 
@@ -179,7 +184,7 @@ module kv './modules/key_vault.bicep' = {
   name: 'kv'
   scope: resourceGroup(rg.name)
   params: {
-    baseName: '${prefix}${uniqueString(rg.id)}${env}'
+    keyVaultName: keyVaultName
     location: location
     tags: tags
     enablePurgeProtection: kvEnablePurgeProtection

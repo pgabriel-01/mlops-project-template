@@ -2,6 +2,7 @@
 param tags object
 param vnetId string
 param runnerHubVnetId string = ''
+param sharedPrivateDnsZoneResourceIds object = {}
 
 // Use environment() suffixes for cloud-agnostic DNS zone names
 var storageSuffix = environment().suffixes.storage  // e.g. core.windows.net
@@ -16,46 +17,58 @@ var dnsZones = [
   'privatelink.api.azureml.ms'
   'privatelink.notebooks.azure.net'
 ]
-
-resource privateDnsZone 'Microsoft.Network/privateDnsZones@2024-06-01' = [for zone in dnsZones: {
+var managedDnsZones = filter(
+  dnsZones,
+  zone => !contains(sharedPrivateDnsZoneResourceIds, zone)
+)
+var privateDnsZoneIds = [
+  for zone in dnsZones: contains(sharedPrivateDnsZoneResourceIds, zone)
+    ? string(sharedPrivateDnsZoneResourceIds[zone])
+    : resourceId('Microsoft.Network/privateDnsZones', zone)
+]
+resource privateDnsZone 'Microsoft.Network/privateDnsZones@2024-06-01' = [for zone in managedDnsZones: {
   name: zone
   location: 'global'
   tags: tags
 }]
 
-// Link each DNS zone to the VNet
-resource vnetLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2024-06-01' = [for (zone, i) in dnsZones: {
-  name: 'link-${uniqueString(vnetId)}'
-  parent: privateDnsZone[i]
-  location: 'global'
-  properties: {
-    virtualNetwork: {
-      id: vnetId
-    }
-    registrationEnabled: false
+// The workload VNet is linked to every selected zone. Shared zones are reused
+// directly so private endpoint records remain visible from the runner hub.
+module vnetLink './private_dns_zone_vnet_link.bicep' = [for zoneId in privateDnsZoneIds: {
+  name: 'dns-workload-link-${uniqueString(zoneId, vnetId)}'
+  scope: resourceGroup(split(zoneId, '/')[2], split(zoneId, '/')[4])
+  params: {
+    privateDnsZoneName: split(zoneId, '/')[8]
+    vnetId: vnetId
+    linkName: 'link-${uniqueString(vnetId)}'
+    tags: tags
   }
-  tags: tags
+  dependsOn: [
+    privateDnsZone
+  ]
 }]
 
-resource runnerHubVnetLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2024-06-01' = [for (zone, i) in dnsZones: if (!empty(runnerHubVnetId)) {
-  name: 'link-runner-${uniqueString(runnerHubVnetId)}'
-  parent: privateDnsZone[i]
-  location: 'global'
-  properties: {
-    virtualNetwork: {
-      id: runnerHubVnetId
-    }
-    registrationEnabled: false
+// Create runner-hub links only for deployment-owned zones. A shared zone ID
+// explicitly means the hub link already exists and must be reused, not duplicated.
+module runnerHubVnetLink './private_dns_zone_vnet_link.bicep' = [for zone in managedDnsZones: if (!empty(runnerHubVnetId)) {
+  name: 'dns-runner-link-${uniqueString(zone, runnerHubVnetId)}'
+  params: {
+    privateDnsZoneName: zone
+    vnetId: runnerHubVnetId
+    linkName: 'link-runner-${uniqueString(runnerHubVnetId)}'
+    tags: tags
   }
-  tags: tags
+  dependsOn: [
+    privateDnsZone
+  ]
 }]
 
-output blobDnsZoneId string = privateDnsZone[0].id
-output fileDnsZoneId string = privateDnsZone[1].id
-output queueDnsZoneId string = privateDnsZone[2].id
-output tableDnsZoneId string = privateDnsZone[3].id
-output dfsDnsZoneId string = privateDnsZone[4].id
-output kvDnsZoneId string = privateDnsZone[5].id
-output acrDnsZoneId string = privateDnsZone[6].id
-output amlDnsZoneId string = privateDnsZone[7].id
-output notebookDnsZoneId string = privateDnsZone[8].id
+output blobDnsZoneId string = privateDnsZoneIds[0]
+output fileDnsZoneId string = privateDnsZoneIds[1]
+output queueDnsZoneId string = privateDnsZoneIds[2]
+output tableDnsZoneId string = privateDnsZoneIds[3]
+output dfsDnsZoneId string = privateDnsZoneIds[4]
+output kvDnsZoneId string = privateDnsZoneIds[5]
+output acrDnsZoneId string = privateDnsZoneIds[6]
+output amlDnsZoneId string = privateDnsZoneIds[7]
+output notebookDnsZoneId string = privateDnsZoneIds[8]

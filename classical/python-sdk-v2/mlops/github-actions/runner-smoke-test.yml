@@ -1,0 +1,32 @@
+name: Private runner smoke test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  private-runner:
+    runs-on: mlops-private
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Verify runner and required public egress
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$RUNNER_OS" = Linux
+          git --version
+          curl --version
+          python3 --version
+          az version
+          for url in \
+            https://github.com \
+            https://api.github.com \
+            https://ghcr.io \
+            https://login.microsoftonline.com \
+            https://management.azure.com \
+            https://pypi.org; do
+            curl --silent --show-error --head --max-time 20 "$url" >/dev/null
+          done

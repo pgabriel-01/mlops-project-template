@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 from pathlib import Path
 
@@ -31,6 +32,7 @@ REQUIRED_CONFIG = {
     "runner",
     "runner_hub_vnet_resource_id",
     "manage_runner_hub_to_workload_peering",
+    "shared_private_dns_zone_resource_ids",
     "python_version",
     "aml_compute_sku",
     "batch_compute_name",
@@ -61,6 +63,17 @@ PLACEHOLDERS = {
     "__MLOPS_TEMPLATES_REPOSITORY__",
     "__MLOPS_TEMPLATES_REF__",
 }
+PRIVATE_DNS_ZONE_NAMES = {
+    "privatelink.blob.core.windows.net",
+    "privatelink.file.core.windows.net",
+    "privatelink.queue.core.windows.net",
+    "privatelink.table.core.windows.net",
+    "privatelink.dfs.core.windows.net",
+    "privatelink.vaultcore.azure.net",
+    "privatelink.azurecr.io",
+    "privatelink.api.azureml.ms",
+    "privatelink.notebooks.azure.net",
+}
 
 
 def generated_paths() -> list[Path]:
@@ -79,6 +92,7 @@ def generated_paths() -> list[Path]:
         "key_vault.bicep",
         "managed_identity.bicep",
         "private_dns_zones.bicep",
+        "private_dns_zone_vnet_link.bicep",
         "private_endpoint.bicep",
         "rbac_persona_data_scientist.bicep",
         "rbac_persona_ml_engineer.bicep",
@@ -157,6 +171,46 @@ def validate_config_values(path: Path, config: dict[str, object]) -> list[str]:
         errors.append(
             f"{path.name} cannot integrate a runner hub when VNet is disabled"
         )
+    try:
+        shared_zone_ids = json.loads(
+            str(config.get("shared_private_dns_zone_resource_ids", "{}"))
+        )
+    except json.JSONDecodeError:
+        shared_zone_ids = None
+        errors.append(
+            f"{path.name} shared private DNS zone IDs must be a JSON object"
+        )
+    if shared_zone_ids is not None and not isinstance(shared_zone_ids, dict):
+        errors.append(
+            f"{path.name} shared private DNS zone IDs must be a JSON object"
+        )
+    if isinstance(shared_zone_ids, dict):
+        if shared_zone_ids and not runner_hub_vnet_resource_id:
+            errors.append(
+                f"{path.name} cannot reuse runner hub DNS zones without a runner hub"
+            )
+        if shared_zone_ids and not config.get("enable_vnet"):
+            errors.append(
+                f"{path.name} cannot reuse private DNS zones when VNet is disabled"
+            )
+        for zone_name, zone_id in shared_zone_ids.items():
+            expected_suffix = (
+                f"/providers/Microsoft.Network/privateDnsZones/{zone_name}"
+            )
+            if (
+                zone_name not in PRIVATE_DNS_ZONE_NAMES
+                or not isinstance(zone_id, str)
+                or not zone_id.lower().endswith(expected_suffix.lower())
+                or not re.match(
+                    r"^/subscriptions/[^/]+/resourceGroups/[^/]+/",
+                    zone_id,
+                    re.IGNORECASE,
+                )
+            ):
+                errors.append(
+                    f"{path.name} has an invalid shared private DNS zone mapping "
+                    f"for {zone_name}"
+                )
     return errors
 
 

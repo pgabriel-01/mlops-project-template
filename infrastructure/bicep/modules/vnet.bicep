@@ -5,8 +5,6 @@ param vnetAddressPrefix string = '10.0.0.0/16'
 param defaultSubnetPrefix string = '10.0.0.0/24'
 param computeSubnetPrefix string = '10.0.1.0/24'
 param privateEndpointSubnetPrefix string = '10.0.2.0/24'
-param bastionSubnetPrefix string = '10.0.3.0/26'
-param enableBastion bool = false
 
 // NAT Gateway for outbound internet from aml-compute subnet
 // Required for serverless compute image builds with no public IP
@@ -71,15 +69,6 @@ var coreSubnets = [
   }
 ]
 
-var bastionSubnet = [
-  {
-    name: 'AzureBastionSubnet'
-    properties: {
-      addressPrefix: bastionSubnetPrefix
-    }
-  }
-]
-
 resource vnet 'Microsoft.Network/virtualNetworks@2024-05-01' = {
   name: 'vnet-${baseName}'
   location: location
@@ -89,7 +78,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2024-05-01' = {
         vnetAddressPrefix
       ]
     }
-    subnets: enableBastion ? concat(coreSubnets, bastionSubnet) : coreSubnets
+    subnets: coreSubnets
   }
   tags: tags
 }
@@ -99,4 +88,3 @@ output vnetName string = vnet.name
 output defaultSubnetId string = vnet.properties.subnets[0].id
 output computeSubnetId string = vnet.properties.subnets[1].id
 output privateEndpointSubnetId string = vnet.properties.subnets[2].id
-output bastionSubnetId string = enableBastion ? vnet.properties.subnets[3].id : ''

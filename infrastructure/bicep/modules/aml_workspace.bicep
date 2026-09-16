@@ -39,9 +39,6 @@ resource amls 'Microsoft.MachineLearningServices/workspaces@2025-06-01' = {
     primaryUserAssignedIdentity: managedIdentityId
     systemDatastoresAuthMode: 'identity'  // Use managed identity for datastore auth instead of access keys
     publicNetworkAccess: enableNetworkIsolation ? 'Disabled' : 'Enabled'
-    managedNetwork: enableNetworkIsolation ? {
-      isolationMode: 'AllowInternetOutbound'
-    } : null
     v1LegacyMode: false
     encryption: {
       status: 'Disabled'

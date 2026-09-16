@@ -399,6 +399,48 @@ class PrivateAksInferenceContractTests(unittest.TestCase):
                 result.stderr,
             )
 
+    def test_runner_update_and_bootstrap_assert_remote_exit_code(self):
+        workflow_root = PATTERN_ROOT / "mlops" / "github-actions"
+        update = (workflow_root / "update-runner-image.yml").read_text()
+        bootstrap = PATTERN_ROOT / "runner-bootstrap"
+        helper = (bootstrap / "scripts" / "invoke_aks_command.py").read_text()
+        scripts = {
+            name: (bootstrap / "scripts" / name).read_text()
+            for name in ("install_arc.sh", "verify.sh", "uninstall.sh")
+        }
+
+        self.assertIn("runner_image:", update)
+        self.assertIn("runs-on: mlops-private", update)
+        self.assertIn("runs-on: ubuntu-24.04", update)
+        self.assertIn(
+            "AKS_CLUSTER_RESOURCE_ID: ${{ vars.ARC_AKS_CLUSTER_RESOURCE_ID }}",
+            update,
+        )
+        self.assertIn(
+            'aks_cluster_resource_id_lower="${AKS_CLUSTER_RESOURCE_ID,,}"', update
+        )
+        self.assertIn("/resourcegroups/", update)
+        self.assertIn("ghcr.io/${GITHUB_REPOSITORY,,}-arc-runner@sha256:", update)
+        self.assertEqual(2, update.count("invoke_aks_command.py"))
+        self.assertIn('command="set -eu;', update)
+        self.assertNotIn('command="set -euo pipefail;', update)
+        self.assertNotIn("--output none", update)
+        self.assertNotIn("az aks command invoke", update)
+        self.assertIn("trap 'rm -f", update)
+        self.assertIn("helm get values", update)
+        self.assertIn(
+            ".template.spec.containers |= map("
+            'if .name == \\"runner\\" then .image = \\$image else . end)',
+            update,
+        )
+        self.assertIn('"provisioningState"', helper)
+        self.assertIn('"exitCode"', helper)
+        self.assertIn("capture_output=True", helper)
+        self.assertIn("SENSITIVE_VALUE", helper)
+        for content in scripts.values():
+            self.assertIn("invoke_aks_command.py", content)
+            self.assertNotIn("az aks command invoke", content)
+
 
 if __name__ == "__main__":
     unittest.main()

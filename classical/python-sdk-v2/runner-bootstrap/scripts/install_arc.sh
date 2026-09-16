@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+INVOKE_AKS=(python3 "$ROOT_DIR/scripts/invoke_aks_command.py")
 STATE_DIR=${ARC_APP_STATE_DIR:-"$HOME/.config/mlops-project-arc"}
 METADATA_PATH=${ARC_APP_METADATA:-"$STATE_DIR/app.json"}
 RESOURCE_GROUP=${ARC_RESOURCE_GROUP:-rg-mlops-arc-dev-eus2-001}
@@ -43,20 +44,24 @@ PY
 )
 IFS=$'\t' read -r APP_ID INSTALLATION_ID PEM_PATH <<<"$APP_VALUES"
 
-az aks command invoke --resource-group "$RESOURCE_GROUP" --name "$AKS_NAME" \
-  --command "set -e; kubectl delete pod arc-image-pull-check --ignore-not-found; kubectl run arc-image-pull-check --image='$ARC_RUNNER_IMAGE' --restart=Never --command -- sh -ec 'git --version && curl --version && python3 --version && az version && test -x /kaniko/executor && /kaniko/executor version && test ! -S /var/run/docker.sock'; kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/arc-image-pull-check --timeout=300s; kubectl logs arc-image-pull-check; kubectl delete pod arc-image-pull-check" \
-  >/dev/null
+command="set -eu; cleanup() { kubectl delete pod arc-image-pull-check --ignore-not-found >/dev/null 2>&1 || true; }; trap cleanup EXIT; cleanup; kubectl run arc-image-pull-check --image='$ARC_RUNNER_IMAGE' --restart=Never --command -- sh -ec 'git --version && curl --version && python3 --version && az version && test -x /kaniko/executor && /kaniko/executor version && test ! -S /var/run/docker.sock'; kubectl wait --for=jsonpath='{.status.phase}'=Succeeded pod/arc-image-pull-check --timeout=300s; kubectl logs arc-image-pull-check"
+"${INVOKE_AKS[@]}" --resource-group "$RESOURCE_GROUP" --name "$AKS_NAME" \
+  --command "$command" \
+  --print-logs
 
-az aks command invoke --resource-group "$RESOURCE_GROUP" --name "$AKS_NAME" \
-  --command "kubectl create namespace $RUNNER_NAMESPACE --dry-run=client -o yaml | kubectl apply -f - && kubectl -n $RUNNER_NAMESPACE create secret generic arc-github-app --from-literal=github_app_id='$APP_ID' --from-literal=github_app_installation_id='$INSTALLATION_ID' --from-file=github_app_private_key=$(basename "$PEM_PATH") --dry-run=client -o yaml | kubectl apply -f -" \
-  --file "$PEM_PATH" >/dev/null
+command="kubectl create namespace $RUNNER_NAMESPACE --dry-run=client -o yaml | kubectl apply -f - && kubectl -n $RUNNER_NAMESPACE create secret generic arc-github-app --from-literal=github_app_id='$APP_ID' --from-literal=github_app_installation_id='$INSTALLATION_ID' --from-file=github_app_private_key=$(basename "$PEM_PATH") --dry-run=client -o yaml | kubectl apply -f -"
+"${INVOKE_AKS[@]}" --resource-group "$RESOURCE_GROUP" --name "$AKS_NAME" \
+  --command "$command" \
+  --file "$PEM_PATH"
 
-az aks command invoke --resource-group "$RESOURCE_GROUP" --name "$AKS_NAME" \
+"${INVOKE_AKS[@]}" --resource-group "$RESOURCE_GROUP" --name "$AKS_NAME" \
   --command "helm upgrade --install arc --namespace $CONTROLLER_NAMESPACE --create-namespace --version $CHART_VERSION -f controller-values.yaml oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller" \
-  --file "$ROOT_DIR/helm/controller-values.yaml"
+  --file "$ROOT_DIR/helm/controller-values.yaml" \
+  --print-logs
 
-az aks command invoke --resource-group "$RESOURCE_GROUP" --name "$AKS_NAME" \
+"${INVOKE_AKS[@]}" --resource-group "$RESOURCE_GROUP" --name "$AKS_NAME" \
   --command "helm upgrade --install mlops-private --namespace $RUNNER_NAMESPACE --create-namespace --version $CHART_VERSION -f $(basename "$RENDERED_VALUES") oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set" \
-  --file "$RENDERED_VALUES"
+  --file "$RENDERED_VALUES" \
+  --print-logs
 
 echo "ARC $CHART_VERSION installed. Run verify.sh before dispatching any workload."

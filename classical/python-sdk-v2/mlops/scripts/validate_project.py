@@ -33,6 +33,9 @@ REQUIRED_CONFIG = {
     "runner_hub_vnet_resource_id",
     "manage_runner_hub_to_workload_peering",
     "shared_private_dns_zone_resource_ids",
+    "enable_private_aks_inference",
+    "aks_cluster_resource_id",
+    "aks_node_subnet_resource_id",
     "python_version",
     "aml_compute_sku",
     "batch_compute_name",
@@ -40,6 +43,24 @@ REQUIRED_CONFIG = {
     "online_endpoint_suffix",
     "online_deployment_name",
     "online_instance_type",
+    "online_compute",
+    "online_environment_name",
+    "online_environment_version",
+    "online_environment_image",
+    "online_namespace",
+    "online_service_account",
+    "online_node_pool_name",
+    "online_node_vm_size",
+    "online_node_min_count",
+    "online_node_max_count",
+    "online_node_max_pods",
+    "online_cpu_request",
+    "online_cpu_limit",
+    "online_memory_request",
+    "online_memory_limit",
+    "aml_kubernetes_extension_name",
+    "aml_kubernetes_extension_release_train",
+    "aml_kubernetes_extension_ssl_cname",
     "batch_endpoint_suffix",
     "batch_deployment_name",
 }
@@ -81,6 +102,9 @@ def generated_paths() -> list[Path]:
         "ai_foundry_hub.bicep",
         "ai_foundry_project.bicep",
         "aml_computecluster.bicep",
+        "aml_kubernetes_compute.bicep",
+        "aml_environment.bicep",
+        "aml_kubernetes_identity.bicep",
         "aml_registry.bicep",
         "aml_workspace.bicep",
         "apim.bicep",
@@ -100,6 +124,8 @@ def generated_paths() -> list[Path]:
         "storage_account.bicep",
         "vnet.bicep",
         "vnet_peering.bicep",
+        "aks_aml_inference.bicep",
+        "aks_run_command_role.bicep",
     )
     paths = [
         PATTERN_ROOT / "README.md",
@@ -120,6 +146,9 @@ def generated_paths() -> list[Path]:
         SCRIPT_ROOT / "validate_project.py",
         INFRASTRUCTURE_ROOT / "bicepconfig.json",
         INFRASTRUCTURE_ROOT / "main.bicep",
+        INFRASTRUCTURE_ROOT
+        / "manifests"
+        / "azureml-inference-namespace.yaml",
         *[
             INFRASTRUCTURE_ROOT / "modules" / module
             for module in bicep_modules
@@ -211,6 +240,71 @@ def validate_config_values(path: Path, config: dict[str, object]) -> list[str]:
                     f"{path.name} has an invalid shared private DNS zone mapping "
                     f"for {zone_name}"
                 )
+    if config.get("enable_private_aks_inference"):
+        cluster_id = str(config.get("aks_cluster_resource_id", ""))
+        if not re.fullmatch(
+            r"/subscriptions/[^/]+/resourceGroups/[^/]+/providers/"
+            r"Microsoft\.ContainerService/managedClusters/[^/]+",
+            cluster_id,
+            re.IGNORECASE,
+        ):
+            errors.append(f"{path.name} has an invalid AKS cluster resource ID")
+        subnet_id = str(config.get("aks_node_subnet_resource_id", ""))
+        if not re.fullmatch(
+            r"/subscriptions/[^/]+/resourceGroups/[^/]+/providers/"
+            r"Microsoft\.Network/virtualNetworks/[^/]+/subnets/[^/]+",
+            subnet_id,
+            re.IGNORECASE,
+        ):
+            errors.append(f"{path.name} has an invalid AKS node subnet resource ID")
+        image = str(config.get("online_environment_image", ""))
+        if not re.fullmatch(
+            r"[a-z0-9]+\.azurecr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}",
+            image,
+        ):
+            errors.append(
+                f"{path.name} online environment image must use an immutable sha256 digest"
+            )
+        if not str(config.get("online_environment_name", "")).strip():
+            errors.append(f"{path.name} requires an online environment name")
+        if not str(config.get("online_environment_version", "")).strip():
+            errors.append(f"{path.name} requires an online environment version")
+        if not config.get("private_network"):
+            errors.append(f"{path.name} private AKS inference requires private_network")
+        if not config.get("enable_vnet"):
+            errors.append(f"{path.name} private AKS inference requires enable_vnet")
+        if not runner_hub_vnet_resource_id:
+            errors.append(
+                f"{path.name} private AKS inference requires the runner hub VNet "
+                "for private DNS and routing"
+            )
+        if not config.get("enable_container_registry"):
+            errors.append(
+                f"{path.name} private AKS inference requires container registry"
+            )
+        if not config.get("aml_kubernetes_extension_ssl_cname"):
+            errors.append(
+                f"{path.name} private AKS inference requires an AML extension TLS CNAME"
+            )
+        if config.get("aml_kubernetes_extension_release_train") != "stable":
+            errors.append(
+                f"{path.name} private AKS inference must use the stable extension train"
+            )
+        if config.get("online_service_account") != "default":
+            errors.append(
+                f"{path.name} AML Kubernetes deployments require the dedicated "
+                "namespace default service account"
+            )
+        if int(config.get("online_node_min_count", 0)) < 3:
+            errors.append(
+                f"{path.name} production inference requires at least three nodes"
+            )
+        if int(config.get("online_node_max_count", 0)) < int(
+            config.get("online_node_min_count", 0)
+        ):
+            errors.append(
+                f"{path.name} inference node maximum must be at least its minimum"
+            )
     return errors
 
 

@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: __ONLINE_NAMESPACE__
+  labels:
+    app.kubernetes.io/part-of: azureml-inference
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: default
+  namespace: __ONLINE_NAMESPACE__
+  annotations:
+    azure.workload.identity/client-id: __ONLINE_INFERENCE_IDENTITY_CLIENT_ID__

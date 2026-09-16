@@ -380,6 +380,12 @@ services. The workspace deliberately emits neither `managedNetwork` nor
 `serverlessComputeCustomSubnet`: Azure rejects custom-subnet AmlCompute when the
 workspace is configured with Managed VNet.
 
+For private deployments, the AmlCompute module starts only after the conditional
+workspace private endpoint module completes. This prevents no-public-IP compute
+creation from racing the endpoint required by Azure. When VNet deployment is
+disabled, ARM skips the conditional endpoint and its dependency, so public
+compute creation remains valid.
+
 This repository does not apply network changes automatically outside the explicit
 infrastructure workflow.
 

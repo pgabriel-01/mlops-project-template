@@ -449,6 +449,56 @@ class ProjectContractTests(unittest.TestCase):
         )
         self.assertIn("module peMlw './modules/private_endpoint.bicep'", main)
 
+    def test_private_compute_compiles_with_workspace_endpoint_dependency(self):
+        main_path = ROOT / "infrastructure/bicep/main.bicep"
+        main = main_path.read_text()
+
+        self.assertRegex(
+            main,
+            r"(?s)module mlwcc .*?dependsOn:\s*\[\s*peMlw\s*\]",
+        )
+
+        completed = subprocess.run(
+            [
+                "az",
+                "bicep",
+                "build",
+                "--stdout",
+                "--file",
+                str(main_path),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        template = json.loads(completed.stdout)
+        compute_deployment = next(
+            resource
+            for resource in template["resources"]
+            if resource.get("name") == "mlwcc"
+        )
+        endpoint_deployment = next(
+            resource
+            for resource in template["resources"]
+            if resource.get("name") == "pe-mlw"
+        )
+
+        self.assertTrue(
+            any(
+                "'Microsoft.Resources/deployments', 'pe-mlw'"
+                in dependency
+                for dependency in compute_deployment["dependsOn"]
+            )
+        )
+        self.assertEqual(
+            compute_deployment["condition"],
+            "[parameters('enableComputeCluster')]",
+        )
+        self.assertEqual(
+            endpoint_deployment["condition"],
+            "[parameters('enableVNet')]",
+        )
+
     def test_key_vault_name_stays_within_exact_azure_boundary(self):
         main = (ROOT / "infrastructure/bicep/main.bicep").read_text()
         key_vault = (

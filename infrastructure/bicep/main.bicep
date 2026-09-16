@@ -364,6 +364,9 @@ module peMlw './modules/private_endpoint.bicep' = if (enableVNet) {
 module mlwcc './modules/aml_computecluster.bicep' = if (enableComputeCluster) {
   name: 'mlwcc'
   scope: resourceGroup(rg.name)
+  dependsOn: [
+    peMlw
+  ]
   params: {
     location: location
     workspaceName: mlw.outputs.amlsName

@@ -9,7 +9,6 @@ param managedIdentityId string
 param managedIdentityPrincipalId string
 param ciPrincipalObjectId string = ''
 param enableNetworkIsolation bool = false
-param computeSubnetId string = ''
 
 // Extract resource IDs for RBAC assignments
 var storageAccountName = split(stoacctid, '/')[8]
@@ -42,10 +41,6 @@ resource amls 'Microsoft.MachineLearningServices/workspaces@2025-06-01' = {
     publicNetworkAccess: enableNetworkIsolation ? 'Disabled' : 'Enabled'
     managedNetwork: enableNetworkIsolation ? {
       isolationMode: 'AllowInternetOutbound'
-    } : null
-    serverlessComputeSettings: enableNetworkIsolation ? {
-      serverlessComputeCustomSubnet: computeSubnetId
-      serverlessComputeNoPublicIP: true
     } : null
     v1LegacyMode: false
     encryption: {

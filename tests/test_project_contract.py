@@ -383,6 +383,13 @@ class ProjectContractTests(unittest.TestCase):
         self.assertIn("allowSharedKeyAccess: false", storage)
         self.assertIn("systemDatastoresAuthMode: 'identity'", workspace)
         self.assertIn("managedNetwork:", workspace)
+        self.assertIn("isolationMode: 'AllowInternetOutbound'", workspace)
+        self.assertNotIn("serverlessComputeSettings:", workspace)
+        self.assertNotIn("serverlessComputeCustomSubnet", workspace)
+        self.assertIn(
+            "publicNetworkAccess: enableNetworkIsolation ? 'Disabled' : 'Enabled'",
+            workspace,
+        )
         self.assertIn("enableNodePublicIp: empty(subnetId)", (
             ROOT / "infrastructure/bicep/modules/aml_computecluster.bicep"
         ).read_text())
@@ -403,6 +410,33 @@ class ProjectContractTests(unittest.TestCase):
             ROOT
             / "infrastructure/bicep/modules/private_dns_zone_vnet_link.bicep"
         ).read_text())
+
+    def test_workspace_does_not_mix_managed_and_custom_vnet_modes(self):
+        workspace = (
+            ROOT / "infrastructure/bicep/modules/aml_workspace.bicep"
+        ).read_text()
+        main = (ROOT / "infrastructure/bicep/main.bicep").read_text()
+
+        managed_vnet_properties = (
+            "managedNetwork:",
+            "isolationMode:",
+        )
+        custom_vnet_properties = (
+            "serverlessComputeSettings:",
+            "serverlessComputeCustomSubnet",
+        )
+
+        for property_name in managed_vnet_properties:
+            self.assertIn(property_name, workspace)
+        self.assertFalse(
+            any(property_name in workspace for property_name in custom_vnet_properties)
+        )
+        self.assertNotIn("param computeSubnetId", workspace)
+        self.assertNotIn("computeSubnetId:", main)
+        self.assertIn(
+            "subnetId: enableVNet ? vnet!.outputs.computeSubnetId : ''",
+            main,
+        )
 
     def test_key_vault_name_stays_within_exact_azure_boundary(self):
         main = (ROOT / "infrastructure/bicep/main.bicep").read_text()

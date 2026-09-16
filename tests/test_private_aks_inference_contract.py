@@ -441,6 +441,36 @@ class PrivateAksInferenceContractTests(unittest.TestCase):
             self.assertIn("invoke_aks_command.py", content)
             self.assertNotIn("az aks command invoke", content)
 
+    def test_runner_build_requires_anonymous_public_package(self):
+        build = (
+            PATTERN_ROOT / "mlops" / "github-actions" / "build-runner-image.yml"
+        ).read_text()
+        anonymous_step = build.split(
+            "      - name: Verify anonymous runner image pull",
+            1,
+        )[1].split("      - name: Report immutable image", 1)[0]
+
+        self.assertIn("printf '{\"auths\":{}}\\n'", anonymous_step)
+        self.assertIn('DOCKER_CONFIG="$anonymous_config"', anonymous_step)
+        self.assertIn(
+            'docker buildx imagetools inspect "$IMAGE_NAME@$DIGEST"',
+            anonymous_step,
+        )
+        self.assertIn("trap cleanup EXIT", anonymous_step)
+        self.assertIn('rm -f "$anonymous_config/config.json"', anonymous_step)
+        self.assertIn("Set the GHCR package visibility to Public", anonymous_step)
+        self.assertIn(
+            "Do not add an imagePullSecret, PAT, or expiring token", anonymous_step
+        )
+        for prohibited in (
+            "--method PATCH",
+            "GITHUB_TOKEN",
+            "password:",
+            "username:",
+            "docker login",
+        ):
+            self.assertNotIn(prohibited, anonymous_step)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -3,6 +3,7 @@
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -62,7 +63,8 @@ def invoke(args):
         return 1
 
     provisioning_state = response.get("provisioningState")
-    logs = sanitize(response.get("logs", ""))
+    raw_logs = str(response.get("logs", ""))
+    logs = sanitize(raw_logs)
     if provisioning_state != "Succeeded" or exit_code != 0:
         print(
             "AKS command failed: "
@@ -75,6 +77,14 @@ def invoke(args):
 
     if args.print_logs and logs:
         print(logs)
+    if args.logs_output:
+        descriptor = os.open(
+            args.logs_output,
+            os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+            0o600,
+        )
+        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            stream.write(raw_logs)
     return 0
 
 
@@ -86,6 +96,7 @@ def parse_args(argv=None):
     parser.add_argument("--command", required=True)
     parser.add_argument("--file", action="append", default=[])
     parser.add_argument("--print-logs", action="store_true")
+    parser.add_argument("--logs-output")
     return parser.parse_args(argv)
 
 

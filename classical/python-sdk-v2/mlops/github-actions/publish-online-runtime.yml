@@ -49,6 +49,7 @@ jobs:
         run: |
           set -euo pipefail
           test -x "$KANIKO_EXECUTOR"
+          test -w "$(dirname "$KANIKO_EXECUTOR")"
           "$KANIKO_EXECUTOR" version
           if [[ -S /var/run/docker.sock ]]; then
             echo "Docker socket must not be mounted on the private runner" >&2

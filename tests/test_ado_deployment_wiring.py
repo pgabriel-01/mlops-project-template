@@ -231,7 +231,7 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
     def test_documentation_names_immutable_template_dependency(self):
         documentation = (ROOT / "docs/azure-devops-deployment.md").read_text()
         self.assertIn(
-            "86d0bebe8f591373b2d04b69cb4d372ccc8fbb5d",
+            "373f4bdcce94861174a9d32fcda26a4688044b46",
             documentation,
         )
 
@@ -482,6 +482,30 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
         self.assertNotIn("subnet_resource_id", workspace)
         self.assertIn(
             "node_public_ip_enabled        = !var.enable_private_endpoints",
+            workspace,
+        )
+
+    def test_private_resource_settings_are_idempotent(self):
+        key_vault = (
+            ROOT / "infrastructure/terraform/modules/key-vault/main.tf"
+        ).read_text()
+        storage = (
+            ROOT / "infrastructure/terraform/modules/storage-account/main.tf"
+        ).read_text()
+        workspace = (
+            ROOT / "infrastructure/terraform/modules/aml-workspace/main.tf"
+        ).read_text()
+
+        self.assertIn(
+            "public_network_access_enabled = !var.enable_private_endpoints",
+            key_vault,
+        )
+        self.assertIn(
+            "allow_nested_items_to_be_public = false",
+            storage,
+        )
+        self.assertIn(
+            'scale_down_nodes_after_idle_duration = "PT2M"',
             workspace,
         )
 

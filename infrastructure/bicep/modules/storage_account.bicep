@@ -1,3 +1,4 @@
+@minLength(1)
 param baseName string
 param location string
 param tags object
@@ -32,7 +33,7 @@ resource stoacct 'Microsoft.Storage/storageAccounts@2025-06-01' = {
     }
     supportsHttpsTrafficOnly: true
     allowSharedKeyAccess: false  // Disable key-based authentication, use Entra ID (managed identity) instead
-    networkRuleSet: enableNetworkIsolation ? {
+    networkAcls: enableNetworkIsolation ? {
       defaultAction: 'Deny'
       bypass: 'AzureServices'
       virtualNetworkRules: virtualNetworkRules

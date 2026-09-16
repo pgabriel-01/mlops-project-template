@@ -1,0 +1,84 @@
+$schema: https://azuremlschemas.azureedge.net/latest/pipelineJob.schema.json
+type: pipeline
+display_name: classical-training
+experiment_name: classical-training
+
+inputs:
+  raw_data:
+    type: uri_file
+    path: ../../../data/taxi-data.csv
+  enable_monitoring: "false"
+  table_name: taximonitoring
+
+outputs:
+  model:
+    type: uri_folder
+  score_report:
+    type: uri_folder
+
+settings:
+  default_compute: azureml:cpu-cluster
+  default_datastore: azureml:workspaceblobstore
+
+jobs:
+  prepare:
+    type: command
+    display_name: Prepare data
+    code: ../../../data-science/src/prep
+    environment:
+      image: mcr.microsoft.com/azureml/openmpi4.1.0-ubuntu22.04:latest
+      conda_file: ../../../data-science/environment/train-conda.yml
+    command: >-
+      python prep.py
+      --raw_data ${{inputs.raw_data}}
+      --train_data ${{outputs.train_data}}
+      --val_data ${{outputs.val_data}}
+      --test_data ${{outputs.test_data}}
+      --enable_monitoring ${{inputs.enable_monitoring}}
+      --table_name ${{inputs.table_name}}
+    inputs:
+      raw_data: ${{parent.inputs.raw_data}}
+      enable_monitoring: ${{parent.inputs.enable_monitoring}}
+      table_name: ${{parent.inputs.table_name}}
+    outputs:
+      train_data:
+        type: uri_folder
+      val_data:
+        type: uri_folder
+      test_data:
+        type: uri_folder
+
+  train:
+    type: command
+    display_name: Train model
+    code: ../../../data-science/src/train
+    environment:
+      image: mcr.microsoft.com/azureml/openmpi4.1.0-ubuntu22.04:latest
+      conda_file: ../../../data-science/environment/train-conda.yml
+    command: >-
+      python train.py
+      --train_data ${{inputs.train_data}}
+      --model_output ${{outputs.model_output}}
+    inputs:
+      train_data: ${{parent.jobs.prepare.outputs.train_data}}
+    outputs:
+      model_output: ${{parent.outputs.model}}
+
+  evaluate:
+    type: command
+    display_name: Evaluate model
+    code: ../../../data-science/src/evaluate
+    environment:
+      image: mcr.microsoft.com/azureml/openmpi4.1.0-ubuntu22.04:latest
+      conda_file: ../../../data-science/environment/train-conda.yml
+    command: >-
+      python evaluate.py
+      --model_name taxi-model
+      --model_input ${{inputs.model_input}}
+      --test_data ${{inputs.test_data}}
+      --evaluation_output ${{outputs.evaluation_output}}
+    inputs:
+      model_input: ${{parent.jobs.train.outputs.model_output}}
+      test_data: ${{parent.jobs.prepare.outputs.test_data}}
+    outputs:
+      evaluation_output: ${{parent.outputs.score_report}}

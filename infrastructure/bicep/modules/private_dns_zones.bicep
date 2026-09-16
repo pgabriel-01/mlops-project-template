@@ -1,11 +1,16 @@
 // Private DNS Zones for private link resolution
 param tags object
 param vnetId string
+param runnerHubVnetId string = ''
 
 // Use environment() suffixes for cloud-agnostic DNS zone names
 var storageSuffix = environment().suffixes.storage  // e.g. core.windows.net
 var dnsZones = [
   'privatelink.blob.${storageSuffix}'
+  'privatelink.file.${storageSuffix}'
+  'privatelink.queue.${storageSuffix}'
+  'privatelink.table.${storageSuffix}'
+  'privatelink.dfs.${storageSuffix}'
   'privatelink.vaultcore.azure.net'
   'privatelink.azurecr.io'
   'privatelink.api.azureml.ms'
@@ -32,8 +37,25 @@ resource vnetLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2024-06
   tags: tags
 }]
 
+resource runnerHubVnetLink 'Microsoft.Network/privateDnsZones/virtualNetworkLinks@2024-06-01' = [for (zone, i) in dnsZones: if (!empty(runnerHubVnetId)) {
+  name: 'link-runner-${uniqueString(runnerHubVnetId)}'
+  parent: privateDnsZone[i]
+  location: 'global'
+  properties: {
+    virtualNetwork: {
+      id: runnerHubVnetId
+    }
+    registrationEnabled: false
+  }
+  tags: tags
+}]
+
 output blobDnsZoneId string = privateDnsZone[0].id
-output kvDnsZoneId string = privateDnsZone[1].id
-output acrDnsZoneId string = privateDnsZone[2].id
-output amlDnsZoneId string = privateDnsZone[3].id
-output notebookDnsZoneId string = privateDnsZone[4].id
+output fileDnsZoneId string = privateDnsZone[1].id
+output queueDnsZoneId string = privateDnsZone[2].id
+output tableDnsZoneId string = privateDnsZone[3].id
+output dfsDnsZoneId string = privateDnsZone[4].id
+output kvDnsZoneId string = privateDnsZone[5].id
+output acrDnsZoneId string = privateDnsZone[6].id
+output amlDnsZoneId string = privateDnsZone[7].id
+output notebookDnsZoneId string = privateDnsZone[8].id

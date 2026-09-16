@@ -1,0 +1,55 @@
+name: Deploy and test online endpoint
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: GitHub Environment and configuration to target
+        required: true
+        default: dev
+        type: choice
+        options: [dev, test, prod]
+      model_version:
+        description: Registered model version
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  config:
+    runs-on: ubuntu-24.04
+    outputs:
+      resource_group: ${{ steps.config.outputs.resource_group }}
+      workspace_name: ${{ steps.config.outputs.workspace_name }}
+      endpoint_name: ${{ steps.config.outputs.online_endpoint_name }}
+      deployment_name: ${{ steps.config.outputs.online_deployment_name }}
+      model_name: ${{ steps.config.outputs.model_name }}
+      instance_type: ${{ steps.config.outputs.online_instance_type }}
+      python_version: ${{ steps.config.outputs.python_version }}
+      runner: ${{ steps.config.outputs.runner }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - id: config
+        run: python3 mlops/scripts/export_config.py config-infra-${{ inputs.environment }}.yml
+
+  online:
+    needs: config
+    uses: __MLOPS_TEMPLATES_REPOSITORY__/.github/workflows/python-sdk-v2-online.yml@__MLOPS_TEMPLATES_REF__
+    with:
+      environment: ${{ inputs.environment }}
+      sdk_repository: __MLOPS_TEMPLATES_REPOSITORY__
+      sdk_ref: __MLOPS_TEMPLATES_REF__
+      resource_group: ${{ needs.config.outputs.resource_group }}
+      workspace_name: ${{ needs.config.outputs.workspace_name }}
+      python_version: ${{ needs.config.outputs.python_version }}
+      runner: ${{ needs.config.outputs.runner }}
+      endpoint_name: ${{ needs.config.outputs.endpoint_name }}
+      deployment_name: ${{ needs.config.outputs.deployment_name }}
+      model_name: ${{ needs.config.outputs.model_name }}
+      model_version: ${{ inputs.model_version }}
+      instance_type: ${{ needs.config.outputs.instance_type }}
+      request_file: data/taxi-request.json
+    secrets: inherit

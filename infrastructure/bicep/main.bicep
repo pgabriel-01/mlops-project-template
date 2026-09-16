@@ -4,7 +4,7 @@ param location string = 'eastus2'
 param prefix string = 'mlops'
 param postfix string = 'demo'
 param env string = 'dev'
-param adoServicePrincipalId string = ''
+param ciPrincipalObjectId string = ''
 param amlComputeSku string = 'STANDARD_D16S_V3'
 
 // Feature flags — control which optional modules are deployed
@@ -12,6 +12,8 @@ param enableMonitoring bool = true
 param enableContainerRegistry bool = true
 param enableComputeCluster bool = true
 param enableVNet bool = false
+param runnerHubVnetResourceId string = ''
+param manageRunnerHubToWorkloadPeering bool = false
 
 // Tier 3 — Governance feature flags
 param enableCMEK bool = false
@@ -61,6 +63,13 @@ param tags object = {
 
 var baseName  = '${prefix}-${postfix}${projectNumber}${env}'
 var resourceGroupName = 'rg-${baseName}'
+var hasRunnerHub = !empty(runnerHubVnetResourceId)
+var runnerHubResourceIdParts = split(runnerHubVnetResourceId, '/')
+var runnerHubSubscriptionId = hasRunnerHub ? runnerHubResourceIdParts[2] : subscription().subscriptionId
+var runnerHubResourceGroupName = hasRunnerHub ? runnerHubResourceIdParts[4] : resourceGroupName
+var runnerHubVnetName = hasRunnerHub ? runnerHubResourceIdParts[8] : ''
+var spokeToRunnerHubPeeringName = 'peer-runner-${uniqueString(rg.id, runnerHubVnetResourceId)}'
+var runnerHubToSpokePeeringName = 'peer-workload-${uniqueString(rg.id, runnerHubVnetResourceId)}'
 
 // ============================================================
 // Phase 1 — Foundation: Resource Group, Managed Identity, VNet
@@ -106,7 +115,28 @@ module dnsZones './modules/private_dns_zones.bicep' = if (enableVNet) {
   scope: resourceGroup(rg.name)
   params: {
     tags: tags
-    vnetId: enableVNet ? vnet.outputs.vnetId : ''
+    vnetId: enableVNet ? vnet!.outputs.vnetId : ''
+    runnerHubVnetId: (enableVNet && hasRunnerHub) ? runnerHubVnetResourceId : ''
+  }
+}
+
+module spokeToRunnerHub './modules/vnet_peering.bicep' = if (enableVNet && hasRunnerHub) {
+  name: 'peer-workload-to-runner-hub'
+  scope: resourceGroup(rg.name)
+  params: {
+    localVnetName: vnet!.outputs.vnetName
+    remoteVnetId: runnerHubVnetResourceId
+    peeringName: spokeToRunnerHubPeeringName
+  }
+}
+
+module runnerHubToSpoke './modules/vnet_peering.bicep' = if (enableVNet && hasRunnerHub && manageRunnerHubToWorkloadPeering) {
+  name: 'peer-runner-hub-to-${uniqueString(rg.id)}'
+  scope: resourceGroup(runnerHubSubscriptionId, runnerHubResourceGroupName)
+  params: {
+    localVnetName: runnerHubVnetName
+    remoteVnetId: vnet!.outputs.vnetId
+    peeringName: runnerHubToSpokePeeringName
   }
 }
 
@@ -118,8 +148,8 @@ module bastion './modules/bastion.bicep' = if (enableVNet && enableBastion) {
     baseName: baseName
     location: location
     tags: tags
-    bastionSubnetId: (enableVNet && enableBastion) ? vnet.outputs.bastionSubnetId : ''
-    defaultSubnetId: enableVNet ? vnet.outputs.defaultSubnetId : ''
+    bastionSubnetId: vnet!.outputs.bastionSubnetId
+    defaultSubnetId: vnet!.outputs.defaultSubnetId
     keyVaultName: kv.outputs.kvName
   }
 }
@@ -138,8 +168,8 @@ module st './modules/storage_account.bicep' = {
     tags: tags
     enableNetworkIsolation: enableVNet
     allowedSubnetIds: enableVNet ? [
-      vnet.outputs.defaultSubnetId
-      vnet.outputs.computeSubnetId
+      vnet!.outputs.defaultSubnetId
+      vnet!.outputs.computeSubnetId
     ] : []
   }
 }
@@ -156,8 +186,8 @@ module kv './modules/key_vault.bicep' = {
     softDeleteRetentionDays: kvSoftDeleteRetentionDays
     enableNetworkIsolation: enableVNet
     allowedSubnetIds: enableVNet ? [
-      vnet.outputs.defaultSubnetId
-      vnet.outputs.computeSubnetId
+      vnet!.outputs.defaultSubnetId
+      vnet!.outputs.computeSubnetId
     ] : []
   }
 }
@@ -195,8 +225,64 @@ module peStorage './modules/private_endpoint.bicep' = if (enableVNet) {
     privateEndpointName: 'pe-st-${baseName}'
     targetResourceId: st.outputs.stoacctOut
     groupId: 'blob'
-    subnetId: enableVNet ? vnet.outputs.privateEndpointSubnetId : ''
-    privateDnsZoneId: enableVNet ? dnsZones.outputs.blobDnsZoneId : ''
+    subnetId: enableVNet ? vnet!.outputs.privateEndpointSubnetId : ''
+    privateDnsZoneIds: enableVNet ? [dnsZones!.outputs.blobDnsZoneId] : []
+  }
+}
+
+module peStorageFile './modules/private_endpoint.bicep' = if (enableVNet) {
+  name: 'pe-storage-file'
+  scope: resourceGroup(rg.name)
+  params: {
+    location: location
+    tags: tags
+    privateEndpointName: 'pe-st-file-${baseName}'
+    targetResourceId: st.outputs.stoacctOut
+    groupId: 'file'
+    subnetId: enableVNet ? vnet!.outputs.privateEndpointSubnetId : ''
+    privateDnsZoneIds: enableVNet ? [dnsZones!.outputs.fileDnsZoneId] : []
+  }
+}
+
+module peStorageQueue './modules/private_endpoint.bicep' = if (enableVNet) {
+  name: 'pe-storage-queue'
+  scope: resourceGroup(rg.name)
+  params: {
+    location: location
+    tags: tags
+    privateEndpointName: 'pe-st-queue-${baseName}'
+    targetResourceId: st.outputs.stoacctOut
+    groupId: 'queue'
+    subnetId: enableVNet ? vnet!.outputs.privateEndpointSubnetId : ''
+    privateDnsZoneIds: enableVNet ? [dnsZones!.outputs.queueDnsZoneId] : []
+  }
+}
+
+module peStorageTable './modules/private_endpoint.bicep' = if (enableVNet) {
+  name: 'pe-storage-table'
+  scope: resourceGroup(rg.name)
+  params: {
+    location: location
+    tags: tags
+    privateEndpointName: 'pe-st-table-${baseName}'
+    targetResourceId: st.outputs.stoacctOut
+    groupId: 'table'
+    subnetId: enableVNet ? vnet!.outputs.privateEndpointSubnetId : ''
+    privateDnsZoneIds: enableVNet ? [dnsZones!.outputs.tableDnsZoneId] : []
+  }
+}
+
+module peStorageDfs './modules/private_endpoint.bicep' = if (enableVNet) {
+  name: 'pe-storage-dfs'
+  scope: resourceGroup(rg.name)
+  params: {
+    location: location
+    tags: tags
+    privateEndpointName: 'pe-st-dfs-${baseName}'
+    targetResourceId: st.outputs.stoacctOut
+    groupId: 'dfs'
+    subnetId: enableVNet ? vnet!.outputs.privateEndpointSubnetId : ''
+    privateDnsZoneIds: enableVNet ? [dnsZones!.outputs.dfsDnsZoneId] : []
   }
 }
 
@@ -209,8 +295,8 @@ module peKeyVault './modules/private_endpoint.bicep' = if (enableVNet) {
     privateEndpointName: 'pe-kv-${baseName}'
     targetResourceId: kv.outputs.kvOut
     groupId: 'vault'
-    subnetId: enableVNet ? vnet.outputs.privateEndpointSubnetId : ''
-    privateDnsZoneId: enableVNet ? dnsZones.outputs.kvDnsZoneId : ''
+    subnetId: enableVNet ? vnet!.outputs.privateEndpointSubnetId : ''
+    privateDnsZoneIds: enableVNet ? [dnsZones!.outputs.kvDnsZoneId] : []
   }
 }
 
@@ -221,10 +307,10 @@ module peCr './modules/private_endpoint.bicep' = if (enableVNet && enableContain
     location: location
     tags: tags
     privateEndpointName: 'pe-cr-${baseName}'
-    targetResourceId: enableContainerRegistry ? cr.outputs.crOut : ''
+    targetResourceId: enableContainerRegistry ? cr!.outputs.crOut : ''
     groupId: 'registry'
-    subnetId: enableVNet ? vnet.outputs.privateEndpointSubnetId : ''
-    privateDnsZoneId: enableVNet ? dnsZones.outputs.acrDnsZoneId : ''
+    subnetId: enableVNet ? vnet!.outputs.privateEndpointSubnetId : ''
+    privateDnsZoneIds: enableVNet ? [dnsZones!.outputs.acrDnsZoneId] : []
   }
 }
 
@@ -241,13 +327,13 @@ module mlw './modules/aml_workspace.bicep' = {
     location: location
     stoacctid: st.outputs.stoacctOut
     kvid: kv.outputs.kvOut
-    appinsightid: enableMonitoring ? appi.outputs.appinsightOut : ''
-    crid: enableContainerRegistry ? cr.outputs.crOut : ''
+    appinsightid: enableMonitoring ? appi!.outputs.appinsightOut : ''
+    crid: enableContainerRegistry ? cr!.outputs.crOut : ''
     managedIdentityId: mi.outputs.managedIdentityId
     managedIdentityPrincipalId: mi.outputs.managedIdentityPrincipalId
-    adoServicePrincipalId: adoServicePrincipalId
+    ciPrincipalObjectId: ciPrincipalObjectId
     enableNetworkIsolation: enableVNet
-    computeSubnetId: enableVNet ? vnet.outputs.computeSubnetId : ''
+    computeSubnetId: enableVNet ? vnet!.outputs.computeSubnetId : ''
     tags: tags
   }
 }
@@ -262,8 +348,11 @@ module peMlw './modules/private_endpoint.bicep' = if (enableVNet) {
     privateEndpointName: 'pe-mlw-${baseName}'
     targetResourceId: mlw.outputs.amlsId
     groupId: 'amlworkspace'
-    subnetId: enableVNet ? vnet.outputs.privateEndpointSubnetId : ''
-    privateDnsZoneId: enableVNet ? dnsZones.outputs.amlDnsZoneId : ''
+    subnetId: enableVNet ? vnet!.outputs.privateEndpointSubnetId : ''
+    privateDnsZoneIds: enableVNet ? [
+      dnsZones!.outputs.amlDnsZoneId
+      dnsZones!.outputs.notebookDnsZoneId
+    ] : []
   }
 }
 
@@ -276,7 +365,7 @@ module mlwcc './modules/aml_computecluster.bicep' = if (enableComputeCluster) {
     workspaceName: mlw.outputs.amlsName
     vmSku: amlComputeSku
     managedIdentityId: mi.outputs.managedIdentityId
-    subnetId: enableVNet ? vnet.outputs.computeSubnetId : ''
+    subnetId: enableVNet ? vnet!.outputs.computeSubnetId : ''
   }
 }
 
@@ -290,7 +379,7 @@ module amlReg './modules/aml_registry.bicep' = if (enableAMLRegistry) {
     tags: tags
     enablePublicAccess: !enableVNet
     managedIdentityPrincipalId: mi.outputs.managedIdentityPrincipalId
-    adoServicePrincipalId: adoServicePrincipalId
+    ciPrincipalObjectId: ciPrincipalObjectId
   }
 }
 
@@ -302,10 +391,10 @@ module peAmlReg './modules/private_endpoint.bicep' = if (enableVNet && enableAML
     location: location
     tags: tags
     privateEndpointName: 'pe-reg-${baseName}'
-    targetResourceId: enableAMLRegistry ? amlReg.outputs.registryId : ''
+    targetResourceId: enableAMLRegistry ? amlReg!.outputs.registryId : ''
     groupId: 'amlregistry'
-    subnetId: enableVNet ? vnet.outputs.privateEndpointSubnetId : ''
-    privateDnsZoneId: enableVNet ? dnsZones.outputs.amlDnsZoneId : ''
+    subnetId: enableVNet ? vnet!.outputs.privateEndpointSubnetId : ''
+    privateDnsZoneIds: enableVNet ? [dnsZones!.outputs.amlDnsZoneId] : []
   }
 }
 
@@ -323,7 +412,7 @@ module rbacTeamLead './modules/rbac_persona_team_lead.bicep' = if (!empty(teamLe
     workspaceId: mlw.outputs.amlsId
     storageAccountId: st.outputs.stoacctOut
     keyVaultId: kv.outputs.kvOut
-    containerRegistryId: enableContainerRegistry ? cr.outputs.crOut : ''
+    containerRegistryId: enableContainerRegistry ? cr!.outputs.crOut : ''
   }
 }
 
@@ -350,7 +439,7 @@ module rbacMlEngineer './modules/rbac_persona_ml_engineer.bicep' = if (!empty(ml
     workspaceId: mlw.outputs.amlsId
     storageAccountId: st.outputs.stoacctOut
     keyVaultId: kv.outputs.kvOut
-    containerRegistryId: enableContainerRegistry ? cr.outputs.crOut : ''
+    containerRegistryId: enableContainerRegistry ? cr!.outputs.crOut : ''
   }
 }
 
@@ -405,7 +494,7 @@ module aiFoundryProject './modules/ai_foundry_project.bicep' = if (enableAIFound
     baseName: baseName
     location: location
     tags: tags
-    aiHubId: enableAIFoundry ? aiFoundryHub.outputs.aiHubId : ''
+    aiHubId: enableAIFoundry ? aiFoundryHub!.outputs.aiHubId : ''
     managedIdentityId: mi.outputs.managedIdentityId
   }
 }
@@ -420,3 +509,12 @@ module apim './modules/apim.bicep' = if (enableAPIManagement) {
     tags: tags
   }
 }
+
+output resourceGroupName string = rg.name
+output workspaceName string = mlw.outputs.amlsName
+output storageAccountName string = st.outputs.stoacctName
+output keyVaultName string = kv.outputs.kvName
+output containerRegistryName string = enableContainerRegistry ? cr!.outputs.crName : ''
+output runnerHubIntegrationEnabled bool = enableVNet && hasRunnerHub
+output runnerHubReciprocalPeeringManaged bool = enableVNet && hasRunnerHub && manageRunnerHubToWorkloadPeering
+output runnerHubReciprocalPeeringCommand string = (enableVNet && hasRunnerHub && !manageRunnerHubToWorkloadPeering) ? 'az network vnet peering create --subscription "${runnerHubSubscriptionId}" --resource-group "${runnerHubResourceGroupName}" --vnet-name "${runnerHubVnetName}" --name "${runnerHubToSpokePeeringName}" --remote-vnet "${vnet!.outputs.vnetId}" --allow-vnet-access --allow-forwarded-traffic' : ''

@@ -1,0 +1,82 @@
+name: Update private runner image
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner_image:
+        description: Immutable GHCR runner image emitted by Build private runner image
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  update:
+    runs-on: mlops-private
+    environment: dev
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Update immutable ARC runner image
+        env:
+          AKS_CLUSTER_RESOURCE_ID: ${{ vars.ARC_AKS_CLUSTER_RESOURCE_ID }}
+          RUNNER_IMAGE: ${{ inputs.runner_image }}
+        run: |
+          set -euo pipefail
+          expected_prefix="ghcr.io/${GITHUB_REPOSITORY,,}-arc-runner@sha256:"
+          [[ "$RUNNER_IMAGE" =~ ^${expected_prefix}[0-9a-f]{64}$ ]] || {
+            echo "runner_image must be this repository's immutable GHCR digest" >&2
+            exit 1
+          }
+          aks_cluster_resource_id_lower="${AKS_CLUSTER_RESOURCE_ID,,}"
+          [[ "$aks_cluster_resource_id_lower" =~ ^/subscriptions/[^/]+/resourcegroups/[^/]+/providers/microsoft\.containerservice/managedclusters/[^/]+$ ]] || {
+            echo "ARC_AKS_CLUSTER_RESOURCE_ID must be the private runner AKS resource ID" >&2
+            exit 1
+          }
+          aks_subscription="$(cut -d/ -f3 <<<"$AKS_CLUSTER_RESOURCE_ID")"
+          aks_resource_group="$(cut -d/ -f5 <<<"$AKS_CLUSTER_RESOURCE_ID")"
+          aks_name="$(cut -d/ -f9 <<<"$AKS_CLUSTER_RESOURCE_ID")"
+          command="set -eu; values=\$(mktemp); updated=\$(mktemp); trap 'rm -f \"\$values\" \"\$updated\"' EXIT; helm get values mlops-private --namespace arc-runners --output json > \"\$values\"; jq --arg image '$RUNNER_IMAGE' '.template.spec.containers |= map(if .name == \"runner\" then .image = \$image else . end)' \"\$values\" > \"\$updated\"; helm upgrade mlops-private --namespace arc-runners --version 0.14.2 --values \"\$updated\" oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set; actual=\$(kubectl get autoscalingrunnerset mlops-private --namespace arc-runners --output jsonpath='{.spec.template.spec.containers[?(@.name==\"runner\")].image}'); test \"\$actual\" = '$RUNNER_IMAGE'"
+          python3 runner-bootstrap/scripts/invoke_aks_command.py \
+            --subscription "$aks_subscription" \
+            --resource-group "$aks_resource_group" \
+            --name "$aks_name" \
+            --command "$command"
+
+  reconcile:
+    needs: update
+    runs-on: ubuntu-24.04
+    environment: dev
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Retire stale ARC runner generations
+        env:
+          AKS_CLUSTER_RESOURCE_ID: ${{ vars.ARC_AKS_CLUSTER_RESOURCE_ID }}
+          RUNNER_IMAGE: ${{ inputs.runner_image }}
+        run: |
+          set -euo pipefail
+          aks_cluster_resource_id_lower="${AKS_CLUSTER_RESOURCE_ID,,}"
+          [[ "$aks_cluster_resource_id_lower" =~ ^/subscriptions/[^/]+/resourcegroups/[^/]+/providers/microsoft\.containerservice/managedclusters/[^/]+$ ]] || {
+            echo "ARC_AKS_CLUSTER_RESOURCE_ID must be the private runner AKS resource ID" >&2
+            exit 1
+          }
+          aks_subscription="$(cut -d/ -f3 <<<"$AKS_CLUSTER_RESOURCE_ID")"
+          aks_resource_group="$(cut -d/ -f5 <<<"$AKS_CLUSTER_RESOURCE_ID")"
+          aks_name="$(cut -d/ -f9 <<<"$AKS_CLUSTER_RESOURCE_ID")"
+          command="set -eu; expected='$RUNNER_IMAGE'; for attempt in \$(seq 1 30); do active=\$(kubectl get ephemeralrunnersets.actions.github.com --namespace arc-runners --output json | jq '[.items[] | select(((.spec.replicas // 0) > 0) or ((.status.currentReplicas // 0) > 0) or ((.status.pendingReplicas // 0) > 0) or ((.status.runningReplicas // 0) > 0))] | length'); test \"\$active\" = 0 && break; test \"\$attempt\" = 30 && exit 1; sleep 10; done; kubectl delete pod --namespace arc-runners --selector actions.github.com/scale-set-name=mlops-private --ignore-not-found; kubectl get ephemeralrunnersets.actions.github.com --namespace arc-runners --output json | jq -r --arg expected \"\$expected\" '.items[] | select(([.spec.template.spec.containers[] | select(.name == \"runner\") | .image][0] // \"\") != \$expected) | .metadata.name' | xargs --no-run-if-empty kubectl delete ephemeralrunnerset.actions.github.com --namespace arc-runners; actual=\$(kubectl get autoscalingrunnerset mlops-private --namespace arc-runners --output jsonpath='{.spec.template.spec.containers[?(@.name==\"runner\")].image}'); test \"\$actual\" = \"\$expected\""
+          python3 runner-bootstrap/scripts/invoke_aks_command.py \
+            --subscription "$aks_subscription" \
+            --resource-group "$aks_resource_group" \
+            --name "$aks_name" \
+            --command "$command"

@@ -324,6 +324,12 @@ compares Kaniko's result with the published manifest digest, validates it as
 `sha256:<64-hex-digest>`, cleans up the token config, and outputs only the
 digest-pinned ACR URI for `online_environment_image`.
 
+The generated `update-runner-image.yml` accepts only this repository's immutable
+GHCR runner digest and targets the AKS resource ID configured in the DEV GitHub
+Environment variable `ARC_AKS_CLUSTER_RESOURCE_ID`. Its shared AKS Run Command
+wrapper rejects remote nonzero `exitCode` values even when Azure CLI exits zero,
+prints sanitized logs only on failure, and uses POSIX remote shell options.
+
 Endpoint, deployment, model, and request names remain workload-owned. Namespace,
 service account, workload UAMI, node pool, and AKS credentials remain
 infrastructure-only.

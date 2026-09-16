@@ -464,6 +464,13 @@ class ProjectContractTests(unittest.TestCase):
                     "runner-bootstrap", "infrastructure", "main.bicepparam"
                 ).is_file()
             )
+            self.assertTrue(
+                project.joinpath(
+                    "runner-bootstrap",
+                    "scripts",
+                    "invoke_aks_command.py",
+                ).is_file()
+            )
 
     def test_known_template_pin_resolves_all_placeholders(self):
         repository = TEMPLATE_REPOSITORY

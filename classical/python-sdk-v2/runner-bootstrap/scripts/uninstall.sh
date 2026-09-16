@@ -3,9 +3,14 @@ set -euo pipefail
 
 RESOURCE_GROUP=${ARC_RESOURCE_GROUP:-rg-mlops-arc-dev-eus2-001}
 AKS_NAME=${ARC_AKS_NAME:-aks-mlops-arc-dev-eus2-001}
+ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 
 if [[ ${1:-} == arc ]]; then
-  az aks command invoke --resource-group "$RESOURCE_GROUP" --name "$AKS_NAME" --command '
+  python3 "$ROOT_DIR/scripts/invoke_aks_command.py" \
+    --resource-group "$RESOURCE_GROUP" \
+    --name "$AKS_NAME" \
+    --print-logs \
+    --command '
     helm uninstall mlops-private -n arc-runners || true
     kubectl delete secret arc-github-app -n arc-runners --ignore-not-found
     helm uninstall arc -n arc-systems || true

@@ -4,8 +4,13 @@ set -euo pipefail
 RESOURCE_GROUP=${ARC_RESOURCE_GROUP:-rg-mlops-arc-dev-eus2-001}
 AKS_NAME=${ARC_AKS_NAME:-aks-mlops-arc-dev-eus2-001}
 GITHUB_REPOSITORY=${GITHUB_REPOSITORY:?GITHUB_REPOSITORY must be owner/repository}
+ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 
-az aks command invoke --resource-group "$RESOURCE_GROUP" --name "$AKS_NAME" --command '
+python3 "$ROOT_DIR/scripts/invoke_aks_command.py" \
+  --resource-group "$RESOURCE_GROUP" \
+  --name "$AKS_NAME" \
+  --print-logs \
+  --command '
 set -e
 kubectl get pods -n arc-systems
 kubectl get pods -n arc-runners

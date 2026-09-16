@@ -95,6 +95,21 @@ Do not patch the runtime workflow to install Docker, Buildah, Kaniko, or any
 other builder with `apt-get` or `sudo`; rebuild and redeploy the reviewed runner
 image instead.
 
+For later image-only rollouts, configure the DEV GitHub Environment variable
+`ARC_AKS_CLUSTER_RESOURCE_ID` with the immutable resource ID of the private
+runner AKS cluster and dispatch `Update private runner image` with the new
+digest-pinned GHCR URI. Its first job updates the scale set from an existing
+private runner; its hosted reconciliation job waits for active ephemeral runner
+sets to drain, removes stale generations, and verifies the configured image.
+Every AKS Run Command response must report both `provisioningState: Succeeded`
+and `exitCode: 0`. Azure CLI process success alone is not accepted, and remote
+commands use POSIX `set -eu` because AKS Run Command executes them with
+`/bin/sh`. Temporary Helm values are removed by a remote exit trap.
+
+If an update failed before the remote command ran, fix the workflow and dispatch
+it again with the same immutable image. Do not restart the ARC listener or
+controller: no Helm revision or runner generation changed.
+
 ## Review and deploy
 
 Review the subscription-scope deployment before creating billable resources:

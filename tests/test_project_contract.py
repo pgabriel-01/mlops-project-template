@@ -467,6 +467,13 @@ class ProjectContractTests(unittest.TestCase):
             self.assertTrue(
                 project.joinpath(
                     "runner-bootstrap",
+                    "manifests",
+                    "arc-operator-rbac.json",
+                ).is_file()
+            )
+            self.assertTrue(
+                project.joinpath(
+                    "runner-bootstrap",
                     "scripts",
                     "invoke_aks_command.py",
                 ).is_file()

@@ -46,6 +46,10 @@ Do not run `provision.sh apply` until all of these are true:
    Log Analytics retention/cost.
 7. The tooling-only GHCR runner image is public, anonymously pullable, and supplied
    to `install_arc.sh` by immutable digest.
+8. `ARC_OPERATOR_PRINCIPAL_OBJECT_ID` is the Microsoft Entra object ID of the
+   GitHub OIDC service principal used by the update workflow. Resolve it from
+   the configured client ID with
+   `az ad sp show --id <client-id> --query id -o tsv`.
 
 ## Repository-scoped GitHub App
 
@@ -109,15 +113,20 @@ digest-pinned GHCR URI. Both jobs run on GitHub-hosted runners and use Azure Run
 Command, so a broken or unpullable current ARC image cannot block recovery. The
 first job updates the scale set; the reconciliation job waits for active
 ephemeral runner sets to drain, removes stale generations, and verifies the
-configured image.
+configured image. The update resolves the unique container named `runner`,
+generates a one-operation JSON Patch for only that container's `image` field,
+and reads the resource back to require the exact immutable digest. It fails
+closed if the runner container is missing, duplicated, or has a nonnumeric
+array index. It does not read Helm release Secrets or grant secret access.
 Every AKS Run Command response must report both `provisioningState: Succeeded`
 and `exitCode: 0`. Azure CLI process success alone is not accepted, and remote
 commands use POSIX `set -eu` because AKS Run Command executes them with
-`/bin/sh`. Temporary Helm values are removed by a remote exit trap.
+`/bin/sh`. Temporary resource and JSON Patch files are removed by a remote exit
+trap.
 
 If an update failed before the remote command ran, fix the workflow and dispatch
 it again with the same immutable image. Do not restart the ARC listener or
-controller: no Helm revision or runner generation changed.
+controller: the runner resource and generations did not change.
 
 ## Review and deploy
 
@@ -158,6 +167,7 @@ After all hard gates are approved:
 ```bash
 export ARC_RUNNER_IMAGE="ghcr.io/<owner>/<repository>-arc-runner@sha256:<digest>"
 export ARC_GITHUB_CONFIG_URL="https://github.com/<owner>/<repository>"
+export ARC_OPERATOR_PRINCIPAL_OBJECT_ID="<github-oidc-service-principal-object-id>"
 export GITHUB_REPOSITORY="<owner>/<repository>"
 runner-bootstrap/scripts/provision.sh apply
 runner-bootstrap/scripts/install_arc.sh
@@ -166,7 +176,14 @@ runner-bootstrap/scripts/verify.sh
 
 `install_arc.sh` uploads the local PEM directly to AKS Run Command, creates the
 Kubernetes secret in `arc-runners`, and suppresses the secret-creation response.
-The committed Helm values reference only the secret name.
+The committed Helm values reference only the secret name. The privileged initial
+install also applies an idempotent namespace Role and RoleBinding for the OIDC
+service principal. That identity can only get and patch
+`actions.github.com/autoscalingrunnersets`; get, list, and delete
+`actions.github.com/ephemeralrunnersets`; and get, list, and delete core pods in
+`arc-runners`. It cannot read Secrets, use `pods/exec`, access nodes, or mutate
+Roles, RoleBindings, or service accounts. Do not replace this native Kubernetes
+allowlist with Azure built-in Writer/Admin roles or preview ABAC.
 
 The committed Helm values retain repository and image placeholders. The install
 script validates that the immutable GHCR digest belongs to the configured GitHub

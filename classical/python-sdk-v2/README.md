@@ -395,7 +395,7 @@ verify each propagation. Do not describe a change as factory-regenerated unless
 an external factory was actually used and recorded separately.
 
 The reviewed reusable-workflow propagation is pinned in that contract to
-`pgabriel-01/mlops-templates@360ea52eb7802b636ff0e9ccaf0b831a500d9a77`.
+`pgabriel-01/mlops-templates@8dbe32cab29268ef128ece88ef994927648fc70f`.
 Generated Python SDK v2 workflows bind both the reusable workflow and its
 checked-out SDK helpers to that same immutable ref. For batch deployment, that
 pin waits for endpoint completion and confirmed successful provisioning before
@@ -406,11 +406,24 @@ batch caller exposes an immutable deployment environment input that defaults to
 workflow validates that the value is a versioned Azure ML environment reference
 with a numeric version and passes the full ID into `BatchDeployment`; mutable
 labels, `latest`, unversioned references, images, and inline Conda definitions are
-rejected before the Azure ML client is created.
+rejected before the Azure ML client is created. The generated caller also passes
+the checked-in `mlops/azureml/deploy/batch/score.py` from a dedicated consumer
+directory. The reusable helper constructs a non-null `CodeConfiguration`, then
+reads the live deployment back and verifies both the immutable environment and
+scoring configuration before defaulting or invoking the endpoint. This prevents
+Azure ML from silently falling back to an anonymous Conda environment and
+workspace-local image build, which is incompatible with the preserved
+`allowSharedKeyAccess=false` storage policy.
+
+The same immutable templates ref uses Azure ML Kubernetes online endpoints and
+deployments on an attached private compute. Generated online callers supply the
+compute name, versioned prebuilt environment name and version, and Kubernetes
+instance type from project configuration. They do not retain the managed online
+VM SKU contract or permit an anonymous environment build path.
 Set `VERIFY_REMOTE_TEMPLATES=1` when running the project contract to verify the
-pinned AML client, batch workflow and helpers, sequencing tests, failed-job
-diagnostics, immutable diagnostics artifact upload, and batch environment contract
-directly from that commit.
+pinned AML client, batch workflow and helpers, sequencing tests, scoring path and
+live deployment checks, failed-job diagnostics, immutable diagnostics artifact
+upload, and batch environment contract directly from that commit.
 
 The generated training pipeline uses the immutable curated environment
 `azureml://registries/azureml/environments/sklearn-1.5/versions/53` for prepare,

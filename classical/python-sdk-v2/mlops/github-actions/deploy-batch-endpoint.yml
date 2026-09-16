@@ -57,6 +57,8 @@ jobs:
       model_version: ${{ inputs.model_version }}
       compute: ${{ needs.config.outputs.compute }}
       deployment_environment: ${{ inputs.deployment_environment }}
+      scoring_code_directory: mlops/azureml/deploy/batch
+      scoring_script: score.py
       request_batch_file: data/taxi-batch.csv
       request_type: uri_file
     secrets: inherit

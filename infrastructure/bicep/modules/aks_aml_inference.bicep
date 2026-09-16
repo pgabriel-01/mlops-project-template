@@ -129,7 +129,7 @@ resource namespaceBootstrap 'Microsoft.Resources/deploymentScripts@2023-08-01' =
     }
   }
   properties: {
-    azCliVersion: '2.90.0'
+    azCliVersion: '2.89.0'
     cleanupPreference: 'Always'
     environmentVariables: [
       {

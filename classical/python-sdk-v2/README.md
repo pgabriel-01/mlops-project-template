@@ -419,7 +419,7 @@ verify each propagation. Do not describe a change as factory-regenerated unless
 an external factory was actually used and recorded separately.
 
 The reviewed reusable-workflow propagation is pinned in that contract to
-`pgabriel-01/mlops-templates@8f8a8d5f33b88df5109a9c950bba19b616c15ea8`.
+`pgabriel-01/mlops-templates@812be5b654e974b573a0f5a52f2869068226a194`.
 Generated Python SDK v2 workflows bind both the reusable workflow and its
 checked-out SDK helpers to that same immutable ref. It supports MLflow no-code
 online deployment while preserving the explicit immutable image-only mode. For

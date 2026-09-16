@@ -315,6 +315,15 @@ The stable generated-workflow contract is:
 - `online_instance_type`: AML Kubernetes instance type;
 - `runner`: private ARC runner label.
 
+The digest-pinned ARC runner image includes a digest-pinned Kaniko executor. The
+generated `publish-online-runtime.yml` uses the environment-scoped federated
+Azure identity to create a masked, ephemeral ACR token config for Kaniko; the
+hardened private runner does not need or use a Docker daemon, privileged pod, or
+socket mount. The workflow tags the build with the immutable source commit SHA,
+compares Kaniko's result with the published manifest digest, validates it as
+`sha256:<64-hex-digest>`, cleans up the token config, and outputs only the
+digest-pinned ACR URI for `online_environment_image`.
+
 Endpoint, deployment, model, and request names remain workload-owned. Namespace,
 service account, workload UAMI, node pool, and AKS credentials remain
 infrastructure-only.

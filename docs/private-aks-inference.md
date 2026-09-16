@@ -159,10 +159,23 @@ Before enabling the feature:
    sufficient. The deployment workflow rejects certificates with no DNS SAN or
    a hostname mismatch before sending the secure Bicep parameters.
 8. First deploy the workspace and private ACR with this feature disabled. Run
-   `publish-online-runtime.yml` on the private runner to build the checked-in
-   Python 3.10 MLflow runtime locally and push it through the private ACR
-   endpoint. Copy the reported digest URI into `online_environment_image`, then
-   enable this feature. Bicep registers the named/versioned environment as
+   `publish-online-runtime.yml` on the private runner after rebuilding and
+   redeploying the digest-pinned ARC runner image described in
+   `runner-bootstrap/README.md`. The runner image includes a digest-pinned
+   Kaniko executor. The workflow uses its federated Azure identity to request a
+   short-lived ACR token, masks it, writes it to an ephemeral mode-0600 Docker
+   config, and removes that config on exit. Kaniko builds and pushes through the
+   private ACR endpoint without a Docker daemon, privileged pod, socket mount,
+   registry admin credentials, ACR managed builder, or AML workspace build.
+   The runtime workflow must not install Docker, Buildah, Kaniko, or other build
+   tools at job time and must not use `sudo` or `apt-get`; tool provisioning is
+   confined to the reviewed, digest-pinned runner image.
+   After Kaniko publishes the source-SHA tag, the workflow independently queries
+   the manifest and requires it to match Kaniko's SHA-256 digest. Copy the
+   reported `<login-server>/mlops/online-runtime@sha256:<64-hex-digest>` URI
+   into `online_environment_image`, then enable this feature. The source-SHA tag
+   is only the build lookup key; the final environment reference is always the
+   immutable digest URI. Bicep registers the named/versioned environment as
    image-only; it has no build context or conda file.
 9. Run read-only preflight checks for AKS 1.35 patch support, extension stable
    versions, OIDC issuer, Workload ID, private DNS, node quota, and TLS material.

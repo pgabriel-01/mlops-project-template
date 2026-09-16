@@ -18,7 +18,7 @@ ephemeral runners.
 | Egress | dedicated Standard NAT Gateway/public IP |
 | ARC chart | `0.14.2` |
 | Runner base image | `ghcr.io/actions/actions-runner:2.337.0` |
-| Runner tools | Python 3 and pinned Azure CLI `2.90.0-1~noble` |
+| Runner tools | Python 3, pinned Azure CLI `2.90.0-1~noble`, and digest-pinned Kaniko `v1.23.2` |
 | Scale set / workflow label | `mlops-private` |
 | Runner bounds | minimum 0, maximum 2 |
 | Logs | Container Insights and selected AKS control-plane logs, 30 days |
@@ -57,9 +57,13 @@ disabled. Do not substitute a PAT. Store the PEM outside the checkout with mode
 
 ## Publish the runner image
 
-The generated infrastructure workflows run Python and Azure CLI commands. The
-stock ARC image does not contain those tools, so ARC installation fails closed
-unless `ARC_RUNNER_IMAGE` names the approved image by immutable digest.
+The generated infrastructure and runtime publishing workflows run Python, Azure
+CLI, and Kaniko commands. The stock ARC image does not contain those tools, so
+ARC installation fails closed unless `ARC_RUNNER_IMAGE` names the approved image
+by immutable digest. Kaniko is copied from a digest-pinned upstream image into
+the runner image; it runs without a Docker daemon, privileged pod, or socket
+mount. Its executable and CA certificate paths are owned by the non-root runner
+user.
 
 `Build private runner image` uses a GitHub-hosted runner with only
 `contents: read` and `packages: write`. The Dockerfile's
@@ -76,11 +80,20 @@ sequence:
    **Public**. GHCR packages are private by default and the package REST API does
    not provide a visibility-change endpoint.
 5. Verify the digest can be pulled anonymously. `install_arc.sh` repeats this
-   check from AKS and verifies `git`, `curl`, Python, and Azure CLI before
-   installing ARC.
+   check from AKS and verifies `git`, `curl`, Python, Azure CLI, the Kaniko
+   executable, and the absence of `/var/run/docker.sock` before installing ARC.
 
 Do not use a PAT, an expiring GitHub App installation token, or a mutable image tag
 as an image pull credential.
+
+After any runner Dockerfile change, rebuild on `main`, review the reported GHCR
+digest, and rerun `install_arc.sh` with that new immutable
+`ARC_RUNNER_IMAGE`. This performs a rolling ARC scale-set update without adding
+registry credentials or mutable tags. Run `verify.sh` and the private runner
+smoke test before dispatching `publish-online-runtime.yml`.
+Do not patch the runtime workflow to install Docker, Buildah, Kaniko, or any
+other builder with `apt-get` or `sudo`; rebuild and redeploy the reviewed runner
+image instead.
 
 ## Review and deploy
 

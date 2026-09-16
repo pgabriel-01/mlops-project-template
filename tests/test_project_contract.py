@@ -13,25 +13,28 @@ ROOT = Path(__file__).resolve().parents[1]
 PATTERN_ROOT = ROOT / "classical" / "python-sdk-v2"
 SCRIPT_ROOT = PATTERN_ROOT / "mlops" / "scripts"
 TEMPLATE_REPOSITORY = "pgabriel-01/mlops-templates"
-TEMPLATE_REF = "40e6c55e158d6dc5ecfc4c60f3d5dad03224cb57"
+TEMPLATE_REF = "360ea52eb7802b636ff0e9ccaf0b831a500d9a77"
+BATCH_ENVIRONMENT = (
+    "azureml://registries/azureml/environments/sklearn-1.5/versions/53"
+)
 TEMPLATE_BLOBS = {
     "src/python-sdk-v2/aml_client.py": ("6ee33702a5b892069916057e3add9ee16e912c21"),
     ".github/workflows/python-sdk-v2-train-register.yml": (
         "16504df1fca114dcb8f5105f51baa115b2814527"
     ),
     ".github/workflows/python-sdk-v2-batch.yml": (
-        "dbe927633d90812990cc3e21a70487df945d3366"
+        "4a9532ed02a6c3ff6eedb66617a4f7c5b67adbd7"
     ),
     "src/python-sdk-v2/create_batch_endpoint.py": (
         "c8be7b6e9f15c4f80a0980156eeaba45319459bc"
     ),
     "src/python-sdk-v2/create_batch_deployment.py": (
-        "73436abb4f3a779e34b76f2d89959ae6164827fd"
+        "2d293cf2af536aa272369fa9736bb1f7bc172b86"
     ),
     "src/python-sdk-v2/test_batch_endpoint.py": (
         "de162e28504f710fe02b8380fadf631ce3456269"
     ),
-    "tests/test_python_sdk_v2.py": "86c22cb49e11b0588c27c5d8115c8fc4e6d99479",
+    "tests/test_python_sdk_v2.py": "e672c13dd9109679c4103cb53165aade87757707",
 }
 sys.path.insert(0, str(SCRIPT_ROOT))
 
@@ -205,6 +208,23 @@ class ProjectContractTests(unittest.TestCase):
             self.assertIn("sdk_repository: __MLOPS_TEMPLATES_REPOSITORY__", content)
             self.assertIn("sdk_ref: __MLOPS_TEMPLATES_REF__", content)
 
+    def test_batch_caller_exposes_immutable_environment(self):
+        content = (
+            PATTERN_ROOT
+            / "mlops"
+            / "github-actions"
+            / "deploy-batch-endpoint.yml"
+        ).read_text()
+
+        self.assertIn(f"default: {BATCH_ENVIRONMENT}", content)
+        self.assertIn(
+            "deployment_environment: ${{ inputs.deployment_environment }}",
+            content,
+        )
+        self.assertNotIn("conda_file:", content)
+        self.assertNotIn("image:", content)
+        self.assertNotIn(":latest", content)
+
     def test_workflows_use_generated_project_paths(self):
         workflow_root = PATTERN_ROOT / "mlops" / "github-actions"
         infrastructure = (workflow_root / "deploy-infrastructure.yml").read_text()
@@ -226,9 +246,6 @@ class ProjectContractTests(unittest.TestCase):
 
     def test_training_job_uses_immutable_curated_environment(self):
         job = (PATTERN_ROOT / "mlops" / "azureml" / "train" / "job.yml").read_text()
-        environment = (
-            "azureml://registries/azureml/environments/" "sklearn-1.5/versions/53"
-        )
 
         environment_lines = [
             line.strip()
@@ -236,7 +253,7 @@ class ProjectContractTests(unittest.TestCase):
             if line.strip().startswith("environment:")
         ]
         self.assertEqual(
-            [f"environment: {environment}"] * 3,
+            [f"environment: {BATCH_ENVIRONMENT}"] * 3,
             environment_lines,
         )
         self.assertNotIn("conda_file:", job)
@@ -351,16 +368,25 @@ class ProjectContractTests(unittest.TestCase):
                 )
                 self.assertIn(f"sdk_ref: {template_ref}", workflow)
                 self.assertNotIn("__MLOPS_TEMPLATES_", workflow)
-            curated_environment = (
-                "azureml://registries/azureml/environments/" "sklearn-1.5/versions/53"
+            self.assertIn(
+                f"default: {BATCH_ENVIRONMENT}",
+                batch_workflow,
             )
+            self.assertIn(
+                "deployment_environment: "
+                "${{ inputs.deployment_environment }}",
+                batch_workflow,
+            )
+            self.assertNotIn("conda_file:", batch_workflow)
+            self.assertNotIn("image:", batch_workflow)
+            self.assertNotIn(":latest", batch_workflow)
             generated_environment_lines = [
                 line.strip()
                 for line in training_job.splitlines()
                 if line.strip().startswith("environment:")
             ]
             self.assertEqual(
-                [f"environment: {curated_environment}"] * 3,
+                [f"environment: {BATCH_ENVIRONMENT}"] * 3,
                 generated_environment_lines,
             )
             self.assertNotIn("conda_file:", training_job)
@@ -394,11 +420,22 @@ class ProjectContractTests(unittest.TestCase):
             self.assertNotIn("__MLOPS_TEMPLATES_", rendered)
         self.assertEqual(40, len(commit))
 
+    def test_no_stale_python_sdk_v2_template_pin(self):
+        stale_prefixes = ("40e6" + "c55e", "d85f" + "2875")
+        paths = [
+            PATTERN_ROOT / "README.md",
+            *PATTERN_ROOT.joinpath("mlops", "github-actions").glob("*.yml"),
+        ]
+        for path in paths:
+            content = path.read_text()
+            for stale_prefix in stale_prefixes:
+                self.assertNotIn(stale_prefix, content)
+
     @unittest.skipUnless(
         os.environ.get("VERIFY_REMOTE_TEMPLATES") == "1",
         "set VERIFY_REMOTE_TEMPLATES=1 to verify immutable shared assets",
     )
-    def test_pinned_templates_preserve_diagnostics_and_batch_sequencing(self):
+    def test_pinned_templates_preserve_batch_and_diagnostics_contracts(self):
         aml_client = load_pinned_template("src/python-sdk-v2/aml_client.py")
         training_workflow = load_pinned_template(
             ".github/workflows/python-sdk-v2-train-register.yml"
@@ -453,6 +490,33 @@ class ProjectContractTests(unittest.TestCase):
         self.assertIn("wait_for_resource_create_or_update(", batch_endpoint)
         self.assertIn("wait_for_resource_create_or_update(", batch_deployment)
         self.assertIn(
+            "DEPLOYMENT_ENVIRONMENT: ${{ inputs.deployment_environment }}",
+            batch_workflow,
+        )
+        self.assertIn(
+            f"default: {BATCH_ENVIRONMENT}",
+            batch_workflow,
+        )
+        self.assertIn(
+            '--environment "$DEPLOYMENT_ENVIRONMENT"',
+            batch_workflow,
+        )
+        self.assertIn(
+            "type=validate_immutable_environment_reference",
+            batch_deployment,
+        )
+        self.assertIn("environment=environment", batch_deployment)
+        self.assertLess(
+            batch_deployment.index(
+                "environment = validate_immutable_environment_reference("
+                "args.environment)"
+            ),
+            batch_deployment.index("ml_client = create_ml_client(args)"),
+        )
+        self.assertNotIn("CondaConfiguration", batch_deployment)
+        self.assertNotIn("code_configuration=", batch_deployment)
+        self.assertNotIn("image=", batch_deployment)
+        self.assertIn(
             "return wait_for_job(ml_client, invocation.name)", batch_invocation
         )
         for test_name in (
@@ -460,8 +524,23 @@ class ProjectContractTests(unittest.TestCase):
             "test_batch_deployment_poller_completes_before_invocation",
             "test_batch_endpoint_repeat_update_waits_then_retries",
             "test_batch_endpoint_terminal_operation_failure_propagates",
+            "test_batch_deployment_uses_explicit_immutable_environment",
+            "test_batch_deployment_rejects_mutable_environment_reference",
+            "test_batch_workflow_uses_pinned_curated_environment",
         ):
             self.assertIn(test_name, template_tests)
+        self.assertIn(
+            'batch_deployment_type.call_args.kwargs["environment"]',
+            template_tests,
+        )
+        for mutable_reference in (
+            "labels/latest",
+            "versions/latest",
+            "azureml:sklearn-1.5@latest",
+            "mcr.microsoft.com/azureml/openmpi4.1.0-ubuntu20.04:latest",
+            "conda.yml",
+        ):
+            self.assertIn(mutable_reference, template_tests)
 
         self.assertIn("diagnostic_jobs = failed_children or [job]", aml_client)
         self.assertRegex(

@@ -375,15 +375,22 @@ verify each propagation. Do not describe a change as factory-regenerated unless
 an external factory was actually used and recorded separately.
 
 The reviewed reusable-workflow propagation is pinned in that contract to
-`pgabriel-01/mlops-templates@40e6c55e158d6dc5ecfc4c60f3d5dad03224cb57`.
+`pgabriel-01/mlops-templates@360ea52eb7802b636ff0e9ccaf0b831a500d9a77`.
 Generated Python SDK v2 workflows bind both the reusable workflow and its
 checked-out SDK helpers to that same immutable ref. For batch deployment, that
 pin waits for endpoint completion and confirmed successful provisioning before
 deployment, waits for deployment before invocation, retries boundedly when an
-existing operation conflicts, and propagates terminal failures and timeouts.
+existing operation conflicts, and propagates terminal failures and timeouts. The
+batch caller exposes an immutable deployment environment input that defaults to
+`azureml://registries/azureml/environments/sklearn-1.5/versions/53`. The reusable
+workflow validates that the value is a versioned Azure ML environment reference
+with a numeric version and passes the full ID into `BatchDeployment`; mutable
+labels, `latest`, unversioned references, images, and inline Conda definitions are
+rejected before the Azure ML client is created.
 Set `VERIFY_REMOTE_TEMPLATES=1` when running the project contract to verify the
 pinned AML client, batch workflow and helpers, sequencing tests, failed-job
-diagnostics, and immutable diagnostics artifact upload directly from that commit.
+diagnostics, immutable diagnostics artifact upload, and batch environment contract
+directly from that commit.
 
 The generated training pipeline uses the immutable curated environment
 `azureml://registries/azureml/environments/sklearn-1.5/versions/53` for prepare,
@@ -392,6 +399,9 @@ image plus conda definitions make the workspace image builder stage a revision
 snapshot in workspace storage. Storage local authentication remains disabled by
 policy, so generated jobs must use the reviewed prebuilt environment rather than
 requiring that workspace-specific image-build path.
+
+This propagation was applied directly to the maintained source pattern and its
+assembled-tree contract; it was not produced by a standalone generator.
 
 ## Keyless private architecture
 

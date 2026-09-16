@@ -52,6 +52,11 @@ def main() -> None:
         parameter: {"value": config[key]}
         for key, parameter in PARAMETER_MAP.items()
     }
+    parameters["sharedPrivateDnsZoneResourceIds"] = {
+        "value": json.loads(
+            str(config["shared_private_dns_zone_resource_ids"])
+        )
+    }
     parameters["ciPrincipalObjectId"] = {"value": ci_principal_object_id}
     payload = {
         "$schema": (

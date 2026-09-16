@@ -1,0 +1,50 @@
+githubConfigUrl: __ARC_GITHUB_CONFIG_URL__
+githubConfigSecret: arc-github-app
+runnerScaleSetName: mlops-private
+minRunners: 0
+maxRunners: 2
+
+template:
+  spec:
+    securityContext:
+      fsGroup: 123
+      runAsNonRoot: true
+      runAsUser: 1001
+    containers:
+      - name: runner
+        image: __ARC_RUNNER_IMAGE__
+        command:
+          - /home/runner/run.sh
+        imagePullPolicy: IfNotPresent
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: "2"
+            memory: 4Gi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          readOnlyRootFilesystem: false
+
+listenerTemplate:
+  spec:
+    containers:
+      - name: listener
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          runAsNonRoot: true
+          runAsUser: 1000

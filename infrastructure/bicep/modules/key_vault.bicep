@@ -1,4 +1,6 @@
-param baseName string
+@minLength(3)
+@maxLength(24)
+param keyVaultName string
 param location string
 param tags object
 param enablePurgeProtection bool = false
@@ -14,7 +16,7 @@ var virtualNetworkRules = [for subnetId in allowedSubnetIds: {
 // Key Vault — RBAC-authorized, idempotent with soft-delete handling
 // Note: enablePurgeProtection cannot be disabled once enabled
 resource kv 'Microsoft.KeyVault/vaults@2025-05-01' = {
-  name: 'kv-${baseName}'
+  name: keyVaultName
   location: location
   properties: {
     tenantId: subscription().tenantId

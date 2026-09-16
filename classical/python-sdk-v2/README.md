@@ -190,6 +190,15 @@ running this project. The AKS/ARC/GitHub App stack is a separate platform
 prerequisite: these MLOps workflows must not attempt to create, upgrade, repair, or
 delete the runner infrastructure that they require in order to execute.
 
+The generated `runner-bootstrap/` assets provide the reviewed GitHub Actions,
+Helm, shell, Python, and Bicep implementation for that separately operated
+platform. Its default system pool is 2 x `Standard_D2ads_v6` (4 vCPUs total), which
+preserves control-plane headroom after the ARC controller and listener are
+installed. Both nodes and the accompanying control plane, NAT, public IP, and log
+retention are fixed costs even when `minRunners` is zero. The runner pod template
+also invokes `/home/runner/run.sh` explicitly so the custom runner image cannot
+exit successfully before registering for work.
+
 Use `mlops-private` as the ARC runner scale-set name/label, or update `runner` in
 all environment configuration files to the chosen scale-set label. Steady-state
 infrastructure, training, and endpoint jobs resolve `runs-on` to that label and
@@ -228,6 +237,28 @@ Choose one reciprocal owner and keep it stable. Do not enable Bicep ownership wh
 a differently named hub-to-workload peering already exists; remove or import the
 old ownership first. Empty/false defaults preserve the standalone generated
 topology.
+
+If the runner hub is already linked to an authoritative private DNS zone for one
+of those namespaces, reuse that zone instead of creating a conflicting second hub
+link. Set `shared_private_dns_zone_resource_ids` to a JSON object whose keys are
+the exact zone names and whose values are full zone resource IDs, for example:
+
+```yaml
+shared_private_dns_zone_resource_ids: "{\"privatelink.blob.core.windows.net\":\"/subscriptions/<subscription-id>/resourceGroups/<dns-resource-group>/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net\"}"
+```
+
+Each supplied zone must already be linked to the runner hub. Bicep skips creating
+that duplicate runner-hub link, links the workload VNet to the shared zone, and
+uses the shared zone for the private endpoint DNS zone group so records remain
+resolvable from both networks. Unlisted namespaces remain deployment-owned.
+Malformed, unsupported, or mismatched mappings fail project validation; there is
+no silent fallback that hides DNS ownership or permission errors.
+
+Key Vault naming is also bounded deterministically: the generated name uses a
+normalized five-character project prefix, the 13-character resource-group hash,
+and a three-character environment suffix, including the `kv-` prefix in Azure's
+24-character maximum. The full resource-group identity remains in the hash so
+truncating the readable prefix does not remove deployment uniqueness.
 
 The runner network must satisfy all of these conditions before deployment:
 

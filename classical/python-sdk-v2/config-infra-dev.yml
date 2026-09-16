@@ -7,6 +7,7 @@ private_network: true
 runner: mlops-private
 runner_hub_vnet_resource_id: ""
 manage_runner_hub_to_workload_peering: false
+shared_private_dns_zone_resource_ids: "{}"
 python_version: "3.11"
 enable_monitoring: true
 enable_container_registry: true

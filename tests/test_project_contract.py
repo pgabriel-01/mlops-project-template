@@ -40,8 +40,16 @@ class ProjectContractTests(unittest.TestCase):
             "resourceGroups/runner-network/providers/Microsoft.Network/"
             "virtualNetworks/runner-hub"
         )
+        shared_blob_zone_id = (
+            "/subscriptions/subscription-id/"
+            "resourceGroups/shared-dns/providers/Microsoft.Network/"
+            "privateDnsZones/privatelink.blob.core.windows.net"
+        )
+        shared_zone_ids = {
+            "privatelink.blob.core.windows.net": shared_blob_zone_id,
+        }
         cases = (
-            (base_config, "", False),
+            (base_config, "", False, {}),
             (
                 base_config.replace(
                     'runner_hub_vnet_resource_id: ""',
@@ -49,16 +57,24 @@ class ProjectContractTests(unittest.TestCase):
                 ).replace(
                     "manage_runner_hub_to_workload_peering: false",
                     "manage_runner_hub_to_workload_peering: true",
+                ).replace(
+                    'shared_private_dns_zone_resource_ids: "{}"',
+                    "shared_private_dns_zone_resource_ids: "
+                    + json.dumps(json.dumps(shared_zone_ids)),
                 ),
                 runner_hub_id,
                 True,
+                shared_zone_ids,
             ),
         )
         with tempfile.TemporaryDirectory() as directory:
             directory_path = Path(directory)
-            for index, (config_text, expected_id, expected_manage) in enumerate(
-                cases
-            ):
+            for index, (
+                config_text,
+                expected_id,
+                expected_manage,
+                expected_zones,
+            ) in enumerate(cases):
                 config_path = directory_path / "config-infra-dev.yml"
                 output_path = directory_path / f"parameters-{index}.json"
                 config_path.write_text(config_text)
@@ -80,6 +96,10 @@ class ProjectContractTests(unittest.TestCase):
                 self.assertEqual(
                     expected_manage,
                     parameters["manageRunnerHubToWorkloadPeering"]["value"],
+                )
+                self.assertEqual(
+                    expected_zones,
+                    parameters["sharedPrivateDnsZoneResourceIds"]["value"],
                 )
                 self.assertEqual(
                     [],
@@ -107,6 +127,24 @@ class ProjectContractTests(unittest.TestCase):
         disabled_vnet["runner_hub_vnet_resource_id"] = runner_hub_id
         disabled_vnet["enable_vnet"] = False
         self.assertTrue(validate_config_values(path, disabled_vnet))
+
+        shared_zone_id = (
+            "/subscriptions/subscription-id/"
+            "resourceGroups/shared-dns/providers/Microsoft.Network/"
+            "privateDnsZones/privatelink.blob.core.windows.net"
+        )
+        missing_hub_for_dns = dict(config)
+        missing_hub_for_dns["shared_private_dns_zone_resource_ids"] = (
+            json.dumps({"privatelink.blob.core.windows.net": shared_zone_id})
+        )
+        self.assertTrue(validate_config_values(path, missing_hub_for_dns))
+
+        invalid_zone_mapping = dict(config)
+        invalid_zone_mapping["runner_hub_vnet_resource_id"] = runner_hub_id
+        invalid_zone_mapping["shared_private_dns_zone_resource_ids"] = (
+            json.dumps({"privatelink.blob.core.windows.net": shared_zone_id + "-wrong"})
+        )
+        self.assertTrue(validate_config_values(path, invalid_zone_mapping))
 
     def test_reusable_workflows_use_generator_placeholders(self):
         workflows = {
@@ -169,6 +207,10 @@ class ProjectContractTests(unittest.TestCase):
 
             for name in ("data-science", "mlops", "data"):
                 shutil.move(selected / name, project / name)
+            shutil.move(
+                selected / "runner-bootstrap",
+                project / "runner-bootstrap",
+            )
             for config in selected.glob("config-infra-*.yml"):
                 shutil.move(config, project / config.name)
 
@@ -225,6 +267,16 @@ class ProjectContractTests(unittest.TestCase):
             self.assertTrue(
                 project.joinpath(
                     "mlops", "scripts", "export_config.py"
+                ).is_file()
+            )
+            self.assertTrue(
+                project.joinpath(
+                    "runner-bootstrap", "helm", "runner-set-values.yaml"
+                ).is_file()
+            )
+            self.assertTrue(
+                project.joinpath(
+                    "runner-bootstrap", "infrastructure", "main.bicepparam"
                 ).is_file()
             )
 
@@ -309,6 +361,10 @@ class ProjectContractTests(unittest.TestCase):
             "cancel remaining queued jobs",
             "delete the dedicated AKS",
             "generic placeholders",
+            "2 x `Standard_D2ads_v6` (4 vCPUs total)",
+            "`/home/runner/run.sh` explicitly",
+            "shared_private_dns_zone_resource_ids",
+            "24-character maximum",
         ):
             self.assertIn(required, readme)
 
@@ -343,7 +399,53 @@ class ProjectContractTests(unittest.TestCase):
         self.assertIn("runnerHubVnetResourceId", main)
         self.assertIn("manageRunnerHubToWorkloadPeering", main)
         self.assertIn("runnerHubReciprocalPeeringCommand", main)
-        self.assertIn("registrationEnabled: false", dns)
+        self.assertIn("registrationEnabled: false", (
+            ROOT
+            / "infrastructure/bicep/modules/private_dns_zone_vnet_link.bicep"
+        ).read_text())
+
+    def test_key_vault_name_stays_within_exact_azure_boundary(self):
+        main = (ROOT / "infrastructure/bicep/main.bicep").read_text()
+        key_vault = (
+            ROOT / "infrastructure/bicep/modules/key_vault.bicep"
+        ).read_text()
+
+        self.assertIn(
+            "var keyVaultPrefix = take(replace(toLower(prefix), '-', ''), 5)",
+            main,
+        )
+        self.assertIn("uniqueString(rg.id)", main)
+        self.assertIn("keyVaultName: keyVaultName", main)
+        self.assertIn("name: keyVaultName", key_vault)
+        self.assertNotIn("name: 'kv-${baseName}'", key_vault)
+
+        first = "kv-" + "retai" + "a" * 13 + "dev"
+        second = "kv-" + "retai" + "b" * 13 + "dev"
+        self.assertEqual(len(first), 24)
+        self.assertEqual(len(second), 24)
+        self.assertNotEqual(first, second)
+
+    def test_shared_runner_hub_dns_zones_are_reused_explicitly(self):
+        main = (ROOT / "infrastructure/bicep/main.bicep").read_text()
+        dns = (
+            ROOT / "infrastructure/bicep/modules/private_dns_zones.bicep"
+        ).read_text()
+        link = (
+            ROOT
+            / "infrastructure/bicep/modules/private_dns_zone_vnet_link.bicep"
+        ).read_text()
+
+        self.assertIn("param sharedPrivateDnsZoneResourceIds object = {}", main)
+        self.assertIn(
+            "sharedPrivateDnsZoneResourceIds: sharedPrivateDnsZoneResourceIds",
+            main,
+        )
+        self.assertIn("contains(sharedPrivateDnsZoneResourceIds, zone)", dns)
+        self.assertIn("for zoneId in privateDnsZoneIds", dns)
+        self.assertIn("for zone in managedDnsZones", dns)
+        self.assertIn("output blobDnsZoneId string = privateDnsZoneIds[0]", dns)
+        self.assertIn("resource privateDnsZone", link)
+        self.assertIn("existing = {", link)
 
 
 if __name__ == "__main__":

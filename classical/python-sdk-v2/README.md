@@ -375,7 +375,7 @@ verify each propagation. Do not describe a change as factory-regenerated unless
 an external factory was actually used and recorded separately.
 
 The reviewed reusable-workflow propagation is pinned in that contract to
-`pgabriel-01/mlops-templates@a8e5fcb5240e20e912cb1760adddec7efde57006`.
+`pgabriel-01/mlops-templates@fa01338a90e0a2fc09be95f8e1059a2e6fa2a4c7`.
 Generated Python SDK v2 workflows bind both the reusable workflow and its
 checked-out SDK helpers to that same immutable ref. For batch deployment, that
 pin waits for endpoint completion and confirmed successful provisioning before

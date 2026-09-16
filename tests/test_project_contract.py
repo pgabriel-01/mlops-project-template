@@ -13,12 +13,10 @@ ROOT = Path(__file__).resolve().parents[1]
 PATTERN_ROOT = ROOT / "classical" / "python-sdk-v2"
 SCRIPT_ROOT = PATTERN_ROOT / "mlops" / "scripts"
 TEMPLATE_REPOSITORY = "pgabriel-01/mlops-templates"
-TEMPLATE_REF = "a8e5fcb5240e20e912cb1760adddec7efde57006"
-BATCH_ENVIRONMENT = (
-    "azureml://registries/azureml/environments/sklearn-1.5/versions/53"
-)
+TEMPLATE_REF = "fa01338a90e0a2fc09be95f8e1059a2e6fa2a4c7"
+BATCH_ENVIRONMENT = "azureml://registries/azureml/environments/sklearn-1.5/versions/53"
 TEMPLATE_BLOBS = {
-    "src/python-sdk-v2/aml_client.py": ("d65c7d1fbf7287a9b1ab64a7025eb320dfac3a68"),
+    "src/python-sdk-v2/aml_client.py": ("9dc0f87f3e0ecc061a02ec3b70204cda1cb92008"),
     ".github/workflows/python-sdk-v2-train-register.yml": (
         "16504df1fca114dcb8f5105f51baa115b2814527"
     ),
@@ -43,7 +41,7 @@ TEMPLATE_BLOBS = {
     "src/python-sdk-v2/create_online_deployment.py": (
         "2d635b99fe710e458a466154eceba852c4670e96"
     ),
-    "tests/test_python_sdk_v2.py": "f1fad04c0d3b93b113624474a98db2ad9374e264",
+    "tests/test_python_sdk_v2.py": "b45ceab12a5918c2c0a836a895d62bd3b1917a13",
 }
 sys.path.insert(0, str(SCRIPT_ROOT))
 
@@ -219,10 +217,7 @@ class ProjectContractTests(unittest.TestCase):
 
     def test_batch_caller_exposes_immutable_environment(self):
         content = (
-            PATTERN_ROOT
-            / "mlops"
-            / "github-actions"
-            / "deploy-batch-endpoint.yml"
+            PATTERN_ROOT / "mlops" / "github-actions" / "deploy-batch-endpoint.yml"
         ).read_text()
 
         self.assertIn(f"default: {BATCH_ENVIRONMENT}", content)
@@ -249,7 +244,11 @@ class ProjectContractTests(unittest.TestCase):
         self.assertIn("request_file: data/taxi-request.json", online)
         self.assertIn("request_batch_file: data/taxi-batch.csv", batch)
         self.assertIn(
-            f"deployment_environment: {CURATED_BATCH_ENVIRONMENT}",
+            f"default: {BATCH_ENVIRONMENT}",
+            batch,
+        )
+        self.assertIn(
+            "deployment_environment: ${{ inputs.deployment_environment }}",
             batch,
         )
         self.assertNotIn("conda_file:", batch)
@@ -387,8 +386,7 @@ class ProjectContractTests(unittest.TestCase):
                 batch_workflow,
             )
             self.assertIn(
-                "deployment_environment: "
-                "${{ inputs.deployment_environment }}",
+                "deployment_environment: " "${{ inputs.deployment_environment }}",
                 batch_workflow,
             )
             self.assertNotIn("conda_file:", batch_workflow)
@@ -435,7 +433,12 @@ class ProjectContractTests(unittest.TestCase):
         self.assertEqual(40, len(commit))
 
     def test_no_stale_python_sdk_v2_template_pin(self):
-        stale_prefixes = ("40e6" + "c55e", "d85f" + "2875")
+        stale_prefixes = (
+            "40e6" + "c55e",
+            "d85f" + "2875",
+            "360e" + "a52e",
+            "a8e5" + "fcb5",
+        )
         paths = [
             PATTERN_ROOT / "README.md",
             *PATTERN_ROOT.joinpath("mlops", "github-actions").glob("*.yml"),
@@ -601,6 +604,9 @@ class ProjectContractTests(unittest.TestCase):
         for test_name in (
             "test_online_workflow_requires_private_kubernetes_contract",
             "test_online_endpoint_uses_attached_arc_kubernetes_compute",
+            "test_online_compute_accepts_direct_aks_attachment_with_uami",
+            "test_online_compute_not_found_explains_direct_aks_trusted_access",
+            "test_online_compute_rejects_non_kubernetes_compute_type",
             "test_online_compute_requires_dedicated_namespace_and_uami",
             "test_prebuilt_environment_contract_requires_digest_and_no_build",
             "test_online_deployment_uses_kubernetes_and_exact_environment",

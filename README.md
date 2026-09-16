@@ -17,3 +17,7 @@ The supported Azure DevOps deployment path uses:
 See [Deploy Classical AML CLI v2 with Azure DevOps](docs/azure-devops-deployment.md)
 for prerequisites, configuration, pipeline entrypoints, deployment order, and
 validation.
+
+For the generated Python SDK v2/GitHub Actions project, see
+[Private Azure ML online inference on AKS](docs/private-aks-inference.md) for the
+opt-in, fully private Kubernetes serving infrastructure contract.

@@ -32,6 +32,7 @@ jobs:
       environment: ${{ steps.select.outputs.environment }}
       location: ${{ steps.config.outputs.location }}
       runner: ${{ steps.config.outputs.runner }}
+      private_aks_inference: ${{ steps.config.outputs.enable_private_aks_inference }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - id: select
@@ -68,12 +69,22 @@ jobs:
             config-infra-${{ needs.config.outputs.environment }}.yml \
             infrastructure/parameters.json
       - name: Validate deployment
+        env:
+          PRIVATE_AKS_INFERENCE: ${{ needs.config.outputs.private_aks_inference }}
+          TLS_CERT_PEM: ${{ secrets.AML_KUBERNETES_EXTENSION_TLS_CERT_PEM }}
+          TLS_KEY_PEM: ${{ secrets.AML_KUBERNETES_EXTENSION_TLS_KEY_PEM }}
         run: |
+          if [[ "$PRIVATE_AKS_INFERENCE" == "true" && ( -z "$TLS_CERT_PEM" || -z "$TLS_KEY_PEM" ) ]]; then
+            echo "AML Kubernetes TLS certificate and key GitHub Environment secrets are required" >&2
+            exit 1
+          fi
           az deployment sub validate \
             --name "mlops-validate-${{ github.run_id }}" \
             --location "${{ needs.config.outputs.location }}" \
             --template-file infrastructure/main.bicep \
-            --parameters @infrastructure/parameters.json
+            --parameters @infrastructure/parameters.json \
+            --parameters amlKubernetesExtensionTlsCertPem="$TLS_CERT_PEM" \
+                         amlKubernetesExtensionTlsKeyPem="$TLS_KEY_PEM"
 
   deploy:
     needs: [config, validate]
@@ -95,9 +106,19 @@ jobs:
             config-infra-${{ needs.config.outputs.environment }}.yml \
             infrastructure/parameters.json
       - name: Deploy infrastructure
+        env:
+          PRIVATE_AKS_INFERENCE: ${{ needs.config.outputs.private_aks_inference }}
+          TLS_CERT_PEM: ${{ secrets.AML_KUBERNETES_EXTENSION_TLS_CERT_PEM }}
+          TLS_KEY_PEM: ${{ secrets.AML_KUBERNETES_EXTENSION_TLS_KEY_PEM }}
         run: |
+          if [[ "$PRIVATE_AKS_INFERENCE" == "true" && ( -z "$TLS_CERT_PEM" || -z "$TLS_KEY_PEM" ) ]]; then
+            echo "AML Kubernetes TLS certificate and key GitHub Environment secrets are required" >&2
+            exit 1
+          fi
           az deployment sub create \
             --name "mlops-${{ needs.config.outputs.environment }}-${{ github.run_id }}" \
             --location "${{ needs.config.outputs.location }}" \
             --template-file infrastructure/main.bicep \
-            --parameters @infrastructure/parameters.json
+            --parameters @infrastructure/parameters.json \
+            --parameters amlKubernetesExtensionTlsCertPem="$TLS_CERT_PEM" \
+                         amlKubernetesExtensionTlsKeyPem="$TLS_KEY_PEM"

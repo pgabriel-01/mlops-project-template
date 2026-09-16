@@ -368,6 +368,27 @@ repository. Generation must replace both
 `__MLOPS_TEMPLATES_REPOSITORY__` and `__MLOPS_TEMPLATES_REF__`, with the latter set
 to an immutable commit SHA.
 
+This repository does not contain a standalone project factory. The
+`classical/python-sdk-v2` source pattern is maintained directly here, and
+`tests/test_project_contract.py` assembles the documented generated layout to
+verify each propagation. Do not describe a change as factory-regenerated unless
+an external factory was actually used and recorded separately.
+
+The reviewed failed-job diagnostics propagation is pinned in that contract to
+`pgabriel-01/mlops-templates@c710acac35876e4aae66d8c73da2c38e4c4a07eb`.
+Generated training workflows bind both the reusable workflow and its checked-out
+SDK helpers to that same immutable ref. Set `VERIFY_REMOTE_TEMPLATES=1` when
+running the project contract to verify the pinned AML client, its diagnostics
+tests, and the immutable diagnostics artifact upload directly from that commit.
+
+The generated training pipeline uses the immutable curated environment
+`azureml://registries/azureml/environments/sklearn-1.5/versions/53` for prepare,
+train, and evaluate. Keep the explicit version: `latest` is mutable, and inline
+image plus conda definitions make the workspace image builder stage a revision
+snapshot in workspace storage. Storage local authentication remains disabled by
+policy, so generated jobs must use the reviewed prebuilt environment rather than
+requiring that workspace-specific image-build path.
+
 ## Keyless private architecture
 
 Bicep disables storage shared-key access, configures identity-authenticated system

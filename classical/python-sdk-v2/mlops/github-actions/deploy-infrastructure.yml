@@ -5,8 +5,8 @@ on:
     paths:
       - ".github/workflows/deploy-infrastructure.yml"
       - "config-infra-*.yml"
-      - "infrastructure/bicep/**"
-      - "scripts/render_bicep_parameters.py"
+      - "infrastructure/**"
+      - "mlops/scripts/render_bicep_parameters.py"
   workflow_dispatch:
     inputs:
       environment:
@@ -39,14 +39,14 @@ jobs:
           SELECTED_ENVIRONMENT: ${{ github.event_name == 'pull_request' && 'dev' || inputs.environment }}
         run: echo "environment=$SELECTED_ENVIRONMENT" >> "$GITHUB_OUTPUT"
       - id: config
-        run: python3 scripts/export_config.py config-infra-${{ steps.select.outputs.environment }}.yml
+        run: python3 mlops/scripts/export_config.py config-infra-${{ steps.select.outputs.environment }}.yml
 
   lint:
     needs: config
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-      - run: az bicep build --file infrastructure/bicep/main.bicep
+      - run: az bicep build --file infrastructure/main.bicep
 
   validate:
     needs: [config, lint]
@@ -64,16 +64,16 @@ jobs:
         env:
           AZURE_PRINCIPAL_OBJECT_ID: ${{ vars.AZURE_PRINCIPAL_OBJECT_ID }}
         run: |
-          python3 scripts/render_bicep_parameters.py \
+          python3 mlops/scripts/render_bicep_parameters.py \
             config-infra-${{ needs.config.outputs.environment }}.yml \
-            infrastructure/bicep/parameters.json
+            infrastructure/parameters.json
       - name: Validate deployment
         run: |
           az deployment sub validate \
             --name "mlops-validate-${{ github.run_id }}" \
             --location "${{ needs.config.outputs.location }}" \
-            --template-file infrastructure/bicep/main.bicep \
-            --parameters @infrastructure/bicep/parameters.json
+            --template-file infrastructure/main.bicep \
+            --parameters @infrastructure/parameters.json
 
   deploy:
     needs: [config, validate]
@@ -91,13 +91,13 @@ jobs:
         env:
           AZURE_PRINCIPAL_OBJECT_ID: ${{ vars.AZURE_PRINCIPAL_OBJECT_ID }}
         run: |
-          python3 scripts/render_bicep_parameters.py \
+          python3 mlops/scripts/render_bicep_parameters.py \
             config-infra-${{ needs.config.outputs.environment }}.yml \
-            infrastructure/bicep/parameters.json
+            infrastructure/parameters.json
       - name: Deploy infrastructure
         run: |
           az deployment sub create \
             --name "mlops-${{ needs.config.outputs.environment }}-${{ github.run_id }}" \
             --location "${{ needs.config.outputs.location }}" \
-            --template-file infrastructure/bicep/main.bicep \
-            --parameters @infrastructure/bicep/parameters.json
+            --template-file infrastructure/main.bicep \
+            --parameters @infrastructure/parameters.json

@@ -26,7 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - id: config
-        run: python3 scripts/export_config.py config-infra-${{ inputs.environment }}.yml
+        run: python3 mlops/scripts/export_config.py config-infra-${{ inputs.environment }}.yml
 
   train:
     needs: config
@@ -39,6 +39,6 @@ jobs:
       workspace_name: ${{ needs.config.outputs.workspace_name }}
       python_version: ${{ needs.config.outputs.python_version }}
       runner: ${{ needs.config.outputs.runner }}
-      job_file: classical/python-sdk-v2/mlops/azureml/train/job.yml
+      job_file: mlops/azureml/train/job.yml
       model_name: ${{ needs.config.outputs.model_name }}
     secrets: inherit

@@ -33,7 +33,7 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - id: config
-        run: python3 scripts/export_config.py config-infra-${{ inputs.environment }}.yml
+        run: python3 mlops/scripts/export_config.py config-infra-${{ inputs.environment }}.yml
 
   batch:
     needs: config
@@ -51,6 +51,6 @@ jobs:
       model_name: ${{ needs.config.outputs.model_name }}
       model_version: ${{ inputs.model_version }}
       compute: ${{ needs.config.outputs.compute }}
-      request_batch_file: classical/python-sdk-v2/data/taxi-batch.csv
+      request_batch_file: data/taxi-batch.csv
       request_type: uri_file
     secrets: inherit

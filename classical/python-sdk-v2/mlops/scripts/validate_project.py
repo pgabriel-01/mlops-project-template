@@ -137,6 +137,7 @@ def generated_paths() -> list[Path]:
         PATTERN_ROOT / "data" / "taxi-batch.csv",
         PATTERN_ROOT / "data" / "taxi-data.csv",
         PATTERN_ROOT / "data" / "taxi-request.json",
+        PATTERN_ROOT / "mlops" / "azureml" / "deploy" / "batch" / "score.py",
         PATTERN_ROOT / "mlops" / "azureml" / "train" / "job.yml",
         *[CONFIG_ROOT / f"config-infra-{environment}.yml" for environment in ENVIRONMENTS],
         *WORKFLOW_ROOT.glob("*.yml"),

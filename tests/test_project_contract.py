@@ -13,35 +13,40 @@ ROOT = Path(__file__).resolve().parents[1]
 PATTERN_ROOT = ROOT / "classical" / "python-sdk-v2"
 SCRIPT_ROOT = PATTERN_ROOT / "mlops" / "scripts"
 TEMPLATE_REPOSITORY = "pgabriel-01/mlops-templates"
-TEMPLATE_REF = "fa01338a90e0a2fc09be95f8e1059a2e6fa2a4c7"
+TEMPLATE_REF = "8dbe32cab29268ef128ece88ef994927648fc70f"
 BATCH_ENVIRONMENT = "azureml://registries/azureml/environments/sklearn-1.5/versions/53"
+SCORING_CODE_DIRECTORY = "mlops/azureml/deploy/batch"
+SCORING_SCRIPT = "score.py"
 TEMPLATE_BLOBS = {
-    "src/python-sdk-v2/aml_client.py": ("9dc0f87f3e0ecc061a02ec3b70204cda1cb92008"),
+    "src/python-sdk-v2/aml_client.py": ("bac5bed341c5e6658842ed2bf91a73ccdabe83b5"),
     ".github/workflows/python-sdk-v2-train-register.yml": (
         "16504df1fca114dcb8f5105f51baa115b2814527"
     ),
     ".github/workflows/python-sdk-v2-batch.yml": (
-        "4a9532ed02a6c3ff6eedb66617a4f7c5b67adbd7"
+        "280038a670216effda41ad1df234e24e342c4219"
     ),
     ".github/workflows/python-sdk-v2-online.yml": (
-        "aa82d72db8fcb5c0fd60303d40efb7a38c55a623"
+        "6289915fcc151d8550618feac168e64037b8a423"
     ),
     "src/python-sdk-v2/create_batch_endpoint.py": (
         "c8be7b6e9f15c4f80a0980156eeaba45319459bc"
     ),
     "src/python-sdk-v2/create_batch_deployment.py": (
-        "2d293cf2af536aa272369fa9736bb1f7bc172b86"
+        "9285133b2725b45cf396ec2c2dadfdb1ebc9f783"
     ),
     "src/python-sdk-v2/test_batch_endpoint.py": (
         "de162e28504f710fe02b8380fadf631ce3456269"
     ),
     "src/python-sdk-v2/create_online_endpoint.py": (
-        "388c0bef31c2ee2647dddca2fe91f5335c28284d"
+        "f20a1833988d37f7e3732e9e10746ffaf1008b5b"
     ),
     "src/python-sdk-v2/create_online_deployment.py": (
         "2d635b99fe710e458a466154eceba852c4670e96"
     ),
-    "tests/test_python_sdk_v2.py": "b45ceab12a5918c2c0a836a895d62bd3b1917a13",
+    "tests/test_python_sdk_v2.py": "7b89ba3b24152b3b96910307e5b7dbcdd1fd8f48",
+    "examples/python-sdk-v2/batch-scoring/score.py": (
+        "99d2a411ff19c2a80f0290f7c57839e2172df58e"
+    ),
 }
 sys.path.insert(0, str(SCRIPT_ROOT))
 
@@ -242,6 +247,30 @@ class ProjectContractTests(unittest.TestCase):
         self.assertNotIn("infrastructure/bicep/", infrastructure)
         self.assertIn("job_file: mlops/azureml/train/job.yml", training)
         self.assertIn("request_file: data/taxi-request.json", online)
+        for output_name, config_name in (
+            ("compute", "online_compute"),
+            ("environment_name", "online_environment_name"),
+            ("environment_version", "online_environment_version"),
+            ("instance_type", "online_instance_type"),
+        ):
+            self.assertIn(
+                f"{output_name}: ${{{{ steps.config.outputs.{config_name} }}}}",
+                online,
+            )
+            self.assertIn(
+                f"{output_name}: ${{{{ needs.config.outputs.{output_name} }}}}",
+                online,
+            )
+        self.assertIn("tls_ca_key_vault_secret_id:", online)
+        self.assertIn(
+            "tls_ca_key_vault_secret_id: " "${{ inputs.tls_ca_key_vault_secret_id }}",
+            online,
+        )
+        self.assertIn(
+            "endpoint_uami_resource_id: " "${{ inputs.endpoint_uami_resource_id }}",
+            online,
+        )
+        self.assertNotIn("Standard_DS3_v2", online)
         self.assertIn("request_batch_file: data/taxi-batch.csv", batch)
         self.assertIn(
             f"default: {BATCH_ENVIRONMENT}",
@@ -251,6 +280,11 @@ class ProjectContractTests(unittest.TestCase):
             "deployment_environment: ${{ inputs.deployment_environment }}",
             batch,
         )
+        self.assertIn(
+            f"scoring_code_directory: {SCORING_CODE_DIRECTORY}",
+            batch,
+        )
+        self.assertIn(f"scoring_script: {SCORING_SCRIPT}", batch)
         self.assertNotIn("conda_file:", batch)
 
         for content in (training, online, batch):
@@ -350,6 +384,9 @@ class ProjectContractTests(unittest.TestCase):
             training_job = (
                 project / "mlops" / "azureml" / "train" / "job.yml"
             ).read_text()
+            batch_scoring = (
+                project / SCORING_CODE_DIRECTORY / SCORING_SCRIPT
+            ).read_text()
             self.assertIn("infrastructure/main.bicep", infrastructure_workflow)
             self.assertIn(
                 "mlops/scripts/render_bicep_parameters.py",
@@ -389,6 +426,11 @@ class ProjectContractTests(unittest.TestCase):
                 "deployment_environment: " "${{ inputs.deployment_environment }}",
                 batch_workflow,
             )
+            self.assertIn(
+                f"scoring_code_directory: {SCORING_CODE_DIRECTORY}",
+                batch_workflow,
+            )
+            self.assertIn(f"scoring_script: {SCORING_SCRIPT}", batch_workflow)
             self.assertNotIn("conda_file:", batch_workflow)
             self.assertNotIn("image:", batch_workflow)
             self.assertNotIn(":latest", batch_workflow)
@@ -403,6 +445,9 @@ class ProjectContractTests(unittest.TestCase):
             )
             self.assertNotIn("conda_file:", training_job)
             self.assertNotIn(":latest", training_job)
+            self.assertIn("def init():", batch_scoring)
+            self.assertIn("def run(mini_batch):", batch_scoring)
+            self.assertIn('os.environ["AZUREML_MODEL_DIR"]', batch_scoring)
             self.assertTrue(
                 project.joinpath("mlops", "azureml", "train", "job.yml").is_file()
             )
@@ -479,6 +524,9 @@ class ProjectContractTests(unittest.TestCase):
             "src/python-sdk-v2/create_online_deployment.py"
         )
         template_tests = load_pinned_template("tests/test_python_sdk_v2.py")
+        scoring_example = load_pinned_template(
+            "examples/python-sdk-v2/batch-scoring/score.py"
+        )
 
         self.assertIn("wait_for_poller(begin_create_or_update())", aml_client)
         self.assertIn("except ResourceExistsError as exc:", aml_client)
@@ -521,7 +569,18 @@ class ProjectContractTests(unittest.TestCase):
             "DEPLOYMENT_ENVIRONMENT: ${{ inputs.deployment_environment }}",
             batch_workflow,
         )
+        self.assertIn(
+            "SCORING_CODE_DIRECTORY: ${{ inputs.scoring_code_directory }}",
+            batch_workflow,
+        )
+        self.assertIn("SCORING_SCRIPT: ${{ inputs.scoring_script }}", batch_workflow)
         self.assertIn('--environment "$DEPLOYMENT_ENVIRONMENT"', batch_workflow)
+        self.assertIn('--repository_root "$GITHUB_WORKSPACE"', batch_workflow)
+        self.assertIn(
+            '--scoring_code_directory "$SCORING_CODE_DIRECTORY"',
+            batch_workflow,
+        )
+        self.assertIn('--scoring_script "$SCORING_SCRIPT"', batch_workflow)
         self.assertIn("wait_for_resource_create_or_update(", batch_endpoint)
         self.assertIn("wait_for_resource_create_or_update(", batch_deployment)
         self.assertIn("DEFAULT_BATCH_ENVIRONMENT", batch_deployment)
@@ -531,23 +590,6 @@ class ProjectContractTests(unittest.TestCase):
         self.assertIn("IMMUTABLE_ENVIRONMENT_PATTERNS", batch_deployment)
         self.assertNotIn("conda_file", batch_deployment)
         self.assertNotIn("Environment(", batch_deployment)
-        self.assertIn(
-            "DEPLOYMENT_ENVIRONMENT: ${{ inputs.deployment_environment }}",
-            batch_workflow,
-        )
-        self.assertIn(
-            f"default: {BATCH_ENVIRONMENT}",
-            batch_workflow,
-        )
-        self.assertIn(
-            '--environment "$DEPLOYMENT_ENVIRONMENT"',
-            batch_workflow,
-        )
-        self.assertIn(
-            "type=validate_immutable_environment_reference",
-            batch_deployment,
-        )
-        self.assertIn("environment=environment", batch_deployment)
         self.assertLess(
             batch_deployment.index(
                 "environment = validate_immutable_environment_reference("
@@ -556,8 +598,15 @@ class ProjectContractTests(unittest.TestCase):
             batch_deployment.index("ml_client = create_ml_client(args)"),
         )
         self.assertNotIn("CondaConfiguration", batch_deployment)
-        self.assertNotIn("code_configuration=", batch_deployment)
         self.assertNotIn("image=", batch_deployment)
+        self.assertIn("CodeConfiguration(", batch_deployment)
+        self.assertIn("code_configuration=code_configuration", batch_deployment)
+        self.assertIn("resolve_scoring_code(", batch_deployment)
+        self.assertIn("verify_live_deployment(", batch_deployment)
+        self.assertLess(
+            batch_deployment.index("verify_live_deployment("),
+            batch_deployment.index("endpoint.defaults.deployment_name"),
+        )
         self.assertIn(
             "return wait_for_job(ml_client, invocation.name)", batch_invocation
         )
@@ -568,20 +617,29 @@ class ProjectContractTests(unittest.TestCase):
             "test_batch_endpoint_terminal_operation_failure_propagates",
             "test_batch_deployment_uses_explicit_immutable_environment",
             "test_batch_deployment_rejects_mutable_environment_reference",
-            "test_batch_workflow_uses_pinned_curated_environment",
             "test_batch_cli_defaults_to_immutable_prebuilt_environment",
+            "test_batch_workflow_passes_explicit_scoring_configuration",
+            "test_batch_scoring_example_defines_supported_mlflow_contract",
+            "test_batch_deployment_rejects_invalid_scoring_paths",
+            "test_batch_deployment_rejects_null_or_mismatched_live_configuration",
+            "test_batch_deployment_repeat_update_waits_then_verifies_before_defaulting",
         ):
             self.assertIn(test_name, template_tests)
         self.assertIn(
-            '"image" not in batch_deployment_type.call_args.kwargs', template_tests
-        )
-        self.assertIn(
-            '"code_configuration" not in batch_deployment_type.call_args.kwargs',
+            'batch_deployment_type.call_args.kwargs["code_configuration"]',
             template_tests,
         )
         self.assertIn("/versions/latest", template_tests)
         self.assertIn('"conda.yml"', template_tests)
         self.assertIn("create_client.assert_not_called()", template_tests)
+        self.assertEqual(
+            scoring_example,
+            (PATTERN_ROOT / SCORING_CODE_DIRECTORY / SCORING_SCRIPT).read_text(),
+        )
+        self.assertIn("def init():", scoring_example)
+        self.assertIn("def run(mini_batch):", scoring_example)
+        self.assertIn("pd.read_csv", scoring_example)
+        self.assertIn("pd.read_parquet", scoring_example)
 
         for required_input in (
             "compute:",
@@ -595,6 +653,21 @@ class ProjectContractTests(unittest.TestCase):
         self.assertIn('--compute "$COMPUTE"', online_workflow)
         self.assertIn('--environment_name "$ENVIRONMENT_NAME"', online_workflow)
         self.assertIn('--environment_version "$ENVIRONMENT_VERSION"', online_workflow)
+        self.assertIn("tls_ca_key_vault_secret_id:", online_workflow)
+        self.assertIn(
+            "TLS_CA_KEY_VAULT_SECRET_ID: " "${{ inputs.tls_ca_key_vault_secret_id }}",
+            online_workflow,
+        )
+        self.assertIn(
+            "REQUESTS_CA_BUNDLE: ${{ steps.private_ca.outputs.ca_bundle_path }}",
+            online_workflow,
+        )
+        self.assertIn(
+            "SSL_CERT_FILE: ${{ steps.private_ca.outputs.ca_bundle_path }}",
+            online_workflow,
+        )
+        self.assertIn('--ca_bundle "$CA_BUNDLE_PATH"', online_workflow)
+        self.assertIn('rm -f -- "$CA_BUNDLE_PATH"', online_workflow)
         self.assertIn("KubernetesOnlineEndpoint", online_endpoint)
         self.assertIn("get_kubernetes_online_compute", online_endpoint)
         self.assertIn("KubernetesOnlineDeployment", online_deployment)

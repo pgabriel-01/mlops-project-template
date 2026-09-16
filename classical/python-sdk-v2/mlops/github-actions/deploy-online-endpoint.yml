@@ -13,6 +13,15 @@ on:
         description: Registered model version
         required: true
         type: string
+      tls_ca_key_vault_secret_id:
+        description: Full Key Vault secret resource ID containing the private endpoint CA bundle
+        required: true
+        type: string
+      endpoint_uami_resource_id:
+        description: Optional endpoint user-assigned managed identity resource ID
+        required: false
+        default: ""
+        type: string
 
 permissions:
   id-token: write
@@ -57,5 +66,7 @@ jobs:
       compute: ${{ needs.config.outputs.compute }}
       environment_name: ${{ needs.config.outputs.environment_name }}
       environment_version: ${{ needs.config.outputs.environment_version }}
+      tls_ca_key_vault_secret_id: ${{ inputs.tls_ca_key_vault_secret_id }}
+      endpoint_uami_resource_id: ${{ inputs.endpoint_uami_resource_id }}
       request_file: data/taxi-request.json
     secrets: inherit

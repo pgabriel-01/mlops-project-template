@@ -25,6 +25,11 @@ AML CLI v2 implementation under `classical/aml-cli-v2` and follow the
 [Azure DevOps deployment runbook](../docs/azure-devops-deployment.md). The
 `classical/python-sdk-v2` implementation is not part of that deployment path.
 
+For the additive GitHub Actions, Python SDK v2, and Bicep project pattern, see
+[`classical/python-sdk-v2/README.md`](python-sdk-v2/README.md). Its source
+workflows and portable environment configurations are isolated under the
+`classical/python-sdk-v2` tree so existing deployment patterns remain unchanged.
+
 
 ## ‼️ Feedback or Issues
 

@@ -4,7 +4,7 @@ param location string
 param tags object
 param enablePublicAccess bool = true
 param managedIdentityPrincipalId string = ''
-param adoServicePrincipalId string = ''
+param ciPrincipalObjectId string = ''
 
 resource amlRegistry 'Microsoft.MachineLearningServices/registries@2024-04-01' = {
   name: 'reg-${baseName}'
@@ -50,13 +50,13 @@ resource rbacMiRegistryUser 'Microsoft.Authorization/roleAssignments@2022-04-01'
   }
 }
 
-// AzureML Registry User — allows the ADO/GHA service principal to push/pull assets
-resource rbacSpnRegistryUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(adoServicePrincipalId)) {
-  name: guid(amlRegistry.id, adoServicePrincipalId, '1823dd4f-9b8c-4ab6-ab4e-7397a3684615')
+// AzureML Registry User — allows the CI workload identity to push/pull assets
+resource rbacCiRegistryUser 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!empty(ciPrincipalObjectId)) {
+  name: guid(amlRegistry.id, ciPrincipalObjectId, '1823dd4f-9b8c-4ab6-ab4e-7397a3684615')
   scope: amlRegistry
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '1823dd4f-9b8c-4ab6-ab4e-7397a3684615')
-    principalId: adoServicePrincipalId
+    principalId: ciPrincipalObjectId
     principalType: 'ServicePrincipal'
   }
 }

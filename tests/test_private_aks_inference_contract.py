@@ -211,11 +211,23 @@ class PrivateAksInferenceContractTests(unittest.TestCase):
         self.assertIn("sslCertPemFile: extensionTlsCertPem", cluster)
         self.assertIn("sslKeyPemFile: extensionTlsKeyPem", cluster)
         self.assertNotIn("sslSecret:", cluster)
-        self.assertIn("deploymentScripts@2023-08-01", cluster)
-        self.assertIn("az aks command invoke", cluster)
-        self.assertIn("kubectl apply -f -", cluster)
-        self.assertIn("for attempt in $(seq 1 12)", cluster)
-        self.assertIn("namespaceBootstrap", cluster)
+        self.assertNotIn("Microsoft.Resources/deploymentScripts", main + cluster)
+        self.assertNotIn("azCliVersion", main + cluster)
+        self.assertNotIn("az aks command invoke", main + cluster)
+        self.assertIn("namespaceBootstrapPrincipalId", cluster)
+        self.assertIn("principalId: namespaceBootstrapPrincipalId", cluster)
+        self.assertNotIn(
+            "principalId: workspaceManagedIdentityPrincipalId\n"
+            "    principalType: 'ServicePrincipal'\n"
+            "    roleDefinitionId: namespaceBootstrapRoleId",
+            cluster,
+        )
+        self.assertIn("if (deployExtension)", cluster)
+        self.assertIn("completePrivateAksInferenceDeployment", main)
+        self.assertIn(
+            "if (enablePrivateAksInference && completePrivateAksInferenceDeployment)",
+            main,
+        )
         self.assertIn("releaseTrain: extensionReleaseTrain", cluster)
         self.assertIn("federatedIdentityCredentials@2024-11-30", identity)
         self.assertIn("storageBlobDataReaderRoleId", identity)
@@ -244,6 +256,36 @@ class PrivateAksInferenceContractTests(unittest.TestCase):
         self.assertNotIn("listKeys(", main + cluster + identity + compute)
         self.assertNotIn("enableNodePublicIP: true", cluster)
         self.assertIn("clusterResourceId: aksClusterResourceId", main)
+
+    def test_workflow_bootstraps_namespace_without_deployment_scripts(self):
+        workflow = (
+            PATTERN_ROOT / "mlops" / "github-actions" / "deploy-infrastructure.yml"
+        ).read_text()
+
+        self.assertIn("completePrivateAksInferenceDeployment=false", workflow)
+        self.assertIn("legacyNamespaceBootstrapRoleAssignmentId", workflow)
+        self.assertIn("az role assignment delete --ids", workflow)
+        self.assertIn(
+            "Legacy workspace identity namespace bootstrap role assignment still exists",
+            workflow,
+        )
+        self.assertIn("invoke_aks_command.py", workflow)
+        self.assertIn('--file "$namespace_manifest"', workflow)
+        self.assertIn(
+            '--command "kubectl apply -f $(basename "$namespace_manifest")"',
+            workflow,
+        )
+        self.assertIn("for attempt in $(seq 1 12)", workflow)
+        self.assertIn('if [[ "$bootstrap_succeeded" != "true" ]]', workflow)
+        self.assertNotIn("az aks command invoke", workflow)
+        bootstrap = workflow.split(
+            "            bootstrap_outputs=",
+            1,
+        )[1].split(
+            "          az deployment sub create",
+            1,
+        )[0]
+        self.assertNotIn("|| true", bootstrap)
 
     def test_no_code_workflow_retires_runtime_builder(self):
         runtime_root = PATTERN_ROOT / "mlops" / "online-runtime"

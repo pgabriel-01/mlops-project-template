@@ -287,6 +287,46 @@ class PrivateAksInferenceContractTests(unittest.TestCase):
         )[0]
         self.assertNotIn("|| true", bootstrap)
 
+    def test_namespace_bootstrap_role_has_exact_kubernetes_data_actions(self):
+        role = (
+            ROOT / "infrastructure" / "bicep" / "modules" / "aks_run_command_role.bicep"
+        ).read_text()
+
+        actions = role.split("        actions: [", 1)[1].split("        ]", 1)[0]
+        data_actions = role.split("        dataActions: [", 1)[1].split(
+            "        ]",
+            1,
+        )[0]
+        self.assertEqual(
+            {
+                "Microsoft.ContainerService/managedClusters/runCommand/action",
+                "Microsoft.ContainerService/managedClusters/commandResults/read",
+            },
+            {line.strip().strip("'") for line in actions.splitlines() if line.strip()},
+        )
+        self.assertEqual(
+            {
+                "Microsoft.ContainerService/managedClusters/namespaces/read",
+                "Microsoft.ContainerService/managedClusters/namespaces/write",
+                "Microsoft.ContainerService/managedClusters/serviceaccounts/read",
+                "Microsoft.ContainerService/managedClusters/serviceaccounts/write",
+            },
+            {
+                line.strip().strip("'")
+                for line in data_actions.splitlines()
+                if line.strip()
+            },
+        )
+        for forbidden in (
+            "/delete",
+            "impersonate",
+            "secrets/",
+            "pods/",
+            "cluster-admin",
+            "Azure Kubernetes Service RBAC",
+        ):
+            self.assertNotIn(forbidden, role)
+
     def test_no_code_workflow_retires_runtime_builder(self):
         runtime_root = PATTERN_ROOT / "mlops" / "online-runtime"
         publish = (

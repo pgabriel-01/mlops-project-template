@@ -121,7 +121,7 @@ resource amlExtension 'Microsoft.KubernetesConfiguration/extensions@2025-03-01' 
       inferenceRouterHA: 'True'
       inferenceRouterServiceType: 'LoadBalancer'
       internalLoadBalancerProvider: 'azure'
-      nodeSelector: 'ml.azure.com/inference=true'
+      'nodeSelector.ml\\.azure\\.com/inference': 'true'
       sslCname: extensionSslCname
     }
     configurationProtectedSettings: {

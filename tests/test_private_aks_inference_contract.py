@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -207,6 +208,11 @@ class PrivateAksInferenceContractTests(unittest.TestCase):
         )
         self.assertIn("internalLoadBalancerProvider: 'azure'", cluster)
         self.assertIn("allowInsecureConnections: 'False'", cluster)
+        self.assertIn(
+            "'nodeSelector.ml\\\\.azure\\\\.com/inference': 'true'",
+            cluster,
+        )
+        self.assertNotIn("nodeSelector: 'ml.azure.com/inference=true'", cluster)
         self.assertIn("configurationProtectedSettings", cluster)
         self.assertIn("sslCertPemFile: extensionTlsCertPem", cluster)
         self.assertIn("sslKeyPemFile: extensionTlsKeyPem", cluster)
@@ -256,6 +262,33 @@ class PrivateAksInferenceContractTests(unittest.TestCase):
         self.assertNotIn("listKeys(", main + cluster + identity + compute)
         self.assertNotIn("enableNodePublicIP: true", cluster)
         self.assertIn("clusterResourceId: aksClusterResourceId", main)
+
+    def test_compiled_extension_uses_flattened_node_selector_setting(self):
+        if shutil.which("az") is None:
+            self.skipTest("Azure CLI is required to compile Bicep")
+
+        module = (
+            ROOT / "infrastructure" / "bicep" / "modules" / "aks_aml_inference.bicep"
+        )
+        result = subprocess.run(
+            ["az", "bicep", "build", "--file", module, "--stdout"],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        template = json.loads(result.stdout)
+        extension = next(
+            resource
+            for resource in template["resources"]
+            if resource["type"] == "Microsoft.KubernetesConfiguration/extensions"
+        )
+        settings = extension["properties"]["configurationSettings"]
+
+        self.assertEqual(
+            "true",
+            settings[r"nodeSelector.ml\.azure\.com/inference"],
+        )
+        self.assertNotIn("nodeSelector", settings)
 
     def test_workflow_bootstraps_namespace_without_deployment_scripts(self):
         workflow = (

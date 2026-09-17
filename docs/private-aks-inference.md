@@ -47,6 +47,8 @@ When `enable_private_aks_inference: true`, the subscription deployment:
 - grants the UAMI only `AcrPull` and `Storage Blob Data Reader`;
 - grants the workspace UAMI the documented AKS attachment roles and Managed
   Identity Operator on the inference UAMI;
+- grants the GitHub OIDC workflow principal only the custom AKS Run Command
+  actions needed to apply the namespace contract;
 - registers the AKS managed-cluster resource as an AML `Kubernetes` compute and
   defines the configured instance type.
 
@@ -139,12 +141,17 @@ Before enabling the feature:
    Entra ID, Azure Resource Manager, Azure ML regional APIs, MCR, the private ACR
    data endpoint, private Storage endpoints, and required Azure telemetry hosts.
    NAT does not replace DNS or firewall allowlists.
-7. The Bicep deployment applies the checked-in namespace/service-account
-   manifest idempotently through AKS Run Command before extension installation,
-   and extension completion is a dependency of AML compute attachment. The
-   template creates a custom role containing only `runCommand/action` and
-   `commandResults/read` and assigns it to the workspace UAMI at the AKS scope.
-   The deployment principal needs permission to create that role and assignment.
+7. The GitHub OIDC workflow performs a two-phase Bicep deployment. The first
+   phase creates the AKS prerequisites and assigns a custom role containing only
+   `runCommand/action` and `commandResults/read` to the workflow principal at the
+   AKS scope. The workflow removes the obsolete workspace-UAMI assignment,
+   applies the checked-in namespace/service-account manifest idempotently through
+   the strict AKS Run Command helper, and fails if cleanup or the remote command
+   fails. The second Bicep phase installs the extension and attaches AML compute.
+   No `Microsoft.Resources/deploymentScripts` resource or key-backed script
+   storage is used, so Storage shared-key access remains disabled.
+   A failed Deployment Script record from an older deployment can remain visible
+   until its retention interval expires, but the workflow does not reuse it.
    After deployment, read the internal load-balancer IP from
    `azureml-fe.status.loadBalancer.ingress[0].ip` and create a private DNS **A
    record** for `aml_kubernetes_extension_ssl_cname`. Do not create a CNAME that

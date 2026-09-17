@@ -71,16 +71,23 @@ def load_pinned_template(path: str) -> str:
 
 
 class ProjectContractTests(unittest.TestCase):
-    def test_azure_cli_versions_match_their_runtime_support(self):
-        deployment_script = (
-            ROOT / "infrastructure" / "bicep" / "modules" / "aks_aml_inference.bicep"
+    def test_runner_cli_pin_does_not_require_a_deployment_script(self):
+        bicep = "\n".join(
+            path.read_text()
+            for path in (ROOT / "infrastructure" / "bicep").rglob("*.bicep")
+        )
+        deployment_workflow = (
+            PATTERN_ROOT / "mlops" / "github-actions" / "deploy-infrastructure.yml"
         ).read_text()
         runner_image = (
             PATTERN_ROOT / "runner-bootstrap" / "image" / "Dockerfile"
         ).read_text()
 
-        self.assertIn("azCliVersion: '2.89.0'", deployment_script)
-        self.assertNotIn("azCliVersion: '2.90.0'", deployment_script)
+        self.assertNotIn("Microsoft.Resources/deploymentScripts", bicep)
+        self.assertNotIn("azCliVersion", bicep)
+        self.assertIn("invoke_aks_command.py", deployment_workflow)
+        self.assertIn("for attempt in $(seq 1 12)", deployment_workflow)
+        self.assertNotIn("az aks command invoke", deployment_workflow)
         self.assertIn("ARG AZURE_CLI_VERSION=2.90.0-1~noble", runner_image)
 
     def test_generated_tree_and_workflow_contract(self):

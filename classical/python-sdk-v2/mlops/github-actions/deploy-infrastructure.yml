@@ -125,6 +125,77 @@ jobs:
           if [[ "$PRIVATE_AKS_INFERENCE" == "true" ]]; then
             printf '%s' "$TLS_CERT_PEM" | openssl x509 -noout -ext subjectAltName | grep -q 'DNS:'
             printf '%s' "$TLS_CERT_PEM" | openssl x509 -noout -checkhost "$SSL_CNAME"
+            bootstrap_outputs="$RUNNER_TEMP/private-aks-bootstrap-outputs.json"
+            az deployment sub create \
+              --name "mlops-${{ needs.config.outputs.environment }}-${{ github.run_id }}-bootstrap" \
+              --location "${{ needs.config.outputs.location }}" \
+              --template-file infrastructure/main.bicep \
+              --parameters @infrastructure/parameters.json \
+              --parameters completePrivateAksInferenceDeployment=false \
+                           amlKubernetesExtensionTlsCertPem="$TLS_CERT_PEM" \
+                           amlKubernetesExtensionTlsKeyPem="$TLS_KEY_PEM" \
+              --query properties.outputs \
+              --output json > "$bootstrap_outputs"
+
+            aks_cluster_id="$(jq -er '.aksClusterId.value' "$bootstrap_outputs")"
+            inference_client_id="$(jq -er '.onlineInferenceIdentityClientId.value' "$bootstrap_outputs")"
+            inference_namespace="$(jq -er '.onlineNamespace.value' "$bootstrap_outputs")"
+            legacy_assignment_id="$(jq -er '.legacyNamespaceBootstrapRoleAssignmentId.value' "$bootstrap_outputs")"
+            aks_subscription="$(cut -d/ -f3 <<<"$aks_cluster_id")"
+            aks_resource_group="$(cut -d/ -f5 <<<"$aks_cluster_id")"
+            aks_name="$(cut -d/ -f9 <<<"$aks_cluster_id")"
+            namespace_manifest="$RUNNER_TEMP/azureml-inference-namespace.yaml"
+
+            python3 - "$inference_namespace" "$inference_client_id" "$namespace_manifest" <<'PY'
+          import sys
+          from pathlib import Path
+
+          namespace, client_id, output_path = sys.argv[1:]
+          content = Path(
+              "infrastructure/manifests/azureml-inference-namespace.yaml"
+          ).read_text()
+          content = content.replace("__ONLINE_NAMESPACE__", namespace)
+          content = content.replace(
+              "__ONLINE_INFERENCE_IDENTITY_CLIENT_ID__",
+              client_id,
+          )
+          if "__ONLINE_" in content:
+              raise SystemExit("Namespace manifest placeholders were not resolved")
+          Path(output_path).write_text(content)
+          PY
+
+            if az resource show \
+              --ids "$legacy_assignment_id" \
+              --api-version 2022-04-01 \
+              --only-show-errors > /dev/null 2>&1; then
+              az role assignment delete --ids "$legacy_assignment_id"
+            fi
+            if az resource show \
+              --ids "$legacy_assignment_id" \
+              --api-version 2022-04-01 \
+              --only-show-errors > /dev/null 2>&1; then
+              echo "Legacy workspace identity namespace bootstrap role assignment still exists" >&2
+              exit 1
+            fi
+
+            bootstrap_succeeded=false
+            for attempt in $(seq 1 12); do
+              if python3 runner-bootstrap/scripts/invoke_aks_command.py \
+                --subscription "$aks_subscription" \
+                --resource-group "$aks_resource_group" \
+                --name "$aks_name" \
+                --file "$namespace_manifest" \
+                --command "kubectl apply -f $(basename "$namespace_manifest")"; then
+                bootstrap_succeeded=true
+                break
+              fi
+              echo "AKS namespace bootstrap attempt $attempt failed; waiting for RBAC propagation" >&2
+              sleep 10
+            done
+            if [[ "$bootstrap_succeeded" != "true" ]]; then
+              echo "Unable to apply the Azure ML namespace contract through AKS Run Command" >&2
+              exit 1
+            fi
           fi
           az deployment sub create \
             --name "mlops-${{ needs.config.outputs.environment }}-${{ github.run_id }}" \

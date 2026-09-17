@@ -18,6 +18,7 @@ param sharedPrivateDnsZoneResourceIds object = {}
 
 // Private Azure ML Kubernetes online inference on an existing AKS cluster
 param enablePrivateAksInference bool = false
+param completePrivateAksInferenceDeployment bool = true
 param aksClusterResourceId string = ''
 param aksNodeSubnetResourceId string = ''
 param onlineComputeName string = 'aks-inference'
@@ -102,6 +103,9 @@ var mlflowNoCodeEnvironmentValidated = onlineMlflowNoCode && hasAnyOnlineEnviron
   : true
 var imageOnlyEnvironmentValidated = !onlineMlflowNoCode && ((enablePrivateAksInference && !hasCompleteOnlineEnvironment) || (hasAnyOnlineEnvironmentInput && !hasCompleteOnlineEnvironment))
   ? fail('Image-only mode requires an online environment name, version, and immutable image together.')
+  : true
+var privateAksBootstrapPrincipalValidated = enablePrivateAksInference && empty(ciPrincipalObjectId)
+  ? fail('Private AKS inference requires the GitHub OIDC principal object ID.')
   : true
 
 var baseName  = '${prefix}-${postfix}${projectNumber}${env}'
@@ -453,13 +457,10 @@ module aksAmlInference './modules/aks_aml_inference.bicep' = if (enablePrivateAk
   scope: resourceGroup(aksSubscriptionId, aksResourceGroupName)
   params: {
     clusterName: aksClusterName
-    location: location
     workspaceResourceId: mlw.outputs.amlsId
-    workspaceManagedIdentityResourceId: mi.outputs.managedIdentityId
     workspaceManagedIdentityPrincipalId: mi.outputs.managedIdentityPrincipalId
     namespaceBootstrapRoleId: aksNamespaceBootstrapRole!.outputs.roleId
-    inferenceIdentityClientId: amlKubernetesIdentity!.outputs.identityClientId
-    inferenceNamespace: onlineNamespace
+    namespaceBootstrapPrincipalId: ciPrincipalObjectId
     nodePoolName: onlineNodePoolName
     nodeSubnetResourceId: aksNodeSubnetResourceId
     nodeVmSize: onlineNodeVmSize
@@ -468,6 +469,7 @@ module aksAmlInference './modules/aks_aml_inference.bicep' = if (enablePrivateAk
     nodeMaxPods: onlineNodeMaxPods
     extensionName: amlKubernetesExtensionName
     extensionReleaseTrain: amlKubernetesExtensionReleaseTrain
+    deployExtension: completePrivateAksInferenceDeployment
     extensionTlsCertPem: amlKubernetesExtensionTlsCertPem
     extensionTlsKeyPem: amlKubernetesExtensionTlsKeyPem
     extensionSslCname: amlKubernetesExtensionSslCname
@@ -488,7 +490,7 @@ module amlOnlineEnvironment './modules/aml_environment.bicep' = if (enablePrivat
   ]
 }
 
-module amlKubernetesCompute './modules/aml_kubernetes_compute.bicep' = if (enablePrivateAksInference) {
+module amlKubernetesCompute './modules/aml_kubernetes_compute.bicep' = if (enablePrivateAksInference && completePrivateAksInferenceDeployment) {
   name: 'aml-kubernetes-compute'
   scope: resourceGroup(rg.name)
   params: {
@@ -661,10 +663,12 @@ output runnerHubIntegrationEnabled bool = enableVNet && hasRunnerHub
 output runnerHubReciprocalPeeringManaged bool = enableVNet && hasRunnerHub && manageRunnerHubToWorkloadPeering
 output runnerHubReciprocalPeeringCommand string = (enableVNet && hasRunnerHub && !manageRunnerHubToWorkloadPeering) ? 'az network vnet peering create --subscription "${runnerHubSubscriptionId}" --resource-group "${runnerHubResourceGroupName}" --vnet-name "${runnerHubVnetName}" --name "${runnerHubToSpokePeeringName}" --remote-vnet "${vnet!.outputs.vnetId}" --allow-vnet-access --allow-forwarded-traffic' : ''
 output privateAksInferenceEnabled bool = enablePrivateAksInference
-output onlineComputeName string = enablePrivateAksInference ? amlKubernetesCompute!.outputs.computeName : ''
+output onlineComputeName string = enablePrivateAksInference && completePrivateAksInferenceDeployment ? amlKubernetesCompute!.outputs.computeName : ''
 output onlineEnvironmentId string = enablePrivateAksInference && !onlineMlflowNoCode ? amlOnlineEnvironment!.outputs.environmentId : ''
-output onlineConfigurationValidated bool = mlflowNoCodeEnvironmentValidated && imageOnlyEnvironmentValidated
+output onlineConfigurationValidated bool = mlflowNoCodeEnvironmentValidated && imageOnlyEnvironmentValidated && privateAksBootstrapPrincipalValidated
 output onlineNamespace string = enablePrivateAksInference ? onlineNamespace : ''
+output aksClusterId string = enablePrivateAksInference ? aksClusterResourceId : ''
+output legacyNamespaceBootstrapRoleAssignmentId string = enablePrivateAksInference ? aksAmlInference!.outputs.legacyNamespaceBootstrapRoleAssignmentId : ''
 output onlineInferenceIdentityId string = enablePrivateAksInference ? amlKubernetesIdentity!.outputs.identityId : ''
 output onlineInferenceIdentityClientId string = enablePrivateAksInference ? amlKubernetesIdentity!.outputs.identityClientId : ''
 output onlineInferenceServiceAccountName string = enablePrivateAksInference ? onlineServiceAccountName : ''

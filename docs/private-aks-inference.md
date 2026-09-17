@@ -142,9 +142,12 @@ Before enabling the feature:
    data endpoint, private Storage endpoints, and required Azure telemetry hosts.
    NAT does not replace DNS or firewall allowlists.
 7. The GitHub OIDC workflow performs a two-phase Bicep deployment. The first
-   phase creates the AKS prerequisites and assigns a custom role containing only
-   `runCommand/action` and `commandResults/read` to the workflow principal at the
-   AKS scope. The workflow removes the obsolete workspace-UAMI assignment,
+   phase creates the AKS prerequisites and assigns a custom role to the workflow
+   principal at the AKS scope. Its ARM actions are limited to
+   `runCommand/action` and `commandResults/read`; its Kubernetes data actions are
+   limited to namespace read/write and service-account read/write. It grants no
+   delete, impersonation, Secret, Pod, or broad built-in role access. The
+   workflow removes the obsolete workspace-UAMI assignment,
    applies the checked-in namespace/service-account manifest idempotently through
    the strict AKS Run Command helper, and fails if cleanup or the remote command
    fails. The second Bicep phase installs the extension and attaches AML compute.

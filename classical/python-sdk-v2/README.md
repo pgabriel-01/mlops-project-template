@@ -339,6 +339,11 @@ a one-operation JSON Patch only to its `image` field, and verifies the exact
 immutable digest by reading the resource back. It does not read Helm release
 Secrets or expand the OIDC principal's secret access.
 
+The infrastructure workflow's namespace bootstrap role retains only the two AKS
+Run Command ARM actions plus namespace read/write and service-account read/write
+data actions. It does not grant delete, impersonation, Secret, Pod, or broad AKS
+built-in permissions.
+
 Endpoint, deployment, model, and request names remain workload-owned. Namespace,
 service account, workload UAMI, node pool, and AKS credentials remain
 infrastructure-only.

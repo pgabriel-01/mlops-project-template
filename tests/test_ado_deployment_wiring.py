@@ -485,6 +485,27 @@ class AzureDevOpsDeploymentWiringTests(unittest.TestCase):
             workspace,
         )
 
+    def test_private_resource_settings_are_idempotent(self):
+        key_vault = (
+            ROOT / "infrastructure/terraform/modules/key-vault/main.tf"
+        ).read_text()
+        storage = (
+            ROOT / "infrastructure/terraform/modules/storage-account/main.tf"
+        ).read_text()
+        workspace = (
+            ROOT / "infrastructure/terraform/modules/aml-workspace/main.tf"
+        ).read_text()
+
+        self.assertIn(
+            "public_network_access_enabled = !var.enable_private_endpoints",
+            key_vault,
+        )
+        self.assertIn("allow_nested_items_to_be_public = false", storage)
+        self.assertIn(
+            'scale_down_nodes_after_idle_duration = "PT2M"',
+            workspace,
+        )
+
     def test_endpoint_deployments_use_supported_private_compute(self):
         online = (
             ROOT

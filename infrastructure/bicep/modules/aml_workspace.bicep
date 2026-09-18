@@ -9,6 +9,7 @@ param managedIdentityId string
 param managedIdentityPrincipalId string
 param ciPrincipalObjectId string = ''
 param enableNetworkIsolation bool = false
+param imageBuildComputeName string = 'cpu-cluster'
 
 // Extract resource IDs for RBAC assignments
 var storageAccountName = split(stoacctid, '/')[8]
@@ -36,6 +37,7 @@ resource amls 'Microsoft.MachineLearningServices/workspaces@2025-06-01' = {
     keyVault: kvid
     applicationInsights: hasAppInsights ? appinsightid : null
     containerRegistry: hasContainerRegistry ? crid : null
+    imageBuildCompute: imageBuildComputeName
     primaryUserAssignedIdentity: managedIdentityId
     systemDatastoresAuthMode: 'identity'  // Use managed identity for datastore auth instead of access keys
     publicNetworkAccess: enableNetworkIsolation ? 'Disabled' : 'Enabled'
@@ -131,7 +133,7 @@ resource workspaceMsiAcrPull 'Microsoft.Authorization/roleAssignments@2022-04-01
   }
 }
 
-// RBAC: Workspace MSI -> ACR Push (for image_build_compute to push built images)
+// RBAC: Workspace MSI -> ACR Push (for imageBuildCompute to push built images)
 resource workspaceMsiAcrPush 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (hasContainerRegistry) {
   name: guid(containerRegistry.id, managedIdentityPrincipalId, '8311e382-0749-4cb8-b61a-304f252e45ec')
   scope: containerRegistry

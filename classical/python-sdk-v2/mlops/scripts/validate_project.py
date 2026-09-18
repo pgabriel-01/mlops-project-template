@@ -185,6 +185,13 @@ def validate_config_values(path: Path, config: dict[str, object]) -> list[str]:
         "ubuntu-24.04",
     }:
         errors.append(f"{path.name} private network requires a private runner")
+    if config.get("private_network") and not str(
+        config.get("batch_compute_name", "")
+    ).strip():
+        errors.append(
+            f"{path.name} private network requires batch_compute_name for "
+            "workspace image builds"
+        )
     runner_hub_vnet_resource_id = config.get("runner_hub_vnet_resource_id", "")
     if runner_hub_vnet_resource_id and not re.fullmatch(
         r"/subscriptions/[^/]+/resourceGroups/[^/]+/providers/"

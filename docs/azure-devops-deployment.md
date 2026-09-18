@@ -183,6 +183,9 @@ All pipelines are manual (`trigger: none`). At queue time select:
      registry, workspace identity, and training compute outputs.
 4. Run the training pipeline with the same environment, pool, and template ref.
    - Terraform owns `cpu-cluster` when `enable_aml_computecluster` is true.
+   - Terraform sets the workspace `image_build_compute_name` to `cpu-cluster`,
+     so private workspace-local environment builds use that no-public-IP
+     cluster and the workspace identity's existing `AcrPush` assignment.
    - The pipeline registers the environment and data asset, submits the Azure ML
      pipeline, waits for completion, and registers `taxi-model`.
 5. Run the online endpoint pipeline, the batch endpoint pipeline, or both.

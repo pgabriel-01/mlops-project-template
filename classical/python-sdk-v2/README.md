@@ -466,6 +466,15 @@ snapshot in workspace storage. Storage local authentication remains disabled by
 policy, so generated jobs must use the reviewed prebuilt environment rather than
 requiring that workspace-specific image-build path.
 
+Private workspaces also set the ARM `imageBuildCompute` property from
+`batch_compute_name` (default `cpu-cluster`). The workspace records the
+deterministic compute name on its initial deployment, and the compute deployment
+then depends on the workspace and its private endpoint. This avoids a circular
+ARM dependency while ensuring later workspace-local image builds run on the
+private, no-public-IP cluster and can push through the workspace identity's
+`AcrPush` assignment. No deployment script, registry shared key, or public
+network exception is required.
+
 This propagation was applied directly to the maintained source pattern and its
 assembled-tree contract; it was not produced by a standalone generator.
 

@@ -102,6 +102,7 @@ class ProjectContractTests(unittest.TestCase):
             config = load_config(PATTERN_ROOT / f"config-infra-{environment}.yml")
             self.assertTrue(config["private_network"])
             self.assertEqual("mlops-private", config["runner"])
+            self.assertEqual("cpu-cluster", config["batch_compute_name"])
             self.assertEqual("", config["runner_hub_vnet_resource_id"])
             self.assertFalse(config["manage_runner_hub_to_workload_peering"])
 
@@ -177,6 +178,10 @@ class ProjectContractTests(unittest.TestCase):
                     parameters["sharedPrivateDnsZoneResourceIds"]["value"],
                 )
                 self.assertEqual(
+                    "cpu-cluster",
+                    parameters["imageBuildComputeName"]["value"],
+                )
+                self.assertEqual(
                     [],
                     validate_config_values(config_path, load_config(config_path)),
                 )
@@ -220,6 +225,16 @@ class ProjectContractTests(unittest.TestCase):
             {"privatelink.blob.core.windows.net": shared_zone_id + "-wrong"}
         )
         self.assertTrue(validate_config_values(path, invalid_zone_mapping))
+
+        missing_image_build_compute = dict(config)
+        missing_image_build_compute["batch_compute_name"] = ""
+        self.assertIn(
+            (
+                "config-infra-dev.yml private network requires "
+                "batch_compute_name for workspace image builds"
+            ),
+            validate_config_values(path, missing_image_build_compute),
+        )
 
     def test_reusable_workflows_use_generator_placeholders(self):
         workflows = {
@@ -964,13 +979,28 @@ class ProjectContractTests(unittest.TestCase):
         )
         self.assertIn("module peMlw './modules/private_endpoint.bicep'", main)
 
-    def test_private_compute_compiles_with_workspace_endpoint_dependency(self):
+    def test_private_compute_compiles_with_workspace_image_build_contract(self):
         main_path = ROOT / "infrastructure/bicep/main.bicep"
         main = main_path.read_text()
+        workspace_module = (
+            ROOT / "infrastructure/bicep/modules/aml_workspace.bicep"
+        ).read_text()
 
         self.assertRegex(
             main,
             r"(?s)module mlwcc .*?dependsOn:\s*\[\s*peMlw\s*\]",
+        )
+        self.assertIn(
+            "imageBuildComputeName: imageBuildComputeName",
+            main,
+        )
+        self.assertIn(
+            "computeClusterName: imageBuildComputeName",
+            main,
+        )
+        self.assertIn(
+            "imageBuildCompute: imageBuildComputeName",
+            workspace_module,
         )
 
         completed = subprocess.run(
@@ -987,6 +1017,11 @@ class ProjectContractTests(unittest.TestCase):
             text=True,
         )
         template = json.loads(completed.stdout)
+        workspace_deployment = next(
+            resource
+            for resource in template["resources"]
+            if resource.get("name") == "mlw"
+        )
         compute_deployment = next(
             resource
             for resource in template["resources"]
@@ -997,12 +1032,46 @@ class ProjectContractTests(unittest.TestCase):
             for resource in template["resources"]
             if resource.get("name") == "pe-mlw"
         )
+        workspace_template = workspace_deployment["properties"]["template"]
+        workspace = next(
+            resource
+            for resource in workspace_template["resources"]
+            if resource["type"] == "Microsoft.MachineLearningServices/workspaces"
+        )
 
         self.assertTrue(
             any(
                 "'Microsoft.Resources/deployments', 'pe-mlw'" in dependency
                 for dependency in compute_deployment["dependsOn"]
             )
+        )
+        self.assertTrue(
+            any(
+                "'Microsoft.Resources/deployments', 'mlw'" in dependency
+                for dependency in compute_deployment["dependsOn"]
+            )
+        )
+        self.assertFalse(
+            any(
+                "'Microsoft.Resources/deployments', 'mlwcc'" in dependency
+                for dependency in workspace_deployment["dependsOn"]
+            )
+        )
+        self.assertEqual(
+            workspace["properties"]["imageBuildCompute"],
+            "[parameters('imageBuildComputeName')]",
+        )
+        self.assertEqual(
+            workspace_deployment["properties"]["parameters"][
+                "imageBuildComputeName"
+            ]["value"],
+            "[parameters('imageBuildComputeName')]",
+        )
+        self.assertEqual(
+            compute_deployment["properties"]["parameters"]["computeClusterName"][
+                "value"
+            ],
+            "[parameters('imageBuildComputeName')]",
         )
         self.assertEqual(
             compute_deployment["condition"],

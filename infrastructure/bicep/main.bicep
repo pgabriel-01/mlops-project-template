@@ -6,6 +6,7 @@ param postfix string = 'demo'
 param env string = 'dev'
 param ciPrincipalObjectId string = ''
 param amlComputeSku string = 'STANDARD_D16S_V3'
+param imageBuildComputeName string = 'cpu-cluster'
 
 // Feature flags — control which optional modules are deployed
 param enableMonitoring bool = true
@@ -388,6 +389,7 @@ module mlw './modules/aml_workspace.bicep' = {
     managedIdentityPrincipalId: mi.outputs.managedIdentityPrincipalId
     ciPrincipalObjectId: ciPrincipalObjectId
     enableNetworkIsolation: enableVNet
+    imageBuildComputeName: imageBuildComputeName
     tags: tags
   }
 }
@@ -420,6 +422,7 @@ module mlwcc './modules/aml_computecluster.bicep' = if (enableComputeCluster) {
   params: {
     location: location
     workspaceName: mlw.outputs.amlsName
+    computeClusterName: imageBuildComputeName
     vmSku: amlComputeSku
     managedIdentityId: mi.outputs.managedIdentityId
     subnetId: enableVNet ? vnet!.outputs.computeSubnetId : ''

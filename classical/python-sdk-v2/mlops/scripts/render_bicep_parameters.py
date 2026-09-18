@@ -12,6 +12,7 @@ PARAMETER_MAP = {
     "postfix": "postfix",
     "environment": "env",
     "aml_compute_sku": "amlComputeSku",
+    "batch_compute_name": "imageBuildComputeName",
     "enable_monitoring": "enableMonitoring",
     "enable_container_registry": "enableContainerRegistry",
     "enable_compute_cluster": "enableComputeCluster",

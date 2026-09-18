@@ -4,6 +4,8 @@ param location string
 param tags object
 param enableNetworkIsolation bool = false
 param allowedSubnetIds array = []
+param enableDeploymentLocks bool = false
+param ciPrincipalObjectId string = ''
 
 // Build VNet rules array for network ACLs
 var virtualNetworkRules = [for subnetId in allowedSubnetIds: {
@@ -45,5 +47,32 @@ resource stoacct 'Microsoft.Storage/storageAccounts@2025-06-01' = {
   tags: tags
 }
 
+resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2025-06-01' = if (enableDeploymentLocks) {
+  parent: stoacct
+  name: 'default'
+}
+
+resource deploymentLocks 'Microsoft.Storage/storageAccounts/blobServices/containers@2025-06-01' = if (enableDeploymentLocks) {
+  parent: blobService
+  name: 'deployment-locks'
+  properties: {
+    publicAccess: 'None'
+  }
+}
+
+resource ciDeploymentLockContributor 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (enableDeploymentLocks && !empty(ciPrincipalObjectId)) {
+  name: guid(deploymentLocks.id, ciPrincipalObjectId, 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')
+  scope: deploymentLocks
+  properties: {
+    roleDefinitionId: subscriptionResourceId(
+      'Microsoft.Authorization/roleDefinitions',
+      'ba92f5b4-2d11-453d-a403-e96b0029c9fe'
+    )
+    principalId: ciPrincipalObjectId
+    principalType: 'ServicePrincipal'
+  }
+}
+
 output stoacctOut string = stoacct.id
 output stoacctName string = stoacct.name
+output deploymentLockContainerName string = enableDeploymentLocks ? deploymentLocks.name : ''

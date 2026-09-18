@@ -1,65 +1,125 @@
-# Copyright (c) Microsoft Corporation. All rights reserved.
-# Licensed under the MIT License.
-
-name: deploy-online-endpoint-pipeline
-
-variables:
-  - ${{ if eq(variables['Build.SourceBranchName'], 'main') }}:
-      # 'main' branch: PRD environment
-      - template: ../../config-infra-prod.yml
-  - ${{ if ne(variables['Build.SourceBranchName'], 'main') }}:
-      # 'develop' or feature branches: DEV environment
-      - template: ../../config-infra-dev.yml
-  - name: version
-    value: python-sdk-v2
-  - name: endpoint_name
-    value: taxi-online-$(namespace)$(postfix)$(environment)
+name: deploy-private-managed-online-endpoint
 
 trigger: none
 
-pool:
-  vmImage: ubuntu-latest
-
-resources:
-  repositories:
-    - repository: mlops-templates # Template Repo
-      name: mlops-templates
-      type: git
-      ref: main
+parameters:
+  - name: environment
+    displayName: Environment
+    type: string
+    default: dev
+    values:
+      - dev
+      - test
+      - prod
+  - name: modelVersion
+    displayName: Registered model version
+    type: string
+    default: REQUIRED
+  - name: privateAgentPool
+    displayName: Private self-hosted agent pool
+    type: string
+    default: REQUIRED_PRIVATE_SELF_HOSTED_POOL
+  - name: azureServiceConnection
+    displayName: Workload identity service connection
+    type: string
+    default: REQUIRED_WORKLOAD_IDENTITY_SERVICE_CONNECTION
 
 stages:
-  - stage: CreateOnlineEndpoint
-    displayName: Create/Update Online Endpoint
+  - stage: DeployManagedOnlineEndpoint
+    displayName: Deploy private managed online endpoint
     jobs:
-      - job: DeployOnlineEndpoint
+      - job: Deploy
+        displayName: Blue-green deploy and private smoke test
+        pool:
+          name: ${{ parameters.privateAgentPool }}
+          demands:
+            - Agent.OS -equals Linux
         steps:
           - checkout: self
-            path: s/
-          - task: Bash@3
-            displayName: "Create checkout repository folder(s)"
+          - bash: |
+              set -euo pipefail
+              pool='${{ parameters.privateAgentPool }}'
+              case "$pool" in
+                REQUIRED_PRIVATE_SELF_HOSTED_POOL|Azure\ Pipelines)
+                  echo "A private self-hosted agent pool is required." >&2
+                  exit 2
+                  ;;
+              esac
+              if [[ '${{ parameters.modelVersion }}' == "REQUIRED" ]]; then
+                echo "modelVersion must identify an immutable registered model version." >&2
+                exit 2
+              fi
+              python3 mlops/scripts/export_config.py \
+                "config-infra-${{ parameters.environment }}.yml" \
+                --azure-devops
+            displayName: Validate private pool and load configuration
+          - task: AzureCLI@2
+            displayName: Deploy and test private managed endpoint
             inputs:
-              targetType: "inline"
-              script: |
-                set -e
-                mkdir "$(Build.Repository.Name)"
-                mkdir "mlops-templates"
-          - checkout: mlops-templates
-            path: s/templates/
-          - template: templates/aml-cli-v2/install-az-cli.yml@mlops-templates
-          - template: templates/aml-cli-v2/install-aml-cli.yml@mlops-templates
-          - template: templates/aml-cli-v2/connect-to-workspace.yml@mlops-templates
-          - template: templates/${{ variables.version }}/create-online-endpoint.yml@mlops-templates
-            parameters:
-              endpoint_name: "${{ variables.endpoint_name }}"
-              endpoint_description: "Taxi Online Endpoint"
-              auth_mode: "aml_token"
-          - template: templates/${{ variables.version }}/create-online-deployment.yml@mlops-templates
-            parameters:
-              deployment_name: taxi-online-dp
-              endpoint_name: "${{ variables.endpoint_name }}"
-              model_path: "taxi-model@latest"
-              traffic_allocation: 100
-          - template: templates/${{ variables.version }}/test-online-endpoint.yml@mlops-templates
-            parameters:
-              endpoint_name: "${{ variables.endpoint_name }}"
-              sample_request: data/taxi-request.json
+              azureSubscription: ${{ parameters.azureServiceConnection }}
+              scriptType: bash
+              scriptLocation: inlineScript
+              addSpnToEnvironment: true
+              inlineScript: |
+                set -euo pipefail
+                if [[ -z "${idToken:-}" ]]; then
+                  echo "The Azure service connection must use workload identity federation." >&2
+                  exit 2
+                fi
+                if [[ "$(enable_managed_online_endpoint)" != "true" ]] || \
+                   [[ "$(private_network)" != "true" ]]; then
+                  echo "Managed online inference requires the enabled private configuration." >&2
+                  exit 2
+                fi
+                python3 -m pip install --disable-pip-version-check \
+                  -r mlops/azureml/deploy/online/requirements.txt
+                az extension add --name ml --version 2.44.1 --upgrade --yes
+                az ml workspace provision-network \
+                  --resource-group "$(resource_group)" \
+                  --name "$(workspace_name)" \
+                  --include-spark false
+                endpoint_identity_id="$(
+                  az identity show \
+                    --resource-group "$(resource_group)" \
+                    --name "$(online_endpoint_identity_name)" \
+                    --query id \
+                    --output tsv
+                )"
+                lock_storage_account_id="$(
+                  az resource show \
+                    --resource-group "$(resource_group)" \
+                    --name "$(workspace_name)" \
+                    --resource-type Microsoft.MachineLearningServices/workspaces \
+                    --query properties.storageAccount \
+                    --output tsv
+                )"
+                lock_storage_account_name="${lock_storage_account_id##*/}"
+                mode_args=()
+                if [[ "$(online_mlflow_no_code)" == "true" ]]; then
+                  mode_args+=(--mlflow-no-code)
+                else
+                  mode_args+=(
+                    --environment-name "$(online_environment_name)"
+                    --environment-version "$(online_environment_version)"
+                    --environment-image "$(online_environment_image)"
+                    --code-directory "$(online_code_directory)"
+                    --scoring-script "$(online_scoring_script)"
+                  )
+                fi
+                python3 mlops/azureml/deploy/online/deploy.py \
+                  --subscription-id "$(az account show --query id --output tsv)" \
+                  --resource-group "$(resource_group)" \
+                  --workspace-name "$(workspace_name)" \
+                  --endpoint-name "$(online_endpoint_name)" \
+                  --deployment-name "$(online_deployment_name)" \
+                  --alternate-deployment-name "$(online_alternate_deployment_name)" \
+                  --traffic-percentage "$(online_traffic_percentage)" \
+                  --lock-storage-account-name "$lock_storage_account_name" \
+                  --lock-container-name "$(online_lock_container_name)" \
+                  --endpoint-identity-resource-id "$endpoint_identity_id" \
+                  --model-name "$(model_name)" \
+                  --model-version "${{ parameters.modelVersion }}" \
+                  --instance-type "$(online_instance_type)" \
+                  --instance-count "$(online_instance_count)" \
+                  --request-file data/taxi-request.json \
+                  "${mode_args[@]}"

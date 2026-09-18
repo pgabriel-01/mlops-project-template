@@ -25,9 +25,6 @@ TEMPLATE_BLOBS = {
     ".github/workflows/python-sdk-v2-batch.yml": (
         "280038a670216effda41ad1df234e24e342c4219"
     ),
-    ".github/workflows/python-sdk-v2-online.yml": (
-        "163c61d99500306e7e15156446ce37db5a2be566"
-    ),
     "src/python-sdk-v2/create_batch_endpoint.py": (
         "c8be7b6e9f15c4f80a0980156eeaba45319459bc"
     ),
@@ -36,12 +33,6 @@ TEMPLATE_BLOBS = {
     ),
     "src/python-sdk-v2/test_batch_endpoint.py": (
         "de162e28504f710fe02b8380fadf631ce3456269"
-    ),
-    "src/python-sdk-v2/create_online_endpoint.py": (
-        "f20a1833988d37f7e3732e9e10746ffaf1008b5b"
-    ),
-    "src/python-sdk-v2/create_online_deployment.py": (
-        "9630fa74d44465125df96a9a9fe50ab2f2c8aa59"
     ),
     "tests/test_python_sdk_v2.py": "a70d7f94752a182b10e48731fbafde5bd92979d6",
     "examples/python-sdk-v2/batch-scoring/score.py": (
@@ -79,14 +70,16 @@ class ProjectContractTests(unittest.TestCase):
         deployment_workflow = (
             PATTERN_ROOT / "mlops" / "github-actions" / "deploy-infrastructure.yml"
         ).read_text()
+        runner_update_workflow = (
+            PATTERN_ROOT / "mlops" / "github-actions" / "update-runner-image.yml"
+        ).read_text()
         runner_image = (
             PATTERN_ROOT / "runner-bootstrap" / "image" / "Dockerfile"
         ).read_text()
 
         self.assertNotIn("Microsoft.Resources/deploymentScripts", bicep)
-        self.assertNotIn("azCliVersion", bicep)
-        self.assertIn("invoke_aks_command.py", deployment_workflow)
-        self.assertIn("for attempt in $(seq 1 12)", deployment_workflow)
+        self.assertNotIn("Microsoft.Resources/deploymentScripts", deployment_workflow)
+        self.assertIn("invoke_aks_command.py", runner_update_workflow)
         self.assertNotIn("az aks command invoke", deployment_workflow)
         self.assertIn("ARG AZURE_CLI_VERSION=2.90.0-1~noble", runner_image)
 
@@ -239,7 +232,6 @@ class ProjectContractTests(unittest.TestCase):
     def test_reusable_workflows_use_generator_placeholders(self):
         workflows = {
             "train-register-model.yml": "python-sdk-v2-train-register.yml",
-            "deploy-online-endpoint.yml": "python-sdk-v2-online.yml",
             "deploy-batch-endpoint.yml": "python-sdk-v2-batch.yml",
         }
         for caller_name, reusable_name in workflows.items():
@@ -280,50 +272,29 @@ class ProjectContractTests(unittest.TestCase):
         self.assertIn("infrastructure/main.bicep", infrastructure)
         self.assertNotIn("infrastructure/bicep/", infrastructure)
         self.assertIn("job_file: mlops/azureml/train/job.yml", training)
-        self.assertIn("request_file: data/taxi-request.json", online)
+        self.assertIn("--request-file data/taxi-request.json", online)
         for output_name, config_name in (
-            ("compute", "online_compute"),
             ("instance_type", "online_instance_type"),
+            ("instance_count", "online_instance_count"),
         ):
             self.assertIn(
                 f"{output_name}: ${{{{ steps.config.outputs.{config_name} }}}}",
                 online,
             )
             self.assertIn(
-                f"{output_name}: ${{{{ needs.config.outputs.{output_name} }}}}",
+                f"--{output_name.replace('_', '-')} "
+                f'"${{{{ needs.config.outputs.{output_name} }}}}"',
                 online,
             )
         self.assertIn(
             "mlflow_no_code: ${{ steps.config.outputs.online_mlflow_no_code }}",
             online,
         )
-        self.assertIn("if: needs.config.outputs.mlflow_no_code == 'true'", online)
-        self.assertIn("if: needs.config.outputs.mlflow_no_code == 'false'", online)
-        no_code_job = online.split("  online-mlflow-no-code:", 1)[1].split(
-            "  online-image-only:", 1
-        )[0]
-        image_only_job = online.split("  online-image-only:", 1)[1]
-        self.assertIn("mlflow_no_code: true", no_code_job)
-        self.assertNotIn("environment_name:", no_code_job)
-        self.assertNotIn("environment_version:", no_code_job)
-        self.assertIn(
-            "environment_name: ${{ needs.config.outputs.environment_name }}",
-            image_only_job,
-        )
-        self.assertIn(
-            "environment_version: ${{ needs.config.outputs.environment_version }}",
-            image_only_job,
-        )
-        self.assertIn("tls_ca_key_vault_secret_id:", online)
-        self.assertIn(
-            "tls_ca_key_vault_secret_id: " "${{ inputs.tls_ca_key_vault_secret_id }}",
-            online,
-        )
-        self.assertIn(
-            "endpoint_uami_resource_id: " "${{ inputs.endpoint_uami_resource_id }}",
-            online,
-        )
-        self.assertNotIn("Standard_DS3_v2", online)
+        self.assertIn("az ml workspace provision-network", online)
+        self.assertIn("mlops/azureml/deploy/online/deploy.py", online)
+        self.assertIn("online_endpoint_identity_name", online)
+        self.assertNotIn("tls_ca_key_vault_secret_id", online)
+        self.assertNotIn("online_compute", online)
         self.assertIn("request_batch_file: data/taxi-batch.csv", batch)
         self.assertIn(
             f"default: {BATCH_ENVIRONMENT}",
@@ -457,7 +428,6 @@ class ProjectContractTests(unittest.TestCase):
             self.assertIn(f"sdk_ref: {template_ref}", training_workflow)
             for workflow, reusable_name in (
                 (training_workflow, "python-sdk-v2-train-register.yml"),
-                (online_workflow, "python-sdk-v2-online.yml"),
                 (batch_workflow, "python-sdk-v2-batch.yml"),
             ):
                 self.assertIn(
@@ -471,6 +441,15 @@ class ProjectContractTests(unittest.TestCase):
                 )
                 self.assertIn(f"sdk_ref: {template_ref}", workflow)
                 self.assertNotIn("__MLOPS_TEMPLATES_", workflow)
+            self.assertIn(
+                "mlops/azureml/deploy/online/deploy.py",
+                online_workflow,
+            )
+            self.assertIn(
+                "az ml workspace provision-network",
+                online_workflow,
+            )
+            self.assertNotIn("__MLOPS_TEMPLATES_", online_workflow)
             self.assertIn(
                 f"default: {BATCH_ENVIRONMENT}",
                 batch_workflow,
@@ -580,9 +559,6 @@ class ProjectContractTests(unittest.TestCase):
         batch_workflow = load_pinned_template(
             ".github/workflows/python-sdk-v2-batch.yml"
         )
-        online_workflow = load_pinned_template(
-            ".github/workflows/python-sdk-v2-online.yml"
-        )
         batch_endpoint = load_pinned_template(
             "src/python-sdk-v2/create_batch_endpoint.py"
         )
@@ -591,12 +567,6 @@ class ProjectContractTests(unittest.TestCase):
         )
         batch_invocation = load_pinned_template(
             "src/python-sdk-v2/test_batch_endpoint.py"
-        )
-        online_endpoint = load_pinned_template(
-            "src/python-sdk-v2/create_online_endpoint.py"
-        )
-        online_deployment = load_pinned_template(
-            "src/python-sdk-v2/create_online_deployment.py"
         )
         template_tests = load_pinned_template("tests/test_python_sdk_v2.py")
         scoring_example = load_pinned_template(
@@ -716,51 +686,6 @@ class ProjectContractTests(unittest.TestCase):
         self.assertIn("pd.read_csv", scoring_example)
         self.assertIn("pd.read_parquet", scoring_example)
 
-        for required_input in (
-            "compute:",
-            "environment_name:",
-            "environment_version:",
-            "instance_type:",
-        ):
-            self.assertIn(required_input, online_workflow)
-        self.assertNotIn("Standard_DS2_v2", online_workflow)
-        self.assertNotIn("ubuntu-24.04", online_workflow)
-        self.assertIn('--compute "$COMPUTE"', online_workflow)
-        self.assertIn('--environment_name "$ENVIRONMENT_NAME"', online_workflow)
-        self.assertIn('--environment_version "$ENVIRONMENT_VERSION"', online_workflow)
-        self.assertIn("tls_ca_key_vault_secret_id:", online_workflow)
-        self.assertIn(
-            "TLS_CA_KEY_VAULT_SECRET_ID: " "${{ inputs.tls_ca_key_vault_secret_id }}",
-            online_workflow,
-        )
-        self.assertIn(
-            "REQUESTS_CA_BUNDLE: ${{ steps.private_ca.outputs.ca_bundle_path }}",
-            online_workflow,
-        )
-        self.assertIn(
-            "SSL_CERT_FILE: ${{ steps.private_ca.outputs.ca_bundle_path }}",
-            online_workflow,
-        )
-        self.assertIn('--ca_bundle "$CA_BUNDLE_PATH"', online_workflow)
-        self.assertIn('rm -f -- "$CA_BUNDLE_PATH"', online_workflow)
-        self.assertIn("KubernetesOnlineEndpoint", online_endpoint)
-        self.assertIn("get_kubernetes_online_compute", online_endpoint)
-        self.assertIn("KubernetesOnlineDeployment", online_deployment)
-        self.assertIn("get_prebuilt_environment", online_deployment)
-        self.assertNotIn("ManagedOnlineEndpoint", online_endpoint)
-        self.assertNotIn("ManagedOnlineDeployment", online_deployment)
-        for test_name in (
-            "test_online_workflow_requires_private_kubernetes_contract",
-            "test_online_endpoint_uses_attached_arc_kubernetes_compute",
-            "test_online_compute_accepts_direct_aks_attachment_with_uami",
-            "test_online_compute_not_found_explains_direct_aks_trusted_access",
-            "test_online_compute_rejects_non_kubernetes_compute_type",
-            "test_online_compute_requires_dedicated_namespace_and_uami",
-            "test_prebuilt_environment_contract_requires_digest_and_no_build",
-            "test_online_deployment_uses_kubernetes_and_exact_environment",
-            "test_online_endpoint_completes_before_deployment_begins",
-        ):
-            self.assertIn(test_name, template_tests)
         self.assertIn(
             'batch_deployment_type.call_args.kwargs["environment"]',
             template_tests,
@@ -908,8 +833,10 @@ class ProjectContractTests(unittest.TestCase):
 
         self.assertIn("allowSharedKeyAccess: false", storage)
         self.assertIn("systemDatastoresAuthMode: 'identity'", workspace)
-        self.assertNotIn("managedNetwork:", workspace)
-        self.assertNotIn("isolationMode:", workspace)
+        self.assertIn("managedNetwork:", workspace)
+        self.assertIn("isolationMode: 'AllowOnlyApprovedOutbound'", workspace)
+        self.assertIn("managedNetworkKind: 'V1'", workspace)
+        self.assertIn("v1LegacyMode: false", workspace)
         self.assertNotIn("serverlessComputeSettings:", workspace)
         self.assertNotIn("serverlessComputeCustomSubnet", workspace)
         self.assertIn(
@@ -948,19 +875,12 @@ class ProjectContractTests(unittest.TestCase):
         ).read_text()
         main = (ROOT / "infrastructure/bicep/main.bicep").read_text()
 
-        forbidden_workspace_network_properties = (
-            "managedNetwork:",
-            "isolationMode:",
-            "serverlessComputeSettings:",
-            "serverlessComputeCustomSubnet",
-        )
-
-        self.assertFalse(
-            any(
-                property_name in workspace
-                for property_name in forbidden_workspace_network_properties
-            )
-        )
+        self.assertIn("managedNetwork:", workspace)
+        self.assertIn("isolationMode: 'AllowOnlyApprovedOutbound'", workspace)
+        self.assertIn("managedNetworkKind: 'V1'", workspace)
+        self.assertIn("v1LegacyMode: false", workspace)
+        self.assertNotIn("serverlessComputeSettings:", workspace)
+        self.assertNotIn("serverlessComputeCustomSubnet", workspace)
         self.assertNotIn("param computeSubnetId", workspace)
         self.assertNotIn("computeSubnetId:", main)
         self.assertIn(
@@ -1062,9 +982,9 @@ class ProjectContractTests(unittest.TestCase):
             "[parameters('imageBuildComputeName')]",
         )
         self.assertEqual(
-            workspace_deployment["properties"]["parameters"][
-                "imageBuildComputeName"
-            ]["value"],
+            workspace_deployment["properties"]["parameters"]["imageBuildComputeName"][
+                "value"
+            ],
             "[parameters('imageBuildComputeName')]",
         )
         self.assertEqual(

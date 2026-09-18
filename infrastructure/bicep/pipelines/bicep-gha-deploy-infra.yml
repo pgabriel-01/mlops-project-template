@@ -138,10 +138,12 @@ jobs:
           echo "enable_api_management=$ENABLE_APIM" >> $GITHUB_OUTPUT
           echo "kv_enable_purge_protection=$KV_ENABLE_PURGE" >> $GITHUB_OUTPUT
           echo "enable_aml_registry=$ENABLE_AML_REGISTRY" >> $GITHUB_OUTPUT
-          ENABLE_BASTION=$(yq eval '.variables.enable_bastion' $COMMON_FILE)
+          ENABLE_BASTION=$(yq eval '.variables.enable_dev_jumpbox' $COMMON_FILE)
           BASTION_SUBNET=$(yq eval '.variables.bastion_subnet_prefix' $COMMON_FILE)
-          echo "enable_bastion=$ENABLE_BASTION" >> $GITHUB_OUTPUT
+          JUMPBOX_IMAGE_VERSION=$(yq eval '.variables.dev_jumpbox_ubuntu_image_version' $COMMON_FILE)
+          echo "enable_dev_jumpbox=$ENABLE_BASTION" >> $GITHUB_OUTPUT
           echo "bastion_subnet_prefix=$BASTION_SUBNET" >> $GITHUB_OUTPUT
+          echo "dev_jumpbox_ubuntu_image_version=$JUMPBOX_IMAGE_VERSION" >> $GITHUB_OUTPUT
 
       - name: Get Service Principal Object ID
         id: get_sp_info
@@ -156,6 +158,17 @@ jobs:
 
       - name: Validate Bicep Deployment
         run: |
+          if [[ "${{ steps.config.outputs.enable_dev_jumpbox }}" == "true" ]]; then
+            base_name="${{ steps.config.outputs.prefix }}-${{ steps.config.outputs.postfix }}${{ steps.config.outputs.project_number }}${{ steps.config.outputs.environment }}"
+            python3 classical/python-sdk-v2/mlops/scripts/check_legacy_bastion.py \
+              --resource-group "rg-$base_name" \
+              --base-name "$base_name"
+            az vm image show \
+              --location "${{ steps.config.outputs.location }}" \
+              --urn "Canonical:ubuntu-24_04-lts:server:${{ steps.config.outputs.dev_jumpbox_ubuntu_image_version }}" \
+              --only-show-errors \
+              --output none
+          fi
           az deployment sub validate \
             --name "bicep-gha-${{ github.run_number }}" \
             --location ${{ steps.config.outputs.location }} \
@@ -165,7 +178,7 @@ jobs:
               prefix=${{ steps.config.outputs.prefix }} \
               postfix=${{ steps.config.outputs.postfix }} \
               env=${{ steps.config.outputs.environment }} \
-              adoServicePrincipalId=${{ steps.get_sp_info.outputs.sp_object_id }} \
+              ciPrincipalObjectId=${{ steps.get_sp_info.outputs.sp_object_id }} \
               amlComputeSku=${{ steps.config.outputs.aml_compute_sku }} \
               enableMonitoring=${{ steps.config.outputs.enable_monitoring }} \
               enableContainerRegistry=${{ steps.config.outputs.enable_container_registry }} \
@@ -187,7 +200,7 @@ jobs:
               enableAIFoundry=${{ steps.config.outputs.enable_ai_foundry }} \
               enableAPIManagement=${{ steps.config.outputs.enable_api_management }} \
               kvEnablePurgeProtection=${{ steps.config.outputs.kv_enable_purge_protection }} \
-              enableBastion=${{ steps.config.outputs.enable_bastion }} \
+              enableDevJumpbox=${{ steps.config.outputs.enable_dev_jumpbox }} \
               bastionSubnetPrefix='${{ steps.config.outputs.bastion_subnet_prefix }}'
 
   deploy:
@@ -274,10 +287,12 @@ jobs:
           echo "enable_api_management=$ENABLE_APIM" >> $GITHUB_OUTPUT
           echo "kv_enable_purge_protection=$KV_ENABLE_PURGE" >> $GITHUB_OUTPUT
           echo "enable_aml_registry=$ENABLE_AML_REGISTRY" >> $GITHUB_OUTPUT
-          ENABLE_BASTION=$(yq eval '.variables.enable_bastion' $COMMON_FILE)
+          ENABLE_BASTION=$(yq eval '.variables.enable_dev_jumpbox' $COMMON_FILE)
           BASTION_SUBNET=$(yq eval '.variables.bastion_subnet_prefix' $COMMON_FILE)
-          echo "enable_bastion=$ENABLE_BASTION" >> $GITHUB_OUTPUT
+          JUMPBOX_IMAGE_VERSION=$(yq eval '.variables.dev_jumpbox_ubuntu_image_version' $COMMON_FILE)
+          echo "enable_dev_jumpbox=$ENABLE_BASTION" >> $GITHUB_OUTPUT
           echo "bastion_subnet_prefix=$BASTION_SUBNET" >> $GITHUB_OUTPUT
+          echo "dev_jumpbox_ubuntu_image_version=$JUMPBOX_IMAGE_VERSION" >> $GITHUB_OUTPUT
 
       - name: Get Service Principal Object ID
         id: get_sp_info
@@ -293,6 +308,17 @@ jobs:
       - name: Deploy Bicep Template
         run: |
           echo "Deploying to ${{ steps.config.outputs.environment }} environment..."
+          if [[ "${{ steps.config.outputs.enable_dev_jumpbox }}" == "true" ]]; then
+            base_name="${{ steps.config.outputs.prefix }}-${{ steps.config.outputs.postfix }}${{ steps.config.outputs.project_number }}${{ steps.config.outputs.environment }}"
+            python3 classical/python-sdk-v2/mlops/scripts/check_legacy_bastion.py \
+              --resource-group "rg-$base_name" \
+              --base-name "$base_name"
+            az vm image show \
+              --location "${{ steps.config.outputs.location }}" \
+              --urn "Canonical:ubuntu-24_04-lts:server:${{ steps.config.outputs.dev_jumpbox_ubuntu_image_version }}" \
+              --only-show-errors \
+              --output none
+          fi
           
           az deployment sub create \
             --name "bicep-gha-${{ github.run_number }}" \
@@ -303,7 +329,7 @@ jobs:
               prefix=${{ steps.config.outputs.prefix }} \
               postfix=${{ steps.config.outputs.postfix }} \
               env=${{ steps.config.outputs.environment }} \
-              adoServicePrincipalId=${{ steps.get_sp_info.outputs.sp_object_id }} \
+              ciPrincipalObjectId=${{ steps.get_sp_info.outputs.sp_object_id }} \
               amlComputeSku=${{ steps.config.outputs.aml_compute_sku }} \
               enableMonitoring=${{ steps.config.outputs.enable_monitoring }} \
               enableContainerRegistry=${{ steps.config.outputs.enable_container_registry }} \
@@ -325,7 +351,7 @@ jobs:
               enableAIFoundry=${{ steps.config.outputs.enable_ai_foundry }} \
               enableAPIManagement=${{ steps.config.outputs.enable_api_management }} \
               kvEnablePurgeProtection=${{ steps.config.outputs.kv_enable_purge_protection }} \
-              enableBastion=${{ steps.config.outputs.enable_bastion }} \
+              enableDevJumpbox=${{ steps.config.outputs.enable_dev_jumpbox }} \
               bastionSubnetPrefix='${{ steps.config.outputs.bastion_subnet_prefix }}'
 
       - name: Output Deployment Results

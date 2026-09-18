@@ -6,6 +6,11 @@ keyless through the existing GitHub Environment OIDC configuration; the GitHub A
 below is a separate, repository-scoped credential used only by ARC to register
 ephemeral runners.
 
+ARC controller, listener, and runner pods are ephemeral managed workloads. They
+are prohibited for interactive troubleshooting, credential storage, or
+long-lived administration. Use the private Dev jumpbox or another approved
+private administration path.
+
 ## Fixed DEV shape
 
 | Setting | Value |

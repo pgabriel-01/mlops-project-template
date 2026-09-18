@@ -54,9 +54,11 @@ variables:
   training_subnet_address_prefix: '10.0.0.0/24'
   endpoints_subnet_address_prefix: '10.0.1.0/24'
 
-  # Bastion settings (only used when enable_bastion: true; requires enable_vnet)
-  enable_bastion: true
+  # Private Dev jumpbox settings. Keep disabled outside Dev.
+  enable_dev_jumpbox: false
   bastion_subnet_prefix: '10.0.3.0/26'
+  administration_subnet_prefix: '10.0.4.0/27'
+  dev_jumpbox_ubuntu_image_version: '24.04.202608270'
 
   # Tags
   tag_cost_center: ''

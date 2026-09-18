@@ -299,23 +299,31 @@ or a GitHub App client secret in this repository, its reusable workflows, or the
 generated project. GitHub App authentication controls ARC runner registration
 only; Azure workload access continues to use the environment-scoped OIDC contract
 
-### Private Azure ML Kubernetes online inference
+### Private Azure ML managed online inference
 
-Managed online deployment is not the fallback for a private-link AML workspace
-whose public network access is disabled. To use an existing private AKS cluster,
-enable the opt-in `enable_private_aks_inference` configuration and follow
-`docs/private-aks-inference.md` in the source template.
+The supported real-time serving path is a private Azure ML managed online
+endpoint. The workspace private endpoint provides private scoring ingress, the
+endpoint disables public network access, and callers use Microsoft Entra
+`aad_token` authentication. The workspace uses managed network v1 with
+`AllowOnlyApprovedOutbound`; Azure ML creates the default managed private
+endpoint rules for the associated Storage, ACR, and Key Vault resources.
 
 The stable generated-workflow contract is:
 
-- `online_compute`: attached AML Kubernetes compute name;
+- `enable_managed_online_endpoint: true`;
 - `online_mlflow_no_code: true`: Azure ML supplies the curated environment for
   the validated MLflow model; the environment name, version, and image settings
   must all be empty;
 - `online_mlflow_no_code: false`: immutable image-only compatibility mode, which
   requires `online_environment_name`, `online_environment_version`, and a private
-  ACR `online_environment_image` pinned by SHA-256 digest;
-- `online_instance_type`: AML Kubernetes instance type;
+  ACR `online_environment_image` pinned by SHA-256 digest, plus
+  `online_code_directory` and `online_scoring_script`;
+- `online_deployment_name` and `online_alternate_deployment_name`: fixed
+  blue-green slots;
+- `online_traffic_percentage`: validated candidate traffic after the private
+  smoke test;
+- `online_instance_type`: managed endpoint Azure VM SKU;
+- `online_instance_count`: explicit deployment capacity;
 - `runner`: private ARC runner label.
 
 The generated MLflow no-code path does not create a workspace environment and
@@ -327,7 +335,26 @@ permitted`. The generated pattern therefore contains no runtime image publishing
 workflow or custom online runtime Dockerfile, and it does not weaken the
 non-root, unprivileged runner contract. Organizations that already operate an
 approved external image supply chain can select image-only mode and provide the
-complete immutable environment triple directly.
+complete immutable environment triple directly. The workflow provisions the
+workspace managed network, creates the endpoint and deployment with Python SDK
+v2, invokes the named deployment privately, and promotes traffic only after the
+deployment reports success.
+
+Online releases use fixed `blue` and `green` deployment slots. The workflow
+updates only the slot that is not currently serving the previous model, performs
+the private smoke invocation against that candidate, and changes the configured
+traffic percentage afterward. A deterministic fingerprint covers the model,
+environment/image, scoring-code contents, capacity, probes, request settings,
+and telemetry configuration; an active slot is reused only when the full
+fingerprint matches. The previous deployment remains available for rollback. The equivalent
+Azure DevOps pipeline requires an explicitly configured private self-hosted
+Linux pool and workload identity federation; Microsoft-hosted agents are
+rejected because they cannot resolve or route to the private endpoint.
+
+Both orchestrators serialize endpoint changes through the same
+Entra-authenticated, endpoint-scoped blob lease in the private workspace storage
+account. The lease renews while deployment is active, releases in cleanup, and
+expires automatically after a terminated runner stops renewing it.
 
 The generated `update-runner-image.yml` accepts only this repository's immutable
 GHCR runner digest and targets the AKS resource ID configured in the DEV GitHub
@@ -339,15 +366,25 @@ a one-operation JSON Patch only to its `image` field, and verifies the exact
 immutable digest by reading the resource back. It does not read Helm release
 Secrets or expand the OIDC principal's secret access.
 
-The infrastructure workflow's namespace bootstrap role retains only the two AKS
-Run Command ARM actions plus namespace read/write and service-account read/write
-data actions. It does not grant delete, impersonation, Secret, Pod, or broad AKS
-built-in permissions.
+The AKS cluster remains a separately operated ARC platform prerequisite. It has
+no AML Kubernetes extension, AML compute attachment, inference node pool, or
+scoring DNS/TLS responsibility. ARC controller, listener, and runner pods are
+ephemeral managed workloads and are prohibited for interactive administration.
 
-Endpoint, deployment, model, and request names remain workload-owned. Namespace,
-service account, workload UAMI, node pool, and AKS credentials remain
-infrastructure-only.
-documented above.
+The optional private Linux `Dev jumpbox` is enabled by default in Dev and
+disabled by default in Test and Prod. Both the VM and Premium Bastion host have
+no public IP. Entra SSH, scoped VM login roles, pinned Azure tooling, and
+automatic shutdown/deallocation are enforced. Private-only Bastion is reachable
+only from an administrator with an existing VPN, ExpressRoute, peering, or other
+approved private routed path to the VNet; Azure Portal access from the public
+internet does not provide that connectivity and no public-IP fallback is
+created. The optional login group receives VM User Login plus Reader only on the
+VM, its NIC, and the Bastion resource. Azure CLI, the system-wide pinned `az ml`
+extension, and the isolated Azure ML Python SDK environment are installed for
+human troubleshooting.
+
+See `docs/private-managed-online-inference.md` for the complete deployment,
+migration, rollback, DNS, and identity contract.
 
 For a repository owned by a personal GitHub account, stop before provisioning AKS
 until the owner confirms personal-repository GitHub App compatibility or migrates
@@ -448,15 +485,16 @@ Azure ML from silently falling back to an anonymous Conda environment and
 workspace-local image build, which is incompatible with the preserved
 `allowSharedKeyAccess=false` storage policy.
 
-The same immutable templates ref uses Azure ML Kubernetes online endpoints and
-deployments on an attached private compute. Generated online callers supply the
-compute name, versioned prebuilt environment name and version, and Kubernetes
-instance type from project configuration. They do not retain the managed online
-VM SKU contract or permit an anonymous environment build path.
+Online deployment is repository-owned rather than delegated to the shared
+template ref. It uses Azure ML Python SDK v2 managed endpoint entities, a
+configured Azure VM SKU and instance count, the deterministic endpoint UAMI, and
+an awaited private smoke invocation before traffic promotion. It does not attach
+Kubernetes compute or permit an anonymous environment build path.
 Set `VERIFY_REMOTE_TEMPLATES=1` when running the project contract to verify the
-pinned AML client, batch workflow and helpers, sequencing tests, scoring path and
-live deployment checks, failed-job diagnostics, immutable diagnostics artifact
-upload, and batch environment contract directly from that commit.
+pinned AML client, training and batch workflows and helpers, sequencing tests,
+scoring path and live deployment checks, failed-job diagnostics, immutable
+diagnostics artifact upload, and batch environment contract directly from that
+commit.
 
 The generated training pipeline uses the immutable curated environment
 `azureml://registries/azureml/environments/sklearn-1.5/versions/53` for prepare,

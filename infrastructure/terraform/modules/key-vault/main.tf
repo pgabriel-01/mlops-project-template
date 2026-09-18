@@ -1,14 +1,15 @@
 data "azurerm_client_config" "current" {}
 
 resource "azurerm_key_vault" "kv" {
-  name                       = "kv-${var.prefix}-${var.postfix}${var.env}"
-  location                   = var.location
-  resource_group_name        = var.rg_name
-  tenant_id                  = data.azurerm_client_config.current.tenant_id
-  sku_name                   = "standard"
-  purge_protection_enabled   = true
-  soft_delete_retention_days = 90
-  rbac_authorization_enabled = true
+  name                          = "kv-${var.prefix}-${var.postfix}${var.env}"
+  location                      = var.location
+  resource_group_name           = var.rg_name
+  tenant_id                     = data.azurerm_client_config.current.tenant_id
+  sku_name                      = "standard"
+  purge_protection_enabled      = true
+  soft_delete_retention_days    = 90
+  rbac_authorization_enabled    = true
+  public_network_access_enabled = !var.enable_private_endpoints
 
   # Network ACL configured inline
   network_acls {

@@ -9,11 +9,16 @@ from project_config import derive_config, load_config
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("config_file", type=Path)
+    parser.add_argument("--azure-devops", action="store_true")
     args = parser.parse_args()
     config = derive_config(load_config(args.config_file))
 
     output_path = os.getenv("GITHUB_OUTPUT")
-    if output_path:
+    if args.azure_devops:
+        for key, value in config.items():
+            rendered = str(value).lower() if isinstance(value, bool) else str(value)
+            print(f"##vso[task.setvariable variable={key}]{rendered}")
+    elif output_path:
         with Path(output_path).open("a", encoding="utf-8") as output:
             for key, value in config.items():
                 rendered = str(value).lower() if isinstance(value, bool) else str(value)

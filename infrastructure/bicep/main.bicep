@@ -17,35 +17,13 @@ param runnerHubVnetResourceId string = ''
 param manageRunnerHubToWorkloadPeering bool = false
 param sharedPrivateDnsZoneResourceIds object = {}
 
-// Private Azure ML Kubernetes online inference on an existing AKS cluster
-param enablePrivateAksInference bool = false
-param completePrivateAksInferenceDeployment bool = true
-param aksClusterResourceId string = ''
-param aksNodeSubnetResourceId string = ''
-param onlineComputeName string = 'aks-inference'
+// Private Azure ML managed online inference
+param enableManagedOnlineEndpoint bool = true
 param onlineMlflowNoCode bool = true
 param onlineEnvironmentName string = ''
 param onlineEnvironmentVersion string = ''
 param onlineEnvironmentImage string = ''
-param onlineNamespace string = 'azureml-inference'
-param onlineServiceAccountName string = 'default'
-param onlineNodePoolName string = 'mlinference'
-param onlineNodeVmSize string = 'Standard_D4s_v3'
-param onlineNodeMinCount int = 3
-param onlineNodeMaxCount int = 6
-param onlineNodeMaxPods int = 30
-param onlineInstanceTypeName string = 'cpu-small'
-param onlineCpuRequest string = '500m'
-param onlineCpuLimit string = '2'
-param onlineMemoryRequest string = '1Gi'
-param onlineMemoryLimit string = '4Gi'
-param amlKubernetesExtensionName string = 'azureml'
-param amlKubernetesExtensionReleaseTrain string = 'stable'
-param amlKubernetesExtensionSslCname string = ''
-@secure()
-param amlKubernetesExtensionTlsCertPem string = ''
-@secure()
-param amlKubernetesExtensionTlsKeyPem string = ''
+param onlineEndpointAllowKeyVaultSecrets bool = false
 
 // Tier 3 — Governance feature flags
 param enableCMEK bool = false
@@ -74,9 +52,19 @@ param defaultSubnetPrefix string = '10.0.0.0/24'
 param computeSubnetPrefix string = '10.0.1.0/24'
 param peSubnetPrefix string = '10.0.2.0/24'
 
-// Bastion settings (only used when enableBastion = true; requires enableVNet)
-param enableBastion bool = false
+// Private administration settings (only used when enableDevJumpbox = true)
+param enableDevJumpbox bool = env == 'dev'
 param bastionSubnetPrefix string = '10.0.3.0/26'
+param administrationSubnetPrefix string = '10.0.4.0/27'
+param devJumpboxVmSize string = 'Standard_D2s_v5'
+param devJumpboxUbuntuImageVersion string = '24.04.202608270'
+param devJumpboxAzureCliVersion string = '2.90.0-1~noble'
+param devJumpboxAzureMlExtensionVersion string = '2.44.1'
+param devJumpboxAzureAiMlVersion string = '1.35.0'
+param devJumpboxAzureIdentityVersion string = '1.21.0'
+param devJumpboxShutdownTime string = '1900'
+param devJumpboxShutdownTimeZone string = 'UTC'
+param devJumpboxLoginGroupId string = ''
 
 // Tag parameters
 param tagCostCenter string = ''
@@ -102,11 +90,14 @@ var hasCompleteOnlineEnvironment = hasOnlineEnvironmentName && hasOnlineEnvironm
 var mlflowNoCodeEnvironmentValidated = onlineMlflowNoCode && hasAnyOnlineEnvironmentInput
   ? fail('MLflow no-code mode cannot define an online environment name, version, or image.')
   : true
-var imageOnlyEnvironmentValidated = !onlineMlflowNoCode && ((enablePrivateAksInference && !hasCompleteOnlineEnvironment) || (hasAnyOnlineEnvironmentInput && !hasCompleteOnlineEnvironment))
+var imageOnlyEnvironmentValidated = !onlineMlflowNoCode && ((enableManagedOnlineEndpoint && !hasCompleteOnlineEnvironment) || (hasAnyOnlineEnvironmentInput && !hasCompleteOnlineEnvironment))
   ? fail('Image-only mode requires an online environment name, version, and immutable image together.')
   : true
-var privateAksBootstrapPrincipalValidated = enablePrivateAksInference && empty(ciPrincipalObjectId)
-  ? fail('Private AKS inference requires the GitHub OIDC principal object ID.')
+var managedOnlineEndpointValidated = enableManagedOnlineEndpoint && (!enableVNet || !enableContainerRegistry)
+  ? fail('Private managed online endpoints require VNet isolation and Azure Container Registry.')
+  : true
+var devJumpboxValidated = enableDevJumpbox && (!enableVNet || env != 'dev')
+  ? fail('The Dev jumpbox can be enabled only in Dev with VNet isolation.')
   : true
 
 var baseName  = '${prefix}-${postfix}${projectNumber}${env}'
@@ -121,10 +112,6 @@ var runnerHubToSpokePeeringName = 'peer-workload-${uniqueString(rg.id, runnerHub
 var keyVaultPrefix = take(replace(toLower(prefix), '-', ''), 5)
 var keyVaultEnvironment = take(replace(toLower(env), '-', ''), 3)
 var keyVaultName = 'kv-${keyVaultPrefix}${uniqueString(rg.id)}${keyVaultEnvironment}'
-var aksResourceIdParts = split(aksClusterResourceId, '/')
-var aksSubscriptionId = enablePrivateAksInference ? aksResourceIdParts[2] : subscription().subscriptionId
-var aksResourceGroupName = enablePrivateAksInference ? aksResourceIdParts[4] : resourceGroupName
-var aksClusterName = enablePrivateAksInference ? aksResourceIdParts[8] : ''
 
 // ============================================================
 // Phase 1 — Foundation: Resource Group, Managed Identity, VNet
@@ -159,8 +146,9 @@ module vnet './modules/vnet.bicep' = if (enableVNet) {
     defaultSubnetPrefix: defaultSubnetPrefix
     computeSubnetPrefix: computeSubnetPrefix
     privateEndpointSubnetPrefix: peSubnetPrefix
-    enableBastion: enableBastion
+    enableBastion: enableDevJumpbox
     bastionSubnetPrefix: bastionSubnetPrefix
+    administrationSubnetPrefix: administrationSubnetPrefix
   }
 }
 
@@ -196,8 +184,8 @@ module runnerHubToSpoke './modules/vnet_peering.bicep' = if (enableVNet && hasRu
   }
 }
 
-// Bastion + Jump Box — conditional on enableBastion (requires enableVNet)
-module bastion './modules/bastion.bicep' = if (enableVNet && enableBastion) {
+// Private-only Bastion + Linux Dev jumpbox
+module bastion './modules/bastion.bicep' = if (enableVNet && enableDevJumpbox) {
   name: 'bastion'
   scope: resourceGroup(rg.name)
   params: {
@@ -205,8 +193,17 @@ module bastion './modules/bastion.bicep' = if (enableVNet && enableBastion) {
     location: location
     tags: tags
     bastionSubnetId: vnet!.outputs.bastionSubnetId
-    defaultSubnetId: vnet!.outputs.defaultSubnetId
-    keyVaultName: kv.outputs.kvName
+    bastionSubnetPrefix: bastionSubnetPrefix
+    administrationSubnetId: vnet!.outputs.administrationSubnetId
+    vmSize: devJumpboxVmSize
+    ubuntuImageVersion: devJumpboxUbuntuImageVersion
+    azureCliVersion: devJumpboxAzureCliVersion
+    azureMlExtensionVersion: devJumpboxAzureMlExtensionVersion
+    azureAiMlVersion: devJumpboxAzureAiMlVersion
+    azureIdentityVersion: devJumpboxAzureIdentityVersion
+    shutdownTime: devJumpboxShutdownTime
+    shutdownTimeZone: devJumpboxShutdownTimeZone
+    loginGroupObjectId: devJumpboxLoginGroupId
   }
 }
 
@@ -227,6 +224,8 @@ module st './modules/storage_account.bicep' = {
       vnet!.outputs.defaultSubnetId
       vnet!.outputs.computeSubnetId
     ] : []
+    enableDeploymentLocks: enableManagedOnlineEndpoint
+    ciPrincipalObjectId: ciPrincipalObjectId
   }
 }
 
@@ -412,6 +411,21 @@ module peMlw './modules/private_endpoint.bicep' = if (enableVNet) {
   }
 }
 
+module onlineEndpointIdentity './modules/aml_online_endpoint_identity.bicep' = if (enableManagedOnlineEndpoint) {
+  name: 'aml-online-endpoint-identity'
+  scope: resourceGroup(rg.name)
+  params: {
+    baseName: baseName
+    location: location
+    tags: tags
+    storageAccountId: st.outputs.stoacctOut
+    containerRegistryId: cr!.outputs.crOut
+    keyVaultId: kv.outputs.kvOut
+    allowKeyVaultSecrets: onlineEndpointAllowKeyVaultSecrets
+    ciPrincipalObjectId: ciPrincipalObjectId
+  }
+}
+
 // AML compute cluster — conditional on enableComputeCluster
 module mlwcc './modules/aml_computecluster.bicep' = if (enableComputeCluster) {
   name: 'mlwcc'
@@ -427,93 +441,6 @@ module mlwcc './modules/aml_computecluster.bicep' = if (enableComputeCluster) {
     managedIdentityId: mi.outputs.managedIdentityId
     subnetId: enableVNet ? vnet!.outputs.computeSubnetId : ''
   }
-}
-
-resource existingAks 'Microsoft.ContainerService/managedClusters@2025-04-01' existing = if (enablePrivateAksInference) {
-  name: aksClusterName
-  scope: resourceGroup(aksSubscriptionId, aksResourceGroupName)
-}
-
-module amlKubernetesIdentity './modules/aml_kubernetes_identity.bicep' = if (enablePrivateAksInference) {
-  name: 'aml-kubernetes-identity'
-  scope: resourceGroup(rg.name)
-  params: {
-    baseName: baseName
-    location: location
-    tags: tags
-    oidcIssuerUrl: existingAks!.properties.oidcIssuerProfile.issuerURL
-    namespace: onlineNamespace
-    serviceAccountName: onlineServiceAccountName
-    storageAccountId: st.outputs.stoacctOut
-    containerRegistryId: cr!.outputs.crOut
-    workspaceManagedIdentityPrincipalId: mi.outputs.managedIdentityPrincipalId
-  }
-}
-
-module aksNamespaceBootstrapRole './modules/aks_run_command_role.bicep' = if (enablePrivateAksInference) {
-  name: 'aks-run-command-role'
-  scope: subscription(aksSubscriptionId)
-}
-
-module aksAmlInference './modules/aks_aml_inference.bicep' = if (enablePrivateAksInference) {
-  name: 'aks-aml-inference'
-  scope: resourceGroup(aksSubscriptionId, aksResourceGroupName)
-  params: {
-    clusterName: aksClusterName
-    workspaceResourceId: mlw.outputs.amlsId
-    workspaceManagedIdentityPrincipalId: mi.outputs.managedIdentityPrincipalId
-    namespaceBootstrapRoleId: aksNamespaceBootstrapRole!.outputs.roleId
-    namespaceBootstrapPrincipalId: ciPrincipalObjectId
-    nodePoolName: onlineNodePoolName
-    nodeSubnetResourceId: aksNodeSubnetResourceId
-    nodeVmSize: onlineNodeVmSize
-    nodeMinCount: onlineNodeMinCount
-    nodeMaxCount: onlineNodeMaxCount
-    nodeMaxPods: onlineNodeMaxPods
-    extensionName: amlKubernetesExtensionName
-    extensionReleaseTrain: amlKubernetesExtensionReleaseTrain
-    deployExtension: completePrivateAksInferenceDeployment
-    extensionTlsCertPem: amlKubernetesExtensionTlsCertPem
-    extensionTlsKeyPem: amlKubernetesExtensionTlsKeyPem
-    extensionSslCname: amlKubernetesExtensionSslCname
-  }
-}
-
-module amlOnlineEnvironment './modules/aml_environment.bicep' = if (enablePrivateAksInference && !onlineMlflowNoCode) {
-  name: 'aml-online-environment'
-  scope: resourceGroup(rg.name)
-  params: {
-    workspaceName: mlw.outputs.amlsName
-    environmentName: onlineEnvironmentName
-    environmentVersion: onlineEnvironmentVersion
-    imageUri: onlineEnvironmentImage
-  }
-  dependsOn: [
-    peMlw
-  ]
-}
-
-module amlKubernetesCompute './modules/aml_kubernetes_compute.bicep' = if (enablePrivateAksInference && completePrivateAksInferenceDeployment) {
-  name: 'aml-kubernetes-compute'
-  scope: resourceGroup(rg.name)
-  params: {
-    workspaceName: mlw.outputs.amlsName
-    location: location
-    computeName: onlineComputeName
-    clusterResourceId: aksClusterResourceId
-    namespace: onlineNamespace
-    identityId: amlKubernetesIdentity!.outputs.identityId
-    extensionPrincipalId: aksAmlInference!.outputs.extensionPrincipalId
-    extensionReleaseTrain: amlKubernetesExtensionReleaseTrain
-    instanceTypeName: onlineInstanceTypeName
-    cpuRequest: onlineCpuRequest
-    cpuLimit: onlineCpuLimit
-    memoryRequest: onlineMemoryRequest
-    memoryLimit: onlineMemoryLimit
-  }
-  dependsOn: [
-    peMlw
-  ]
 }
 
 // AML Registry — cross-workspace model/asset promotion
@@ -665,13 +592,17 @@ output containerRegistryName string = enableContainerRegistry ? cr!.outputs.crNa
 output runnerHubIntegrationEnabled bool = enableVNet && hasRunnerHub
 output runnerHubReciprocalPeeringManaged bool = enableVNet && hasRunnerHub && manageRunnerHubToWorkloadPeering
 output runnerHubReciprocalPeeringCommand string = (enableVNet && hasRunnerHub && !manageRunnerHubToWorkloadPeering) ? 'az network vnet peering create --subscription "${runnerHubSubscriptionId}" --resource-group "${runnerHubResourceGroupName}" --vnet-name "${runnerHubVnetName}" --name "${runnerHubToSpokePeeringName}" --remote-vnet "${vnet!.outputs.vnetId}" --allow-vnet-access --allow-forwarded-traffic' : ''
-output privateAksInferenceEnabled bool = enablePrivateAksInference
-output onlineComputeName string = enablePrivateAksInference && completePrivateAksInferenceDeployment ? amlKubernetesCompute!.outputs.computeName : ''
-output onlineEnvironmentId string = enablePrivateAksInference && !onlineMlflowNoCode ? amlOnlineEnvironment!.outputs.environmentId : ''
-output onlineConfigurationValidated bool = mlflowNoCodeEnvironmentValidated && imageOnlyEnvironmentValidated && privateAksBootstrapPrincipalValidated
-output onlineNamespace string = enablePrivateAksInference ? onlineNamespace : ''
-output aksClusterId string = enablePrivateAksInference ? aksClusterResourceId : ''
-output legacyNamespaceBootstrapRoleAssignmentId string = enablePrivateAksInference ? aksAmlInference!.outputs.legacyNamespaceBootstrapRoleAssignmentId : ''
-output onlineInferenceIdentityId string = enablePrivateAksInference ? amlKubernetesIdentity!.outputs.identityId : ''
-output onlineInferenceIdentityClientId string = enablePrivateAksInference ? amlKubernetesIdentity!.outputs.identityClientId : ''
-output onlineInferenceServiceAccountName string = enablePrivateAksInference ? onlineServiceAccountName : ''
+output managedOnlineEndpointEnabled bool = enableManagedOnlineEndpoint
+output onlineEndpointIdentityId string = enableManagedOnlineEndpoint ? onlineEndpointIdentity!.outputs.identityId : ''
+output onlineEndpointIdentityClientId string = enableManagedOnlineEndpoint ? onlineEndpointIdentity!.outputs.identityClientId : ''
+output onlineDeploymentLockStorageAccountName string = enableManagedOnlineEndpoint ? st.outputs.stoacctName : ''
+output onlineDeploymentLockContainerName string = enableManagedOnlineEndpoint ? st.outputs.deploymentLockContainerName : ''
+output onlineConfigurationValidated bool = mlflowNoCodeEnvironmentValidated && imageOnlyEnvironmentValidated && managedOnlineEndpointValidated
+output devJumpboxEnabled bool = enableVNet && enableDevJumpbox
+output devJumpboxVmId string = enableVNet && enableDevJumpbox ? bastion!.outputs.jumpboxVmId : ''
+output devJumpboxPrivateIp string = enableVNet && enableDevJumpbox ? bastion!.outputs.jumpboxPrivateIp : ''
+output privateBastionId string = enableVNet && enableDevJumpbox ? bastion!.outputs.bastionId : ''
+output amlPrivateDnsZoneId string = enableVNet ? dnsZones!.outputs.amlDnsZoneId : ''
+output keyVaultPrivateDnsZoneId string = enableVNet ? dnsZones!.outputs.kvDnsZoneId : ''
+output acrPrivateDnsZoneId string = enableVNet ? dnsZones!.outputs.acrDnsZoneId : ''
+output privateAdministrationConnectivityRequired bool = enableVNet && enableDevJumpbox && devJumpboxValidated

@@ -45,10 +45,11 @@ def derive_config(config: dict[str, Any]) -> dict[str, Any]:
         **config,
         "resource_group": f"rg-{base_name}",
         "workspace_name": f"mlw-{base_name}",
-        "online_endpoint_name": (
-            f"{config['online_endpoint_suffix']}-{compact_name}"
-        )[:32],
-        "batch_endpoint_name": (
-            f"{config['batch_endpoint_suffix']}-{compact_name}"
-        )[:32],
+        "online_endpoint_identity_name": f"id-online-{base_name}",
+        "online_endpoint_name": (f"{config['online_endpoint_suffix']}-{compact_name}")[
+            :32
+        ],
+        "batch_endpoint_name": (f"{config['batch_endpoint_suffix']}-{compact_name}")[
+            :32
+        ],
     }

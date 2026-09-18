@@ -6,6 +6,7 @@ param defaultSubnetPrefix string = '10.0.0.0/24'
 param computeSubnetPrefix string = '10.0.1.0/24'
 param privateEndpointSubnetPrefix string = '10.0.2.0/24'
 param bastionSubnetPrefix string = '10.0.3.0/26'
+param administrationSubnetPrefix string = '10.0.4.0/27'
 param enableBastion bool = false
 
 // NAT Gateway for outbound internet from aml-compute subnet
@@ -78,6 +79,20 @@ var bastionSubnet = [
       addressPrefix: bastionSubnetPrefix
     }
   }
+  {
+    name: 'administration'
+    properties: {
+      addressPrefix: administrationSubnetPrefix
+      natGateway: {
+        id: natGateway.id
+      }
+      serviceEndpoints: [
+        { service: 'Microsoft.KeyVault' }
+        { service: 'Microsoft.Storage' }
+        { service: 'Microsoft.ContainerRegistry' }
+      ]
+    }
+  }
 ]
 
 resource vnet 'Microsoft.Network/virtualNetworks@2024-05-01' = {
@@ -100,3 +115,4 @@ output defaultSubnetId string = vnet.properties.subnets[0].id
 output computeSubnetId string = vnet.properties.subnets[1].id
 output privateEndpointSubnetId string = vnet.properties.subnets[2].id
 output bastionSubnetId string = enableBastion ? vnet.properties.subnets[3].id : ''
+output administrationSubnetId string = enableBastion ? vnet.properties.subnets[4].id : ''

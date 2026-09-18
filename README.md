@@ -19,7 +19,6 @@ for prerequisites, configuration, pipeline entrypoints, deployment order, and
 validation.
 
 For the generated Python SDK v2/GitHub Actions project, see
-[Private Azure ML online inference on AKS](docs/private-aks-inference.md) for the
-opt-in, fully private Kubernetes serving infrastructure contract. The generated
-online pattern defaults to Azure ML curated MLflow no-code inference and retains
-an explicit immutable image-only compatibility mode.
+[Private Azure ML managed online inference](docs/private-managed-online-inference.md)
+for the private endpoint, managed-network, identity, deployment, and migration
+contract. The private AKS platform is retained exclusively for GitHub ARC.

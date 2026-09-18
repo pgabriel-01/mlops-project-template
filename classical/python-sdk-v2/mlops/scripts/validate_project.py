@@ -33,37 +33,39 @@ REQUIRED_CONFIG = {
     "runner_hub_vnet_resource_id",
     "manage_runner_hub_to_workload_peering",
     "shared_private_dns_zone_resource_ids",
-    "enable_private_aks_inference",
-    "aks_cluster_resource_id",
-    "aks_node_subnet_resource_id",
+    "enable_managed_online_endpoint",
     "python_version",
     "aml_compute_sku",
     "batch_compute_name",
     "model_name",
     "online_endpoint_suffix",
     "online_deployment_name",
+    "online_alternate_deployment_name",
+    "online_traffic_percentage",
+    "online_lock_container_name",
     "online_instance_type",
-    "online_compute",
+    "online_instance_count",
     "online_mlflow_no_code",
     "online_environment_name",
     "online_environment_version",
     "online_environment_image",
-    "online_namespace",
-    "online_service_account",
-    "online_node_pool_name",
-    "online_node_vm_size",
-    "online_node_min_count",
-    "online_node_max_count",
-    "online_node_max_pods",
-    "online_cpu_request",
-    "online_cpu_limit",
-    "online_memory_request",
-    "online_memory_limit",
-    "aml_kubernetes_extension_name",
-    "aml_kubernetes_extension_release_train",
-    "aml_kubernetes_extension_ssl_cname",
+    "online_code_directory",
+    "online_scoring_script",
+    "online_endpoint_allow_key_vault_secrets",
     "batch_endpoint_suffix",
     "batch_deployment_name",
+    "enable_dev_jumpbox",
+    "bastion_subnet_prefix",
+    "administration_subnet_prefix",
+    "dev_jumpbox_vm_size",
+    "dev_jumpbox_ubuntu_image_version",
+    "dev_jumpbox_azure_cli_version",
+    "dev_jumpbox_azure_ml_extension_version",
+    "dev_jumpbox_azure_ai_ml_version",
+    "dev_jumpbox_azure_identity_version",
+    "dev_jumpbox_shutdown_time",
+    "dev_jumpbox_shutdown_timezone",
+    "dev_jumpbox_login_group_id",
 }
 FORBIDDEN_PATH_PARTS = {
     "aml-cli-v2",
@@ -96,6 +98,10 @@ PRIVATE_DNS_ZONE_NAMES = {
     "privatelink.api.azureml.ms",
     "privatelink.notebooks.azure.net",
 }
+VERIFIED_JUMPBOX_IMAGES = {
+    ("eastus", "24.04.202608270"),
+    ("eastus2", "24.04.202608270"),
+}
 
 
 def generated_paths() -> list[Path]:
@@ -103,9 +109,7 @@ def generated_paths() -> list[Path]:
         "ai_foundry_hub.bicep",
         "ai_foundry_project.bicep",
         "aml_computecluster.bicep",
-        "aml_kubernetes_compute.bicep",
-        "aml_environment.bicep",
-        "aml_kubernetes_identity.bicep",
+        "aml_online_endpoint_identity.bicep",
         "aml_registry.bicep",
         "aml_workspace.bicep",
         "apim.bicep",
@@ -125,8 +129,6 @@ def generated_paths() -> list[Path]:
         "storage_account.bicep",
         "vnet.bicep",
         "vnet_peering.bicep",
-        "aks_aml_inference.bicep",
-        "aks_run_command_role.bicep",
     )
     paths = [
         PATTERN_ROOT / "README.md",
@@ -139,6 +141,11 @@ def generated_paths() -> list[Path]:
         PATTERN_ROOT / "data" / "taxi-data.csv",
         PATTERN_ROOT / "data" / "taxi-request.json",
         PATTERN_ROOT / "mlops" / "azureml" / "deploy" / "batch" / "score.py",
+        PATTERN_ROOT / "mlops" / "azureml" / "deploy" / "online" / "deploy.py",
+        PATTERN_ROOT / "mlops" / "azureml" / "deploy" / "online" / "deployment_lock.py",
+        PATTERN_ROOT / "mlops" / "azureml" / "deploy" / "online" / "requirements.txt",
+        PATTERN_ROOT / "mlops" / "azureml" / "deploy" / "online" / "code" / "score.py",
+        PATTERN_ROOT / "mlops" / "scripts" / "check_legacy_bastion.py",
         PATTERN_ROOT / "mlops" / "azureml" / "train" / "job.yml",
         *[
             CONFIG_ROOT / f"config-infra-{environment}.yml"
@@ -153,8 +160,8 @@ def generated_paths() -> list[Path]:
         SCRIPT_ROOT / "render_bicep_parameters.py",
         SCRIPT_ROOT / "validate_project.py",
         INFRASTRUCTURE_ROOT / "bicepconfig.json",
+        INFRASTRUCTURE_ROOT / "assets" / "dev-jumpbox-bootstrap.pub",
         INFRASTRUCTURE_ROOT / "main.bicep",
-        INFRASTRUCTURE_ROOT / "manifests" / "azureml-inference-namespace.yaml",
         *[INFRASTRUCTURE_ROOT / "modules" / module for module in bicep_modules],
     ]
     return sorted(paths)
@@ -185,9 +192,10 @@ def validate_config_values(path: Path, config: dict[str, object]) -> list[str]:
         "ubuntu-24.04",
     }:
         errors.append(f"{path.name} private network requires a private runner")
-    if config.get("private_network") and not str(
-        config.get("batch_compute_name", "")
-    ).strip():
+    if (
+        config.get("private_network")
+        and not str(config.get("batch_compute_name", "")).strip()
+    ):
         errors.append(
             f"{path.name} private network requires batch_compute_name for "
             "workspace image builds"
@@ -246,65 +254,57 @@ def validate_config_values(path: Path, config: dict[str, object]) -> list[str]:
                     f"{path.name} has an invalid shared private DNS zone mapping "
                     f"for {zone_name}"
                 )
-    if config.get("enable_private_aks_inference"):
-        cluster_id = str(config.get("aks_cluster_resource_id", ""))
-        if not re.fullmatch(
-            r"/subscriptions/[^/]+/resourceGroups/[^/]+/providers/"
-            r"Microsoft\.ContainerService/managedClusters/[^/]+",
-            cluster_id,
-            re.IGNORECASE,
-        ):
-            errors.append(f"{path.name} has an invalid AKS cluster resource ID")
-        subnet_id = str(config.get("aks_node_subnet_resource_id", ""))
-        if not re.fullmatch(
-            r"/subscriptions/[^/]+/resourceGroups/[^/]+/providers/"
-            r"Microsoft\.Network/virtualNetworks/[^/]+/subnets/[^/]+",
-            subnet_id,
-            re.IGNORECASE,
-        ):
-            errors.append(f"{path.name} has an invalid AKS node subnet resource ID")
+    if config.get("enable_managed_online_endpoint"):
         if not config.get("private_network"):
-            errors.append(f"{path.name} private AKS inference requires private_network")
-        if not config.get("enable_vnet"):
-            errors.append(f"{path.name} private AKS inference requires enable_vnet")
-        if not runner_hub_vnet_resource_id:
             errors.append(
-                f"{path.name} private AKS inference requires the runner hub VNet "
-                "for private DNS and routing"
+                f"{path.name} managed online endpoint requires private_network"
             )
+        if not config.get("enable_vnet"):
+            errors.append(f"{path.name} managed online endpoint requires enable_vnet")
         if not config.get("enable_container_registry"):
             errors.append(
-                f"{path.name} private AKS inference requires container registry"
+                f"{path.name} managed online endpoint requires container registry"
             )
-        ssl_cname = str(config.get("aml_kubernetes_extension_ssl_cname", ""))
         if not re.fullmatch(
-            r"(?=.{1,253}\Z)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+"
-            r"[a-z](?:[a-z0-9-]{0,61}[a-z0-9])?",
-            ssl_cname,
-            re.IGNORECASE,
+            r"Standard_[A-Za-z0-9_]+",
+            str(config.get("online_instance_type", "")),
+        ):
+            errors.append(f"{path.name} online_instance_type must be an Azure VM SKU")
+        if int(config.get("online_instance_count", 0)) < 1:
+            errors.append(f"{path.name} online_instance_count must be at least one")
+        if (
+            environment in {"test", "prod"}
+            and int(config.get("online_instance_count", 0)) < 3
         ):
             errors.append(
-                f"{path.name} private AKS inference requires a valid TLS FQDN"
+                f"{path.name} requires at least three managed endpoint instances"
             )
-        if config.get("aml_kubernetes_extension_release_train") != "stable":
+        if str(config.get("online_endpoint_suffix", "")).strip() == "online":
             errors.append(
-                f"{path.name} private AKS inference must use the stable extension train"
+                f"{path.name} managed endpoint suffix must not reuse the legacy "
+                "Kubernetes endpoint name"
             )
-        if config.get("online_service_account") != "default":
+        deployment_names = (
+            str(config.get("online_deployment_name", "")),
+            str(config.get("online_alternate_deployment_name", "")),
+        )
+        if deployment_names[0] == deployment_names[1]:
+            errors.append(f"{path.name} blue-green deployment names must differ")
+        for deployment_name in deployment_names:
+            if not re.fullmatch(
+                r"[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?",
+                deployment_name,
+            ):
+                errors.append(f"{path.name} has an invalid managed deployment name")
+        if not 1 <= int(config.get("online_traffic_percentage", 0)) <= 100:
             errors.append(
-                f"{path.name} AML Kubernetes deployments require the dedicated "
-                "namespace default service account"
+                f"{path.name} online_traffic_percentage must be between 1 and 100"
             )
-        if int(config.get("online_node_min_count", 0)) < 3:
-            errors.append(
-                f"{path.name} production inference requires at least three nodes"
-            )
-        if int(config.get("online_node_max_count", 0)) < int(
-            config.get("online_node_min_count", 0)
+        if not re.fullmatch(
+            r"[a-z0-9](?:[a-z0-9-]{1,61}[a-z0-9])?",
+            str(config.get("online_lock_container_name", "")),
         ):
-            errors.append(
-                f"{path.name} inference node maximum must be at least its minimum"
-            )
+            errors.append(f"{path.name} has an invalid deployment lock container name")
     mlflow_no_code = config.get("online_mlflow_no_code")
     if not isinstance(mlflow_no_code, bool):
         errors.append(f"{path.name} online_mlflow_no_code must be true or false")
@@ -312,6 +312,8 @@ def validate_config_values(path: Path, config: dict[str, object]) -> list[str]:
     environment_name = str(config.get("online_environment_name", "")).strip()
     environment_version = str(config.get("online_environment_version", "")).strip()
     environment_image = str(config.get("online_environment_image", "")).strip()
+    code_directory = str(config.get("online_code_directory", "")).strip()
+    scoring_script = str(config.get("online_scoring_script", "")).strip()
     environment_values = (
         environment_name,
         environment_version,
@@ -328,14 +330,25 @@ def validate_config_values(path: Path, config: dict[str, object]) -> list[str]:
             "version, and image together"
         )
     if (
-        config.get("enable_private_aks_inference")
+        config.get("enable_managed_online_endpoint")
         and not mlflow_no_code
         and not all(environment_values)
     ):
         errors.append(
-            f"{path.name} image-only private AKS inference requires online "
+            f"{path.name} image-only managed inference requires online "
             "environment name, version, and image"
         )
+    if not mlflow_no_code and (not code_directory or not scoring_script):
+        errors.append(
+            f"{path.name} image-only managed inference requires a code "
+            "directory and scoring script"
+        )
+    if code_directory and scoring_script:
+        scoring_path = PATTERN_ROOT / code_directory / scoring_script
+        if not scoring_path.is_file():
+            errors.append(
+                f"{path.name} online scoring script does not exist: {scoring_path}"
+            )
     if environment_image and not re.fullmatch(
         r"[a-z0-9]+\.azurecr\.io/[a-z0-9._/-]+@sha256:[0-9a-f]{64}",
         environment_image,
@@ -343,6 +356,48 @@ def validate_config_values(path: Path, config: dict[str, object]) -> list[str]:
         errors.append(
             f"{path.name} online environment image must use an immutable sha256 digest"
         )
+    enable_dev_jumpbox = config.get("enable_dev_jumpbox")
+    if not isinstance(enable_dev_jumpbox, bool):
+        errors.append(f"{path.name} enable_dev_jumpbox must be true or false")
+    if environment == "dev" and enable_dev_jumpbox is not True:
+        errors.append(f"{path.name} must enable the Dev jumpbox by default")
+    if environment != "dev" and enable_dev_jumpbox is not False:
+        errors.append(f"{path.name} must disable the Dev jumpbox by default")
+    if enable_dev_jumpbox and not config.get("enable_vnet"):
+        errors.append(f"{path.name} Dev jumpbox requires enable_vnet")
+    if str(config.get("dev_jumpbox_ubuntu_image_version", "")).lower() in {
+        "",
+        "latest",
+    }:
+        errors.append(f"{path.name} Dev jumpbox image version must be pinned")
+    image_key = (
+        str(config.get("location", "")).lower(),
+        str(config.get("dev_jumpbox_ubuntu_image_version", "")),
+    )
+    if image_key not in VERIFIED_JUMPBOX_IMAGES:
+        errors.append(
+            f"{path.name} Dev jumpbox image is not verified for its target region"
+        )
+    for key in (
+        "dev_jumpbox_azure_cli_version",
+        "dev_jumpbox_azure_ml_extension_version",
+        "dev_jumpbox_azure_ai_ml_version",
+        "dev_jumpbox_azure_identity_version",
+    ):
+        if not str(config.get(key, "")).strip():
+            errors.append(f"{path.name} {key} must be pinned")
+    if not re.fullmatch(
+        r"\d+\.\d+\.\d+",
+        str(config.get("dev_jumpbox_azure_ml_extension_version", "")),
+    ):
+        errors.append(
+            f"{path.name} Dev jumpbox Azure ML extension version must be pinned"
+        )
+    if not re.fullmatch(
+        r"(?:[01][0-9]|2[0-3])[0-5][0-9]",
+        str(config.get("dev_jumpbox_shutdown_time", "")),
+    ):
+        errors.append(f"{path.name} has an invalid Dev jumpbox shutdown time")
     return errors
 
 

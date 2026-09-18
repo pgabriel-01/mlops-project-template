@@ -6,6 +6,7 @@ on:
       - ".github/workflows/deploy-infrastructure.yml"
       - "config-infra-*.yml"
       - "infrastructure/**"
+      - "mlops/scripts/check_shared_private_dns.py"
       - "mlops/scripts/render_bicep_parameters.py"
   workflow_dispatch:
     inputs:
@@ -63,6 +64,10 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Check runner hub private DNS ownership
+        run: |
+          python3 mlops/scripts/check_shared_private_dns.py \
+            config-infra-${{ needs.config.outputs.environment }}.yml
       - name: Check Dev jumpbox migration prerequisites
         if: needs.config.outputs.enable_dev_jumpbox == 'true'
         run: |
@@ -78,6 +83,7 @@ jobs:
       - name: Load configuration
         env:
           AZURE_PRINCIPAL_OBJECT_ID: ${{ vars.AZURE_PRINCIPAL_OBJECT_ID }}
+          DEV_JUMPBOX_LOGIN_GROUP_ID: ${{ vars.DEV_JUMPBOX_LOGIN_GROUP_ID }}
         run: |
           python3 mlops/scripts/render_bicep_parameters.py \
             config-infra-${{ needs.config.outputs.environment }}.yml \
@@ -102,6 +108,10 @@ jobs:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Check runner hub private DNS ownership
+        run: |
+          python3 mlops/scripts/check_shared_private_dns.py \
+            config-infra-${{ needs.config.outputs.environment }}.yml
       - name: Check Dev jumpbox migration prerequisites
         if: needs.config.outputs.enable_dev_jumpbox == 'true'
         run: |
@@ -117,6 +127,7 @@ jobs:
       - name: Load configuration
         env:
           AZURE_PRINCIPAL_OBJECT_ID: ${{ vars.AZURE_PRINCIPAL_OBJECT_ID }}
+          DEV_JUMPBOX_LOGIN_GROUP_ID: ${{ vars.DEV_JUMPBOX_LOGIN_GROUP_ID }}
         run: |
           python3 mlops/scripts/render_bicep_parameters.py \
             config-infra-${{ needs.config.outputs.environment }}.yml \

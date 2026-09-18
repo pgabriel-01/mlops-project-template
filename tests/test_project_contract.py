@@ -1,4 +1,5 @@
 import hashlib
+import importlib.util
 import json
 import os
 import shutil
@@ -8,6 +9,7 @@ import tempfile
 import unittest
 import urllib.request
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 PATTERN_ROOT = ROOT / "classical" / "python-sdk-v2"
@@ -43,6 +45,14 @@ sys.path.insert(0, str(SCRIPT_ROOT))
 
 from project_config import load_config
 from validate_project import validate_config_values
+
+DNS_PREFLIGHT = SCRIPT_ROOT / "check_shared_private_dns.py"
+DNS_PREFLIGHT_SPEC = importlib.util.spec_from_file_location(
+    "check_shared_private_dns", DNS_PREFLIGHT
+)
+assert DNS_PREFLIGHT_SPEC and DNS_PREFLIGHT_SPEC.loader
+check_shared_private_dns = importlib.util.module_from_spec(DNS_PREFLIGHT_SPEC)
+DNS_PREFLIGHT_SPEC.loader.exec_module(check_shared_private_dns)
 
 
 def load_pinned_template(path: str) -> str:
@@ -269,6 +279,12 @@ class ProjectContractTests(unittest.TestCase):
 
         self.assertIn("mlops/scripts/export_config.py", infrastructure)
         self.assertIn("mlops/scripts/render_bicep_parameters.py", infrastructure)
+        self.assertEqual(
+            2,
+            infrastructure.count(
+                "python3 mlops/scripts/check_shared_private_dns.py"
+            ),
+        )
         self.assertIn("infrastructure/main.bicep", infrastructure)
         self.assertNotIn("infrastructure/bicep/", infrastructure)
         self.assertIn("job_file: mlops/azureml/train/job.yml", training)
@@ -1038,9 +1054,202 @@ class ProjectContractTests(unittest.TestCase):
         self.assertIn("contains(sharedPrivateDnsZoneResourceIds, zone)", dns)
         self.assertIn("for zoneId in privateDnsZoneIds", dns)
         self.assertIn("for zone in managedDnsZones", dns)
+        self.assertIn(
+            "for zone in managedDnsZones: if (!empty(runnerHubVnetId))",
+            dns,
+        )
         self.assertIn("output blobDnsZoneId string = privateDnsZoneIds[0]", dns)
         self.assertIn("resource privateDnsZone", link)
         self.assertIn("existing = {", link)
+
+    def test_runner_hub_dns_preflight_requires_every_existing_zone(self):
+        runner_hub_id = (
+            "/subscriptions/runner-sub/resourceGroups/runner-rg/providers/"
+            "Microsoft.Network/virtualNetworks/runner-hub"
+        )
+        blob_id = (
+            "/subscriptions/dns-sub/resourceGroups/dns-rg/providers/"
+            "Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net"
+        )
+        queue_id = (
+            "/subscriptions/dns-sub/resourceGroups/dns-rg/providers/"
+            "Microsoft.Network/privateDnsZones/privatelink.queue.core.windows.net"
+        )
+        config = {
+            "runner_hub_vnet_resource_id": runner_hub_id,
+            "shared_private_dns_zone_resource_ids": json.dumps(
+                {"privatelink.blob.core.windows.net": blob_id}
+            ),
+        }
+        links = [
+            {
+                "zoneName": "privatelink.blob.core.windows.net",
+                "zoneId": blob_id,
+            },
+            {
+                "zoneName": "privatelink.queue.core.windows.net",
+                "zoneId": queue_id,
+            },
+        ]
+        with patch.object(
+            check_shared_private_dns,
+            "find_runner_hub_zone_links",
+            return_value=links,
+        ):
+            blockers = check_shared_private_dns.find_blockers(config)
+        self.assertEqual(1, len(blockers))
+        self.assertIn("must include privatelink.queue.core.windows.net", blockers[0])
+
+    def test_runner_hub_dns_preflight_accepts_exact_map_and_standalone_mode(self):
+        runner_hub_id = (
+            "/subscriptions/runner-sub/resourceGroups/runner-rg/providers/"
+            "Microsoft.Network/virtualNetworks/runner-hub"
+        )
+        zone_id = (
+            "/subscriptions/dns-sub/resourceGroups/dns-rg/providers/"
+            "Microsoft.Network/privateDnsZones/privatelink.api.azureml.ms"
+        )
+        config = {
+            "runner_hub_vnet_resource_id": runner_hub_id,
+            "shared_private_dns_zone_resource_ids": json.dumps(
+                {"privatelink.api.azureml.ms": zone_id}
+            ),
+        }
+        with patch.object(
+            check_shared_private_dns,
+            "find_runner_hub_zone_links",
+            return_value=[
+                {
+                    "zoneName": "privatelink.api.azureml.ms",
+                    "zoneId": zone_id.upper(),
+                }
+            ],
+        ):
+            self.assertEqual([], check_shared_private_dns.find_blockers(config))
+        with patch.object(
+            check_shared_private_dns,
+            "find_runner_hub_zone_links",
+        ) as query:
+            self.assertEqual(
+                [],
+                check_shared_private_dns.find_blockers(
+                    {
+                        "runner_hub_vnet_resource_id": "",
+                        "shared_private_dns_zone_resource_ids": "{}",
+                    }
+                ),
+            )
+            query.assert_not_called()
+
+    def test_runner_hub_dns_preflight_rejects_malformed_inputs(self):
+        self.assertEqual(
+            ["shared_private_dns_zone_resource_ids must be a JSON object"],
+            check_shared_private_dns.find_blockers(
+                {
+                    "runner_hub_vnet_resource_id": "",
+                    "shared_private_dns_zone_resource_ids": "{",
+                }
+            ),
+        )
+        self.assertEqual(
+            ["runner_hub_vnet_resource_id is not a valid Azure VNet resource ID"],
+            check_shared_private_dns.find_blockers(
+                {
+                    "runner_hub_vnet_resource_id": "runner-hub",
+                    "shared_private_dns_zone_resource_ids": "{}",
+                }
+            ),
+        )
+        with patch.object(
+            check_shared_private_dns.subprocess,
+            "run",
+            side_effect=subprocess.TimeoutExpired("az", 120),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "timed out after 120 seconds"):
+                check_shared_private_dns.az_json("account", "list")
+
+    def test_runner_hub_dns_preflight_batches_resource_graph_subscriptions(self):
+        subscriptions = [
+            {"id": f"subscription-{index}", "state": "Enabled"}
+            for index in range(1001)
+        ]
+        responses = [
+            subscriptions,
+            {"data": [], "$skipToken": "next"},
+            {"data": []},
+            {"data": []},
+        ]
+        with patch.object(
+            check_shared_private_dns,
+            "az_json",
+            side_effect=responses,
+        ) as az_json:
+            self.assertEqual(
+                [],
+                check_shared_private_dns.find_runner_hub_zone_links(
+                    "/subscriptions/runner-sub/resourceGroups/runner-rg/providers/"
+                    "Microsoft.Network/virtualNetworks/runner-hub"
+                ),
+            )
+        request_bodies = [
+            json.loads(call.args[call.args.index("--body") + 1])
+            for call in az_json.call_args_list[1:]
+        ]
+        self.assertEqual([1000, 1000, 1], [
+            len(body["subscriptions"]) for body in request_bodies
+        ])
+        self.assertNotIn("$skipToken", request_bodies[0]["options"])
+        self.assertEqual("next", request_bodies[1]["options"]["$skipToken"])
+
+    def test_azure_devops_infrastructure_preflight_and_parameters_are_shell_safe(self):
+        infrastructure = (
+            PATTERN_ROOT
+            / "mlops"
+            / "devops-pipelines"
+            / "deploy-infrastructure-pipeline.yml"
+        ).read_text()
+        online = (
+            PATTERN_ROOT
+            / "mlops"
+            / "devops-pipelines"
+            / "deploy-online-endpoint-pipeline.yml"
+        ).read_text()
+        self.assertEqual(
+            2,
+            infrastructure.count("mlops/scripts/check_shared_private_dns.py"),
+        )
+        self.assertNotIn("pool='${{ parameters.privateAgentPool }}'", infrastructure)
+        self.assertNotIn("pool='${{ parameters.privateAgentPool }}'", online)
+        self.assertNotIn("'${{ parameters.modelVersion }}'", online)
+        self.assertIn(
+            "PRIVATE_AGENT_POOL: ${{ parameters.privateAgentPool }}",
+            infrastructure,
+        )
+        self.assertNotIn("az ad sp show", infrastructure)
+        self.assertEqual(
+            2,
+            infrastructure.count(
+                "AZURE_PRINCIPAL_OBJECT_ID: ${{ parameters.azurePrincipalObjectId }}"
+            ),
+        )
+        self.assertEqual(
+            2,
+            infrastructure.count(
+                "DEV_JUMPBOX_LOGIN_GROUP_ID: "
+                "${{ parameters.devJumpboxLoginGroupId }}"
+            ),
+        )
+        self.assertIn("MODEL_VERSION: ${{ parameters.modelVersion }}", online)
+        github = (
+            PATTERN_ROOT / "mlops" / "github-actions" / "deploy-infrastructure.yml"
+        ).read_text()
+        self.assertEqual(
+            2,
+            github.count(
+                "DEV_JUMPBOX_LOGIN_GROUP_ID: "
+                "${{ vars.DEV_JUMPBOX_LOGIN_GROUP_ID }}"
+            ),
+        )
 
 
 if __name__ == "__main__":

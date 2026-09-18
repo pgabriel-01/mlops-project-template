@@ -1,10 +1,10 @@
 import argparse
 import json
 import os
+import re
 from pathlib import Path
 
 from project_config import load_config
-
 
 PARAMETER_MAP = {
     "location": "location",
@@ -65,8 +65,18 @@ def main() -> None:
 
     config = load_config(args.config_file)
     ci_principal_object_id = os.getenv("AZURE_PRINCIPAL_OBJECT_ID", "").strip()
-    if not ci_principal_object_id:
-        raise SystemExit("AZURE_PRINCIPAL_OBJECT_ID is required")
+    canonical_uuid = re.compile(
+        r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        re.IGNORECASE,
+    )
+    if not canonical_uuid.fullmatch(ci_principal_object_id):
+        raise SystemExit("AZURE_PRINCIPAL_OBJECT_ID must be a canonical UUID")
+    login_group_object_id = os.getenv(
+        "DEV_JUMPBOX_LOGIN_GROUP_ID",
+        str(config["dev_jumpbox_login_group_id"]),
+    ).strip()
+    if login_group_object_id and not canonical_uuid.fullmatch(login_group_object_id):
+        raise SystemExit("DEV_JUMPBOX_LOGIN_GROUP_ID must be empty or a canonical UUID")
     parameters = {
         parameter: {"value": config[key]} for key, parameter in PARAMETER_MAP.items()
     }
@@ -74,6 +84,7 @@ def main() -> None:
         "value": json.loads(str(config["shared_private_dns_zone_resource_ids"]))
     }
     parameters["ciPrincipalObjectId"] = {"value": ci_principal_object_id}
+    parameters["devJumpboxLoginGroupId"] = {"value": login_group_object_id}
     payload = {
         "$schema": (
             "https://schema.management.azure.com/schemas/"

@@ -188,6 +188,12 @@ class ManagedOnlineEndpointContractTests(unittest.TestCase):
         self.assertNotIn("adminPassword", jumpbox)
         self.assertIn("type: 'SystemAssigned'", jumpbox)
         self.assertIn("AADSSHLoginForLinux", jumpbox)
+        self.assertIn("autoUpgradeMinorVersion: true", jumpbox)
+        self.assertNotIn("enableAutomaticUpgrade", jumpbox)
+        self.assertIn("securityType: 'TrustedLaunch'", jumpbox)
+        self.assertIn("scope: jumpboxVm", jumpbox)
+        self.assertIn("scope: jumpboxNic", jumpbox)
+        self.assertIn("scope: bastion", jumpbox)
         self.assertIn(
             "AZURE_EXTENSION_DIR=/opt/az-extensions az extension add "
             "--name ml --version {1} --yes",

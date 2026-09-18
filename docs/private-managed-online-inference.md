@@ -36,6 +36,16 @@ The private runner must have routing and private DNS access to the workspace
 private endpoint. OIDC authenticates the workflow but does not provide network
 connectivity.
 
+When the runner hub is already linked to authoritative private DNS zones, callers
+must supply the full resource ID for every matching supported namespace through
+`sharedPrivateDnsZoneResourceIds`; supplying only Blob is not sufficient. The
+shared-zone map remains generic and may reference zones in any subscription
+visible to the deployment identity. A fail-closed preflight compares the map to
+the runner hub's actual links before both GitHub Actions and Azure DevOps
+validation/deployment. Supplied zones skip duplicate runner-hub links while still
+linking the workload VNet; callers without a shared runner hub retain the
+standalone deployment behavior.
+
 GitHub Actions and Azure DevOps acquire the same endpoint-scoped blob lease
 before reading traffic or selecting a deployment slot. The renewable 60-second
 lease is held through smoke validation and traffic promotion and released on

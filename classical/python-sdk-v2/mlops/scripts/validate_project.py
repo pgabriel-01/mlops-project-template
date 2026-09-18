@@ -146,6 +146,7 @@ def generated_paths() -> list[Path]:
         PATTERN_ROOT / "mlops" / "azureml" / "deploy" / "online" / "requirements.txt",
         PATTERN_ROOT / "mlops" / "azureml" / "deploy" / "online" / "code" / "score.py",
         PATTERN_ROOT / "mlops" / "scripts" / "check_legacy_bastion.py",
+        PATTERN_ROOT / "mlops" / "scripts" / "check_shared_private_dns.py",
         PATTERN_ROOT / "mlops" / "azureml" / "train" / "job.yml",
         *[
             CONFIG_ROOT / f"config-infra-{environment}.yml"

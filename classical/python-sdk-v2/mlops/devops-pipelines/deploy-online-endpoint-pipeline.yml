@@ -38,14 +38,13 @@ stages:
           - checkout: self
           - bash: |
               set -euo pipefail
-              pool='${{ parameters.privateAgentPool }}'
-              case "$pool" in
+              case "$PRIVATE_AGENT_POOL" in
                 REQUIRED_PRIVATE_SELF_HOSTED_POOL|Azure\ Pipelines)
                   echo "A private self-hosted agent pool is required." >&2
                   exit 2
                   ;;
               esac
-              if [[ '${{ parameters.modelVersion }}' == "REQUIRED" ]]; then
+              if [[ "$MODEL_VERSION" == "REQUIRED" ]]; then
                 echo "modelVersion must identify an immutable registered model version." >&2
                 exit 2
               fi
@@ -53,6 +52,9 @@ stages:
                 "config-infra-${{ parameters.environment }}.yml" \
                 --azure-devops
             displayName: Validate private pool and load configuration
+            env:
+              PRIVATE_AGENT_POOL: ${{ parameters.privateAgentPool }}
+              MODEL_VERSION: ${{ parameters.modelVersion }}
           - task: AzureCLI@2
             displayName: Deploy and test private managed endpoint
             inputs:
@@ -118,8 +120,10 @@ stages:
                   --lock-container-name "$(online_lock_container_name)" \
                   --endpoint-identity-resource-id "$endpoint_identity_id" \
                   --model-name "$(model_name)" \
-                  --model-version "${{ parameters.modelVersion }}" \
+                  --model-version "$MODEL_VERSION" \
                   --instance-type "$(online_instance_type)" \
                   --instance-count "$(online_instance_count)" \
                   --request-file data/taxi-request.json \
                   "${mode_args[@]}"
+            env:
+              MODEL_VERSION: ${{ parameters.modelVersion }}

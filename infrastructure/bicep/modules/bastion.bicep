@@ -181,7 +181,6 @@ resource aadSsh 'Microsoft.Compute/virtualMachines/extensions@2025-04-01' = {
     type: 'AADSSHLoginForLinux'
     typeHandlerVersion: '1.0'
     autoUpgradeMinorVersion: true
-    enableAutomaticUpgrade: true
     settings: {}
   }
 }

@@ -238,21 +238,26 @@ a differently named hub-to-workload peering already exists; remove or import the
 old ownership first. Empty/false defaults preserve the standalone generated
 topology.
 
-If the runner hub is already linked to an authoritative private DNS zone for one
-of those namespaces, reuse that zone instead of creating a conflicting second hub
-link. Set `shared_private_dns_zone_resource_ids` to a JSON object whose keys are
-the exact zone names and whose values are full zone resource IDs, for example:
+If the runner hub is already linked to authoritative private DNS zones for any
+of those namespaces, reuse every matching zone instead of creating conflicting
+second hub links. Set `shared_private_dns_zone_resource_ids` to a JSON object
+whose keys are the exact zone names and whose values are full zone resource IDs,
+for example:
 
 ```yaml
 shared_private_dns_zone_resource_ids: "{\"privatelink.blob.core.windows.net\":\"/subscriptions/<subscription-id>/resourceGroups/<dns-resource-group>/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net\"}"
 ```
 
-Each supplied zone must already be linked to the runner hub. Bicep skips creating
-that duplicate runner-hub link, links the workload VNet to the shared zone, and
-uses the shared zone for the private endpoint DNS zone group so records remain
-resolvable from both networks. Unlisted namespaces remain deployment-owned.
-Malformed, unsupported, or mismatched mappings fail project validation; there is
-no silent fallback that hides DNS ownership or permission errors.
+The map must include every supported namespace already linked to the runner hub,
+not only Blob. Each supplied zone must already be linked to that hub. The
+fail-closed infrastructure preflight queries all Azure subscriptions visible to
+the deployment identity and rejects omitted, mismatched, unlinked, or duplicate
+authoritative zones before ARM validation or deployment. Bicep skips creating
+runner-hub links for supplied zones, links the workload VNet to each shared zone,
+and uses those zones for private endpoint DNS zone groups so records remain
+resolvable from both networks. Supported namespaces with no existing hub link
+remain deployment-owned. Empty runner-hub settings preserve standalone behavior
+and do not query Azure.
 
 Key Vault naming is also bounded deterministically: the generated name uses a
 normalized five-character project prefix, the 13-character resource-group hash,

@@ -34,6 +34,7 @@ resource stoacct 'Microsoft.Storage/storageAccounts@2025-06-01' = {
       keySource: 'Microsoft.Storage'
     }
     supportsHttpsTrafficOnly: true
+    minimumTlsVersion: 'TLS1_2'
     allowSharedKeyAccess: false  // Disable key-based authentication, use Entra ID (managed identity) instead
     networkAcls: enableNetworkIsolation ? {
       defaultAction: 'Deny'

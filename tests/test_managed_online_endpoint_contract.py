@@ -157,6 +157,7 @@ class ManagedOnlineEndpointContractTests(unittest.TestCase):
         self.assertIn("name: 'deployment-locks'", storage)
         self.assertIn("scope: deploymentLocks", storage)
         self.assertIn("allowSharedKeyAccess: false", storage)
+        self.assertIn("minimumTlsVersion: 'TLS1_2'", storage)
 
     def test_jumpbox_contract_is_private_and_entra_only(self):
         main = (ROOT / "infrastructure" / "bicep" / "main.bicep").read_text()
@@ -217,12 +218,48 @@ class ManagedOnlineEndpointContractTests(unittest.TestCase):
             if args[:2] == ("group", "exists"):
                 return True
             if args[:3] == ("network", "bastion", "list"):
-                return [{"name": "bastion-old", "sku": {"name": "Basic"}}]
+                return [
+                    {
+                        "name": "bastion-old",
+                        "sku": {"name": "Basic"},
+                        "provisioningState": "Succeeded",
+                        "enableTunneling": True,
+                        "ipConfigurations": [
+                            {
+                                "name": "AzureBastionHostIpConfiguration",
+                                "privateIPAllocationMethod": "Dynamic",
+                                "publicIpAddress": {
+                                    "id": "/subscriptions/example/resourceGroups/"
+                                    "rg-mlops-demo001dev/providers/Microsoft.Network/"
+                                    "publicIPAddresses/pip-bastion-mlops-demo001dev"
+                                },
+                                "subnet": {
+                                    "id": "/subscriptions/example/resourceGroups/"
+                                    "rg-mlops-demo001dev/providers/Microsoft.Network/"
+                                    "virtualNetworks/vnet-demo/subnets/"
+                                    "AzureBastionSubnet"
+                                },
+                            }
+                        ],
+                    }
+                ]
             return [
                 {
                     "name": "pip-bastion-mlops-demo001dev",
                     "type": "Microsoft.Network/publicIPAddresses",
-                }
+                },
+                {
+                    "name": "vm-jumpbox-mlops-demo001dev",
+                    "type": "Microsoft.Compute/virtualMachines",
+                },
+                {
+                    "name": "nic-jumpbox-mlops-demo001dev",
+                    "type": "Microsoft.Network/networkInterfaces",
+                },
+                {
+                    "name": "nsg-jumpbox-mlops-demo001dev",
+                    "type": "Microsoft.Network/networkSecurityGroups",
+                },
             ]
 
         with patch.object(check_legacy_bastion, "az_json", side_effect=fake_az_json):
@@ -234,8 +271,20 @@ class ManagedOnlineEndpointContractTests(unittest.TestCase):
             "Microsoft.Network/publicIPAddresses " "pip-bastion-mlops-demo001dev",
             blockers,
         )
+        self.assertIn(
+            "Microsoft.Compute/virtualMachines vm-jumpbox-mlops-demo001dev",
+            blockers,
+        )
+        self.assertIn(
+            "Microsoft.Network/networkInterfaces nic-jumpbox-mlops-demo001dev",
+            blockers,
+        )
+        self.assertIn(
+            "Microsoft.Network/networkSecurityGroups nsg-jumpbox-mlops-demo001dev",
+            blockers,
+        )
 
-    def test_existing_private_bastion_passes_preflight(self):
+    def test_existing_desired_private_bastion_passes_preflight(self):
         def fake_az_json(*args):
             if args[:2] == ("group", "exists"):
                 return True
@@ -244,7 +293,22 @@ class ManagedOnlineEndpointContractTests(unittest.TestCase):
                     {
                         "name": "bastion-private-mlops-demo001dev",
                         "sku": {"name": "Premium"},
-                        "enablePrivateOnlyBastion": True,
+                        "provisioningState": "Succeeded",
+                        "enablePrivateOnlyBastion": None,
+                        "enableTunneling": True,
+                        "ipConfigurations": [
+                            {
+                                "name": "private",
+                                "privateIPAllocationMethod": "Dynamic",
+                                "provisioningState": "Succeeded",
+                                "subnet": {
+                                    "id": "/subscriptions/example/resourceGroups/"
+                                    "rg-mlops-demo001dev/providers/Microsoft.Network/"
+                                    "virtualNetworks/vnet-demo/subnets/"
+                                    "AzureBastionSubnet"
+                                },
+                            }
+                        ],
                     }
                 ]
             return []
@@ -254,6 +318,103 @@ class ManagedOnlineEndpointContractTests(unittest.TestCase):
                 "rg-mlops-demo001dev", "mlops-demo001dev"
             )
         self.assertEqual([], blockers)
+
+    def test_expected_bastion_with_public_ip_fails_preflight(self):
+        def fake_az_json(*args):
+            if args[:2] == ("group", "exists"):
+                return True
+            if args[:3] == ("network", "bastion", "list"):
+                return [
+                    {
+                        "name": "bastion-private-mlops-demo001dev",
+                        "sku": {"name": "Premium"},
+                        "provisioningState": "Succeeded",
+                        "enableTunneling": True,
+                        "ipConfigurations": [
+                            {
+                                "name": "private",
+                                "privateIPAllocationMethod": "Dynamic",
+                                "publicIpAddress": {"id": "/public-ip"},
+                                "subnet": {
+                                    "id": "/subscriptions/example/resourceGroups/"
+                                    "rg-mlops-demo001dev/providers/Microsoft.Network/"
+                                    "virtualNetworks/vnet-demo/subnets/"
+                                    "AzureBastionSubnet"
+                                },
+                            }
+                        ],
+                    }
+                ]
+            return []
+
+        with patch.object(check_legacy_bastion, "az_json", side_effect=fake_az_json):
+            blockers = check_legacy_bastion.find_blockers(
+                "rg-mlops-demo001dev", "mlops-demo001dev"
+            )
+        self.assertEqual(
+            ["Bastion bastion-private-mlops-demo001dev"],
+            blockers,
+        )
+
+    def test_only_exact_private_bastion_posture_is_idempotent(self):
+        expected_name = "bastion-private-mlops-demo001dev"
+        desired = {
+            "name": expected_name,
+            "sku": {"name": "Premium"},
+            "provisioningState": "Succeeded",
+            "enableTunneling": True,
+            "ipConfigurations": [
+                {
+                    "name": "private",
+                    "privateIPAllocationMethod": "Dynamic",
+                    "provisioningState": "Succeeded",
+                    "subnet": {
+                        "id": "/subscriptions/example/resourceGroups/"
+                        "rg-mlops-demo001dev/providers/Microsoft.Network/"
+                        "virtualNetworks/vnet-demo/subnets/AzureBastionSubnet"
+                    },
+                }
+            ],
+        }
+        self.assertTrue(
+            check_legacy_bastion.is_desired_private_bastion(desired, expected_name)
+        )
+
+        invalid_variants = []
+        for path, value in (
+            (("name",), "bastion-old"),
+            (("sku", "name"), "Standard"),
+            (("provisioningState",), "Failed"),
+            (("enablePrivateOnlyBastion",), False),
+            (("enableTunneling",), False),
+            (("ipConfigurations", 0, "name"), "default"),
+            (("ipConfigurations", 0, "privateIPAllocationMethod"), "Static"),
+            (("ipConfigurations", 0, "provisioningState"), "Updating"),
+            (("ipConfigurations", 0, "subnet", "id"), "/wrong-subnet"),
+            (("ipConfigurations", 0, "publicIpAddress"), {"id": "/public-ip"}),
+        ):
+            variant = json.loads(json.dumps(desired))
+            target = variant
+            for key in path[:-1]:
+                target = target[key]
+            target[path[-1]] = value
+            invalid_variants.append(variant)
+        invalid_variants.extend(
+            [
+                {**desired, "ipConfigurations": []},
+                {
+                    **desired,
+                    "ipConfigurations": desired["ipConfigurations"] * 2,
+                },
+            ]
+        )
+        for variant in invalid_variants:
+            with self.subTest(variant=variant):
+                self.assertFalse(
+                    check_legacy_bastion.is_desired_private_bastion(
+                        variant, expected_name
+                    )
+                )
 
     def test_online_workflow_has_no_kubernetes_or_tls_contract(self):
         workflow = (

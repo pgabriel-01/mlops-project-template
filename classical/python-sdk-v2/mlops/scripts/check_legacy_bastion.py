@@ -5,15 +5,48 @@ import json
 import subprocess
 from typing import Any
 
+AZURE_COMMAND_TIMEOUT_SECONDS = 120
+
 
 def az_json(*args: str) -> Any:
-    result = subprocess.run(
-        ["az", *args, "--output", "json", "--only-show-errors"],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        result = subprocess.run(
+            ["az", *args, "--output", "json", "--only-show-errors"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=AZURE_COMMAND_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as error:
+        raise RuntimeError(
+            f"Azure CLI command timed out after {AZURE_COMMAND_TIMEOUT_SECONDS} "
+            f"seconds: az {' '.join(args)}"
+        ) from error
     return json.loads(result.stdout)
+
+
+def is_desired_private_bastion(bastion: dict[str, Any], expected_name: str) -> bool:
+    ip_configurations = bastion.get("ipConfigurations") or []
+    if len(ip_configurations) != 1:
+        return False
+    ip_configuration = ip_configurations[0]
+    subnet_id = ((ip_configuration.get("subnet") or {}).get("id") or "").lower()
+    has_public_ip = any(
+        ip_configuration.get(key) is not None
+        for key in ("publicIpAddress", "publicIPAddress")
+    )
+    return (
+        bastion.get("name") == expected_name
+        and (bastion.get("sku") or {}).get("name") == "Premium"
+        and bastion.get("provisioningState") == "Succeeded"
+        and bastion.get("enablePrivateOnlyBastion") is not False
+        and bastion.get("enableTunneling") is True
+        and ip_configuration.get("name") == "private"
+        and ip_configuration.get("privateIPAllocationMethod") == "Dynamic"
+        and ip_configuration.get("provisioningState") == "Succeeded"
+        and subnet_id.endswith("/subnets/azurebastionsubnet")
+        and not has_public_ip
+    )
 
 
 def find_blockers(resource_group: str, base_name: str) -> list[str]:
@@ -26,9 +59,7 @@ def find_blockers(resource_group: str, base_name: str) -> list[str]:
         "network", "bastion", "list", "--resource-group", resource_group
     ):
         name = bastion.get("name", "")
-        sku = (bastion.get("sku") or {}).get("name")
-        private_only = bastion.get("enablePrivateOnlyBastion")
-        if name != expected_name or sku != "Premium" or private_only is not True:
+        if not is_desired_private_bastion(bastion, expected_name):
             blockers.append(f"Bastion {name or '<unnamed>'}")
 
     legacy_names = {
@@ -49,7 +80,10 @@ def main() -> None:
     parser.add_argument("--base-name", required=True)
     args = parser.parse_args()
 
-    blockers = find_blockers(args.resource_group, args.base_name)
+    try:
+        blockers = find_blockers(args.resource_group, args.base_name)
+    except (RuntimeError, subprocess.CalledProcessError, json.JSONDecodeError) as error:
+        raise SystemExit(f"Private Bastion preflight failed: {error}") from error
     if blockers:
         details = "\n".join(f"- {blocker}" for blocker in blockers)
         raise SystemExit(

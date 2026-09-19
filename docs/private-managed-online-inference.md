@@ -62,8 +62,9 @@ steps synchronously:
    `az ml workspace provision-network`. Omit the presence-only `--include-spark`
    flag when Spark provisioning is not required.
 2. Verify the workspace still disables public access, has
-   `v1_legacy_mode=false` (the SDK may normalize an omitted safe default to
-   `None`), and uses `AllowOnlyApprovedOutbound`.
+   `v1_legacy_mode=false`, and uses `AllowOnlyApprovedOutbound`. If the SDK
+   normalizes the optional field to `None`, read the authoritative ARM property
+   and require literal `false`.
 3. Create or reconcile the managed endpoint with its fixed UAMI and no invalid
    traffic reference.
 4. Select one of two fixed deployment slots (`blue` and `green`). A new model is

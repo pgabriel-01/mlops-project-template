@@ -1,4 +1,5 @@
 import importlib.util
+import io
 import json
 import os
 import subprocess
@@ -502,15 +503,8 @@ class ManagedOnlineEndpointContractTests(unittest.TestCase):
                 managed_network=SimpleNamespace(
                     isolation_mode="AllowOnlyApprovedOutbound"
                 ),
-            )
-        )
-        managed_online_deploy.validate_workspace(
-            {
-                "public_network_access": "Disabled",
-                "managed_network": {
-                    "isolation_mode": "AllowOnlyApprovedOutbound",
-                },
-            }
+            ),
+            authoritative_v1_legacy_mode=False,
         )
 
         for override in (
@@ -528,6 +522,62 @@ class ManagedOnlineEndpointContractTests(unittest.TestCase):
             with self.subTest(override=override):
                 with self.assertRaises(RuntimeError):
                     managed_online_deploy.validate_workspace(workspace)
+
+        omitted = SimpleNamespace(
+            public_network_access="Disabled",
+            v1_legacy_mode=None,
+            managed_network=SimpleNamespace(isolation_mode="AllowOnlyApprovedOutbound"),
+        )
+        for authoritative_value in (None, True, "false", 0):
+            with self.subTest(authoritative_value=authoritative_value):
+                with self.assertRaises(RuntimeError):
+                    managed_online_deploy.validate_workspace(
+                        omitted,
+                        authoritative_v1_legacy_mode=authoritative_value,
+                    )
+
+    def test_authoritative_workspace_legacy_mode_read_is_fail_closed(self):
+        credential = SimpleNamespace(
+            get_token=lambda _: SimpleNamespace(token="test-token")
+        )
+        for arm_value in (False, True, None):
+            response = io.BytesIO(
+                json.dumps({"properties": {"v1LegacyMode": arm_value}}).encode()
+            )
+            with self.subTest(arm_value=arm_value):
+                with patch.object(
+                    managed_online_deploy.urllib.request,
+                    "urlopen",
+                    return_value=response,
+                ) as urlopen:
+                    self.assertIs(
+                        managed_online_deploy.read_workspace_v1_legacy_mode(
+                            credential,
+                            "subscription",
+                            "resource group",
+                            "workspace/name",
+                        ),
+                        arm_value,
+                    )
+                request = urlopen.call_args.args[0]
+                self.assertIn("/resourceGroups/resource%20group/", request.full_url)
+                self.assertIn("/workspaces/workspace%2Fname?", request.full_url)
+                self.assertEqual(30, urlopen.call_args.kwargs["timeout"])
+
+        with patch.object(
+            managed_online_deploy.urllib.request,
+            "urlopen",
+            side_effect=OSError("ARM unavailable"),
+        ):
+            with self.assertRaisesRegex(
+                RuntimeError, "authoritative Azure ML workspace ARM state"
+            ):
+                managed_online_deploy.read_workspace_v1_legacy_mode(
+                    credential,
+                    "subscription",
+                    "resource-group",
+                    "workspace",
+                )
 
     def test_image_mode_requires_complete_immutable_environment(self):
         request = PATTERN_ROOT / "data" / "taxi-request.json"

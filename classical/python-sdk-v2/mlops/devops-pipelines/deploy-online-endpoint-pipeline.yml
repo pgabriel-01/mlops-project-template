@@ -56,7 +56,7 @@ stages:
               PRIVATE_AGENT_POOL: ${{ parameters.privateAgentPool }}
               MODEL_VERSION: ${{ parameters.modelVersion }}
           - task: AzureCLI@2
-            displayName: Deploy and test private managed endpoint
+            displayName: Deploy private managed endpoint candidate
             inputs:
               azureSubscription: ${{ parameters.azureServiceConnection }}
               scriptType: bash
@@ -95,6 +95,8 @@ stages:
                     --output tsv
                 )"
                 lock_storage_account_name="${lock_storage_account_id##*/}"
+                echo "##vso[task.setvariable variable=endpointIdentityId]$endpoint_identity_id"
+                echo "##vso[task.setvariable variable=lockStorageAccountName]$lock_storage_account_name"
                 mode_args=()
                 if [[ "$(online_mlflow_no_code)" == "true" ]]; then
                   mode_args+=(--mlflow-no-code)
@@ -123,6 +125,52 @@ stages:
                   --instance-type "$(online_instance_type)" \
                   --instance-count "$(online_instance_count)" \
                   --request-file data/taxi-request.json \
+                  --phase deploy \
+                  "${mode_args[@]}"
+            env:
+              MODEL_VERSION: ${{ parameters.modelVersion }}
+          - task: AzureCLI@2
+            displayName: Invoke candidate and promote traffic with fresh OIDC login
+            inputs:
+              azureSubscription: ${{ parameters.azureServiceConnection }}
+              scriptType: bash
+              scriptLocation: inlineScript
+              addSpnToEnvironment: true
+              inlineScript: |
+                set -euo pipefail
+                if [[ -z "${idToken:-}" ]]; then
+                  echo "The Azure service connection must use workload identity federation." >&2
+                  exit 2
+                fi
+                mode_args=()
+                if [[ "$(online_mlflow_no_code)" == "true" ]]; then
+                  mode_args+=(--mlflow-no-code)
+                else
+                  mode_args+=(
+                    --environment-name "$(online_environment_name)"
+                    --environment-version "$(online_environment_version)"
+                    --environment-image "$(online_environment_image)"
+                    --code-directory "$(online_code_directory)"
+                    --scoring-script "$(online_scoring_script)"
+                  )
+                fi
+                python3 mlops/azureml/deploy/online/deploy.py \
+                  --subscription-id "$(az account show --query id --output tsv)" \
+                  --resource-group "$(resource_group)" \
+                  --workspace-name "$(workspace_name)" \
+                  --endpoint-name "$(online_endpoint_name)" \
+                  --deployment-name "$(online_deployment_name)" \
+                  --alternate-deployment-name "$(online_alternate_deployment_name)" \
+                  --traffic-percentage "$(online_traffic_percentage)" \
+                  --lock-storage-account-name "$(lockStorageAccountName)" \
+                  --lock-container-name "$(online_lock_container_name)" \
+                  --endpoint-identity-resource-id "$(endpointIdentityId)" \
+                  --model-name "$(model_name)" \
+                  --model-version "$MODEL_VERSION" \
+                  --instance-type "$(online_instance_type)" \
+                  --instance-count "$(online_instance_count)" \
+                  --request-file data/taxi-request.json \
+                  --phase finalize \
                   "${mode_args[@]}"
             env:
               MODEL_VERSION: ${{ parameters.modelVersion }}

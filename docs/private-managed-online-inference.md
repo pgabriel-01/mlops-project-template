@@ -74,8 +74,14 @@ steps synchronously:
    the same complete deployment specification reuses its existing slot.
 6. Create or reconcile the candidate deployment from an immutable model version
    and wait for provisioning to succeed.
-7. Invoke the named candidate directly from the private runner.
-8. Re-read the endpoint and promote the configured traffic percentage only
+7. Refresh the workload-identity login after the potentially long deployment,
+   reacquire the endpoint lease, and require exactly one successful candidate
+   with the requested deterministic fingerprint. The endpoint's pending
+   fingerprint must also match, so an older run cannot overtake a newer deploy
+   during the login boundary.
+8. Invoke the named candidate directly from the private runner using the fresh
+   login.
+9. Re-read the endpoint and promote the configured traffic percentage only
    after the smoke invocation succeeds. The previous deployment resource is
    retained for rollback.
 
@@ -85,6 +91,12 @@ settings, probes, and telemetry setting. A slot receiving traffic is reusable
 only when that complete fingerprint matches. Changing any rollout input,
 including scoring code while retaining the same model version, selects the
 inactive slot or fails closed when both slots are already serving traffic.
+GitHub Actions performs a second pinned `azure/login` immediately before the
+finalization phase. Azure DevOps uses a second `AzureCLI@2` task against the same
+workload-identity service connection so that task receives a fresh federated
+assertion. Direct callers retain a single-process `full` phase.
+Successful promotion removes the pending fingerprint; failed invocation leaves
+traffic unchanged.
 
 The endpoint UAMI cannot be changed in place. Replace the endpoint if its identity
 contract changes.

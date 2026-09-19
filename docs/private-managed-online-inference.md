@@ -65,15 +65,17 @@ steps synchronously:
    `v1_legacy_mode=false`, and uses `AllowOnlyApprovedOutbound`. If the SDK
    normalizes the optional field to `None`, read the authoritative ARM property
    and require literal `false`.
-3. Create or reconcile the managed endpoint with its fixed UAMI and no invalid
+3. Verify the requested model name and exact version exist in the target
+   workspace before creating or updating endpoint resources.
+4. Create or reconcile the managed endpoint with its fixed UAMI and no invalid
    traffic reference.
-4. Select one of two fixed deployment slots (`blue` and `green`). A new model is
+5. Select one of two fixed deployment slots (`blue` and `green`). A new model is
    deployed only to the slot that is not currently serving traffic; a rerun for
    the same complete deployment specification reuses its existing slot.
-5. Create or reconcile the candidate deployment from an immutable model version
+6. Create or reconcile the candidate deployment from an immutable model version
    and wait for provisioning to succeed.
-6. Invoke the named candidate directly from the private runner.
-7. Re-read the endpoint and promote the configured traffic percentage only
+7. Invoke the named candidate directly from the private runner.
+8. Re-read the endpoint and promote the configured traffic percentage only
    after the smoke invocation succeeds. The previous deployment resource is
    retained for rollback.
 

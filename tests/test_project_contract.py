@@ -1221,6 +1221,13 @@ class ProjectContractTests(unittest.TestCase):
         sleep.assert_called_once_with(1)
         command = run.call_args_list[0].args[0]
         self.assertIn("provision-network", command)
+        self.assertNotIn(
+            ["--include-spark", "false"],
+            [command[index : index + 2] for index in range(len(command) - 1)],
+        )
+        self.assertFalse(
+            any(argument.startswith("--include-spark=") for argument in command)
+        )
         self.assertNotIn("--include-spark", command)
 
         permanent = subprocess.CompletedProcess(

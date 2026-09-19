@@ -449,8 +449,10 @@ class ManagedOnlineEndpointContractTests(unittest.TestCase):
         self.assertIn("id-token: write", workflow)
         self.assertIn("az ml workspace provision-network", workflow)
         self.assertIn("az ml workspace provision-network", ado_pipeline)
-        self.assertNotIn("--include-spark", workflow)
-        self.assertNotIn("--include-spark", ado_pipeline)
+        for pipeline in (workflow, ado_pipeline):
+            self.assertNotIn("--include-spark false", pipeline)
+            self.assertNotIn("--include-spark=false", pipeline)
+            self.assertNotIn("--include-spark", pipeline)
         self.assertIn("mlops/azureml/deploy/online/deploy.py", workflow)
         self.assertIn("check_legacy_bastion.py", infrastructure)
         self.assertIn("az vm image show", infrastructure)

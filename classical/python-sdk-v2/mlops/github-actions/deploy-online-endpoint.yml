@@ -72,7 +72,8 @@ jobs:
           az ml workspace provision-network \
             --resource-group "${{ needs.config.outputs.resource_group }}" \
             --name "${{ needs.config.outputs.workspace_name }}"
-      - name: Deploy and test private managed endpoint
+      - name: Deploy private managed endpoint candidate
+        id: deploy
         env:
           MLFLOW_NO_CODE: ${{ needs.config.outputs.mlflow_no_code }}
         run: |
@@ -92,6 +93,8 @@ jobs:
               --output tsv
           )"
           lock_storage_account_name="${lock_storage_account_id##*/}"
+          echo "endpoint_identity_id=$endpoint_identity_id" >> "$GITHUB_OUTPUT"
+          echo "lock_storage_account_name=$lock_storage_account_name" >> "$GITHUB_OUTPUT"
           mode_args=()
           if [[ "$MLFLOW_NO_CODE" == "true" ]]; then
             mode_args+=(--mlflow-no-code)
@@ -120,4 +123,45 @@ jobs:
             --instance-type "${{ needs.config.outputs.instance_type }}" \
             --instance-count "${{ needs.config.outputs.instance_count }}" \
             --request-file data/taxi-request.json \
+            --phase deploy \
+            "${mode_args[@]}"
+      - name: Refresh Azure OIDC login before private invocation
+        uses: azure/login@a457da9ea143d694b1b9c7c869ebb04ebe844ef5
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Invoke candidate and promote traffic
+        env:
+          MLFLOW_NO_CODE: ${{ needs.config.outputs.mlflow_no_code }}
+        run: |
+          mode_args=()
+          if [[ "$MLFLOW_NO_CODE" == "true" ]]; then
+            mode_args+=(--mlflow-no-code)
+          else
+            mode_args+=(
+              --environment-name "${{ needs.config.outputs.environment_name }}"
+              --environment-version "${{ needs.config.outputs.environment_version }}"
+              --environment-image "${{ needs.config.outputs.environment_image }}"
+              --code-directory "${{ needs.config.outputs.code_directory }}"
+              --scoring-script "${{ needs.config.outputs.scoring_script }}"
+            )
+          fi
+          python mlops/azureml/deploy/online/deploy.py \
+            --subscription-id "${{ secrets.AZURE_SUBSCRIPTION_ID }}" \
+            --resource-group "${{ needs.config.outputs.resource_group }}" \
+            --workspace-name "${{ needs.config.outputs.workspace_name }}" \
+            --endpoint-name "${{ needs.config.outputs.endpoint_name }}" \
+            --deployment-name "${{ needs.config.outputs.deployment_name }}" \
+            --alternate-deployment-name "${{ needs.config.outputs.alternate_deployment_name }}" \
+            --traffic-percentage "${{ needs.config.outputs.traffic_percentage }}" \
+            --lock-storage-account-name "${{ steps.deploy.outputs.lock_storage_account_name }}" \
+            --lock-container-name "${{ needs.config.outputs.lock_container_name }}" \
+            --endpoint-identity-resource-id "${{ steps.deploy.outputs.endpoint_identity_id }}" \
+            --model-name "${{ needs.config.outputs.model_name }}" \
+            --model-version "${{ inputs.model_version }}" \
+            --instance-type "${{ needs.config.outputs.instance_type }}" \
+            --instance-count "${{ needs.config.outputs.instance_count }}" \
+            --request-file data/taxi-request.json \
+            --phase finalize \
             "${mode_args[@]}"

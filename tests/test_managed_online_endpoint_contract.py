@@ -455,6 +455,24 @@ class ManagedOnlineEndpointContractTests(unittest.TestCase):
             self.assertNotIn("--include-spark false", pipeline)
             self.assertNotIn("--include-spark=false", pipeline)
             self.assertNotIn("--include-spark", pipeline)
+            self.assertEqual(1, pipeline.count("--phase deploy"))
+            self.assertEqual(1, pipeline.count("--phase finalize"))
+            self.assertLess(
+                pipeline.index("--phase deploy"),
+                pipeline.index("--phase finalize"),
+            )
+        self.assertEqual(2, workflow.count("uses: azure/login@"))
+        self.assertLess(
+            workflow.index("Refresh Azure OIDC login before private invocation"),
+            workflow.index("--phase finalize"),
+        )
+        self.assertEqual(2, ado_pipeline.count("- task: AzureCLI@2"))
+        self.assertLess(
+            ado_pipeline.index(
+                "Invoke candidate and promote traffic with fresh OIDC login"
+            ),
+            ado_pipeline.index("--phase finalize"),
+        )
         self.assertIn("mlops/azureml/deploy/online/deploy.py", workflow)
         self.assertIn("check_legacy_bastion.py", infrastructure)
         self.assertIn("az vm image show", infrastructure)
@@ -676,6 +694,140 @@ class ManagedOnlineEndpointContractTests(unittest.TestCase):
             desired_fingerprint="desired",
         )
         self.assertEqual("green", candidate)
+
+    def test_finalize_requires_one_exact_deployed_fingerprint(self):
+        class MissingDeploymentError(Exception):
+            pass
+
+        args = Namespace(
+            deployment_name="blue",
+            alternate_deployment_name="green",
+            endpoint_name="taxi-endpoint",
+        )
+        deployments = {
+            "blue": SimpleNamespace(
+                tags={managed_online_deploy.DEPLOYMENT_FINGERPRINT_TAG: "old"}
+            ),
+            "green": SimpleNamespace(
+                tags={managed_online_deploy.DEPLOYMENT_FINGERPRINT_TAG: "desired"}
+            ),
+        }
+
+        def get_deployment(name, endpoint_name):
+            self.assertEqual("taxi-endpoint", endpoint_name)
+            if name not in deployments:
+                raise MissingDeploymentError(name)
+            return deployments[name]
+
+        client = SimpleNamespace(online_deployments=SimpleNamespace(get=get_deployment))
+        self.assertEqual(
+            "green",
+            managed_online_deploy.deployed_candidate_name(
+                client,
+                args,
+                "desired",
+                MissingDeploymentError,
+            ),
+        )
+        for fingerprints in (
+            ("old", "older"),
+            ("desired", "desired"),
+        ):
+            deployments["blue"].tags[
+                managed_online_deploy.DEPLOYMENT_FINGERPRINT_TAG
+            ] = fingerprints[0]
+            deployments["green"].tags[
+                managed_online_deploy.DEPLOYMENT_FINGERPRINT_TAG
+            ] = fingerprints[1]
+            with self.subTest(fingerprints=fingerprints):
+                with self.assertRaisesRegex(RuntimeError, "exactly one"):
+                    managed_online_deploy.deployed_candidate_name(
+                        client,
+                        args,
+                        "desired",
+                        MissingDeploymentError,
+                    )
+
+    def test_finalize_invokes_before_promoting_under_reacquired_lease(self):
+        args = Namespace(
+            deployment_name="blue",
+            alternate_deployment_name="green",
+            endpoint_name="taxi-endpoint",
+            request_file=Path("request.json"),
+            traffic_percentage=100,
+        )
+        deployment = SimpleNamespace(
+            tags={managed_online_deploy.DEPLOYMENT_FINGERPRINT_TAG: "desired"},
+            provisioning_state="Succeeded",
+        )
+
+        def get_deployment(name, endpoint_name):
+            if name == "green":
+                raise LookupError(name)
+            return deployment
+
+        endpoint = SimpleNamespace(
+            traffic={"blue": 100},
+            tags={
+                managed_online_deploy.PENDING_FINGERPRINT_TAG: "desired",
+            },
+        )
+        client = SimpleNamespace(
+            online_deployments=SimpleNamespace(
+                get=MagicMock(side_effect=get_deployment)
+            ),
+            online_endpoints=SimpleNamespace(
+                invoke=MagicMock(),
+                get=MagicMock(return_value=endpoint),
+                begin_create_or_update=MagicMock(
+                    return_value=SimpleNamespace(result=lambda: None)
+                ),
+            ),
+        )
+        lease = SimpleNamespace(ensure_held=MagicMock())
+        with patch.object(
+            managed_online_deploy,
+            "deployment_fingerprint",
+            return_value="desired",
+        ):
+            managed_online_deploy.finalize_candidate_under_lock(
+                args,
+                client,
+                LookupError,
+                lease,
+            )
+        client.online_endpoints.invoke.assert_called_once_with(
+            endpoint_name="taxi-endpoint",
+            deployment_name="blue",
+            request_file="request.json",
+        )
+        self.assertEqual({"blue": 100}, endpoint.traffic)
+        self.assertNotIn(
+            managed_online_deploy.PENDING_FINGERPRINT_TAG,
+            endpoint.tags,
+        )
+        client.online_endpoints.begin_create_or_update.assert_called_once_with(endpoint)
+        self.assertGreaterEqual(lease.ensure_held.call_count, 2)
+
+        endpoint.tags = {
+            managed_online_deploy.PENDING_FINGERPRINT_TAG: "newer",
+        }
+        client.online_endpoints.invoke.reset_mock()
+        with (
+            patch.object(
+                managed_online_deploy,
+                "deployment_fingerprint",
+                return_value="desired",
+            ),
+            self.assertRaisesRegex(RuntimeError, "newer deployment"),
+        ):
+            managed_online_deploy.finalize_candidate_under_lock(
+                args,
+                client,
+                LookupError,
+                lease,
+            )
+        client.online_endpoints.invoke.assert_not_called()
 
     def test_same_model_changed_rollout_inputs_use_inactive_slot(self):
         base = Namespace(

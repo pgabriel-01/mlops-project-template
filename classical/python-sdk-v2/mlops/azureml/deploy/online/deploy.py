@@ -11,6 +11,7 @@ from typing import Any
 from urllib.parse import quote
 
 DEPLOYMENT_FINGERPRINT_TAG = "deployment-fingerprint"
+PENDING_FINGERPRINT_TAG = "pending-deployment-fingerprint"
 REQUEST_SETTINGS = {
     "request_timeout_ms": 60_000,
     "max_concurrent_requests_per_instance": 1,
@@ -46,6 +47,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--code-directory", type=Path)
     parser.add_argument("--scoring-script", default="")
     parser.add_argument("--mlflow-no-code", action="store_true")
+    parser.add_argument(
+        "--phase",
+        choices=("deploy", "finalize", "full"),
+        default="full",
+    )
     return parser.parse_args()
 
 
@@ -288,7 +294,38 @@ def promoted_traffic(
     }
 
 
-def deploy_under_lock(
+def deployed_candidate_name(
+    client: Any,
+    args: argparse.Namespace,
+    desired_fingerprint: str,
+    resource_not_found_error: type[BaseException],
+) -> str:
+    matches = []
+    for deployment_name in (
+        args.deployment_name,
+        args.alternate_deployment_name,
+    ):
+        try:
+            deployment = client.online_deployments.get(
+                name=deployment_name,
+                endpoint_name=args.endpoint_name,
+            )
+        except resource_not_found_error:
+            continue
+        if (
+            str((deployment.tags or {}).get(DEPLOYMENT_FINGERPRINT_TAG, ""))
+            == desired_fingerprint
+        ):
+            matches.append(deployment_name)
+    if len(matches) != 1:
+        raise RuntimeError(
+            "Expected exactly one successfully deployed candidate with the "
+            f"requested fingerprint; found {len(matches)}."
+        )
+    return matches[0]
+
+
+def deploy_candidate_under_lock(
     args: argparse.Namespace,
     client: Any,
     sdk: SimpleNamespace,
@@ -332,6 +369,7 @@ def deploy_under_lock(
         tags={
             "managed-by": "python-sdk-v2",
             "network-access": "private",
+            PENDING_FINGERPRINT_TAG: desired_fingerprint,
         },
     )
     client.online_endpoints.begin_create_or_update(endpoint).result()
@@ -409,6 +447,38 @@ def deploy_under_lock(
             f"Deployment provisioning state is {live_deployment.provisioning_state}"
         )
 
+
+def finalize_candidate_under_lock(
+    args: argparse.Namespace,
+    client: Any,
+    resource_not_found_error: type[BaseException],
+    lease: Any,
+) -> None:
+    desired_fingerprint = deployment_fingerprint(args)
+    lease.ensure_held()
+    candidate_name = deployed_candidate_name(
+        client=client,
+        args=args,
+        desired_fingerprint=desired_fingerprint,
+        resource_not_found_error=resource_not_found_error,
+    )
+    live_endpoint = client.online_endpoints.get(args.endpoint_name)
+    if str((live_endpoint.tags or {}).get(PENDING_FINGERPRINT_TAG, "")) != (
+        desired_fingerprint
+    ):
+        raise RuntimeError(
+            "The endpoint pending deployment fingerprint changed before "
+            "finalization; a newer deployment must be finalized instead."
+        )
+    live_deployment = client.online_deployments.get(
+        name=candidate_name,
+        endpoint_name=args.endpoint_name,
+    )
+    if normalized(live_deployment.provisioning_state) != "succeeded":
+        raise RuntimeError(
+            f"Deployment provisioning state is {live_deployment.provisioning_state}"
+        )
+
     client.online_endpoints.invoke(
         endpoint_name=args.endpoint_name,
         deployment_name=candidate_name,
@@ -417,11 +487,20 @@ def deploy_under_lock(
 
     lease.ensure_held()
     live_endpoint = client.online_endpoints.get(args.endpoint_name)
+    if str((live_endpoint.tags or {}).get(PENDING_FINGERPRINT_TAG, "")) != (
+        desired_fingerprint
+    ):
+        raise RuntimeError(
+            "The endpoint pending deployment fingerprint changed during "
+            "finalization; traffic was not promoted."
+        )
     live_endpoint.traffic = promoted_traffic(
         current_traffic=dict(live_endpoint.traffic or {}),
         candidate_name=candidate_name,
         traffic_percentage=args.traffic_percentage,
     )
+    live_endpoint.tags = dict(live_endpoint.tags or {})
+    live_endpoint.tags.pop(PENDING_FINGERPRINT_TAG, None)
     client.online_endpoints.begin_create_or_update(live_endpoint).result()
 
 
@@ -484,13 +563,21 @@ def deploy(args: argparse.Namespace) -> None:
         container_name=args.lock_container_name,
         endpoint_name=args.endpoint_name,
     ) as lease:
-        deploy_under_lock(
-            args=args,
-            client=client,
-            sdk=sdk,
-            resource_not_found_error=ResourceNotFoundError,
-            lease=lease,
-        )
+        if args.phase in ("deploy", "full"):
+            deploy_candidate_under_lock(
+                args=args,
+                client=client,
+                sdk=sdk,
+                resource_not_found_error=ResourceNotFoundError,
+                lease=lease,
+            )
+        if args.phase in ("finalize", "full"):
+            finalize_candidate_under_lock(
+                args=args,
+                client=client,
+                resource_not_found_error=ResourceNotFoundError,
+                lease=lease,
+            )
 
 
 def main() -> None:

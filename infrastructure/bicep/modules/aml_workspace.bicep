@@ -17,10 +17,6 @@ var keyVaultName = split(kvid, '/')[8]
 var hasContainerRegistry = !empty(crid)
 var containerRegistryName = hasContainerRegistry ? split(crid, '/')[8] : 'none'
 var hasAppInsights = !empty(appinsightid)
-var networkConnectionApproverRoleId = subscriptionResourceId(
-  'Microsoft.Authorization/roleDefinitions',
-  'b556d68e-0be0-4f35-a333-ad7ee1ce17ea' // Azure AI Enterprise Network Connection Approver
-)
 
 // AML workspace with user-assigned managed identity
 resource amls 'Microsoft.MachineLearningServices/workspaces@2026-05-01' = {
@@ -150,36 +146,6 @@ resource workspaceMsiAcrPush 'Microsoft.Authorization/roleAssignments@2022-04-01
   scope: containerRegistry
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '8311e382-0749-4cb8-b61a-304f252e45ec') // AcrPush
-    principalId: managedIdentityPrincipalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
-resource workspaceMsiStorageNetworkApprover 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (enableNetworkIsolation) {
-  name: guid(storageAccount.id, managedIdentityPrincipalId, networkConnectionApproverRoleId)
-  scope: storageAccount
-  properties: {
-    roleDefinitionId: networkConnectionApproverRoleId
-    principalId: managedIdentityPrincipalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
-resource workspaceMsiKeyVaultNetworkApprover 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (enableNetworkIsolation) {
-  name: guid(keyVault.id, managedIdentityPrincipalId, networkConnectionApproverRoleId)
-  scope: keyVault
-  properties: {
-    roleDefinitionId: networkConnectionApproverRoleId
-    principalId: managedIdentityPrincipalId
-    principalType: 'ServicePrincipal'
-  }
-}
-
-resource workspaceMsiAcrNetworkApprover 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (enableNetworkIsolation && hasContainerRegistry) {
-  name: guid(containerRegistry.id, managedIdentityPrincipalId, networkConnectionApproverRoleId)
-  scope: containerRegistry
-  properties: {
-    roleDefinitionId: networkConnectionApproverRoleId
     principalId: managedIdentityPrincipalId
     principalType: 'ServicePrincipal'
   }

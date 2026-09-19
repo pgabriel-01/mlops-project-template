@@ -521,6 +521,16 @@ custom subnet in that mode. The module still supports a custom subnet for
 unmanaged-network workspace variants. No deployment script, registry shared key,
 or public network exception is required.
 
+First deployment is intentionally two-phase for managed-network workspaces.
+Bicep first creates the workspace and target-scoped Azure AI Enterprise Network
+Connection Approver assignments on Storage, Key Vault, ACR, and the AML
+workspace itself, plus Reader at exactly the ACR scope because the approver role
+does not include the registry read action. The workflow then invokes the supported
+`az ml workspace provision-network --include-spark false` operation with bounded
+retries only for authorization propagation. Compute is deployed only after that
+operation succeeds. This avoids the first-deploy RBAC propagation race without
+granting Contributor, Owner, or resource-group-wide access.
+
 This propagation was applied directly to the maintained source pattern and its
 assembled-tree contract; it was not produced by a standalone generator.
 

@@ -152,6 +152,18 @@ stages:
                       python3 mlops/scripts/render_bicep_parameters.py \
                         "config-infra-${{ parameters.environment }}.yml" \
                         infrastructure/parameters.json
+                      if [[ "$(enable_vnet)" == "true" ]] && \
+                         [[ "$(enable_compute_cluster)" == "true" ]]; then
+                        az deployment sub create \
+                          --name "mlops-base-${{ parameters.environment }}-$(Build.BuildId)" \
+                          --location "$(location)" \
+                          --template-file infrastructure/main.bicep \
+                          --parameters @infrastructure/parameters.json enableComputeCluster=false
+                        az extension add --name ml --version 2.44.1 --upgrade --yes
+                        python3 mlops/scripts/provision_workspace_network.py \
+                          --resource-group "$(resource_group)" \
+                          --workspace-name "$(workspace_name)"
+                      fi
                       az deployment sub create \
                         --name "mlops-${{ parameters.environment }}-$(Build.BuildId)" \
                         --location "$(location)" \

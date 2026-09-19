@@ -53,6 +53,13 @@ DNS_PREFLIGHT_SPEC = importlib.util.spec_from_file_location(
 assert DNS_PREFLIGHT_SPEC and DNS_PREFLIGHT_SPEC.loader
 check_shared_private_dns = importlib.util.module_from_spec(DNS_PREFLIGHT_SPEC)
 DNS_PREFLIGHT_SPEC.loader.exec_module(check_shared_private_dns)
+NETWORK_PROVISION = SCRIPT_ROOT / "provision_workspace_network.py"
+NETWORK_PROVISION_SPEC = importlib.util.spec_from_file_location(
+    "provision_workspace_network", NETWORK_PROVISION
+)
+assert NETWORK_PROVISION_SPEC and NETWORK_PROVISION_SPEC.loader
+provision_workspace_network = importlib.util.module_from_spec(NETWORK_PROVISION_SPEC)
+NETWORK_PROVISION_SPEC.loader.exec_module(provision_workspace_network)
 
 
 def load_pinned_template(path: str) -> str:
@@ -961,7 +968,10 @@ class ProjectContractTests(unittest.TestCase):
 
         self.assertRegex(
             main,
-            r"(?s)module mlwcc .*?dependsOn:\s*\[\s*peMlw\s*\]",
+            (
+                r"(?s)module mlwcc .*?dependsOn:\s*\[\s*"
+                r"mlwNetworkApprovers\s*peMlw\s*\]"
+            ),
         )
         self.assertIn(
             "imageBuildComputeName: imageBuildComputeName",
@@ -1000,6 +1010,11 @@ class ProjectContractTests(unittest.TestCase):
             for resource in template["resources"]
             if resource.get("name") == "mlwcc"
         )
+        approver_deployment = next(
+            resource
+            for resource in template["resources"]
+            if resource.get("name") == "mlw-network-approvers"
+        )
         endpoint_deployment = next(
             resource
             for resource in template["resources"]
@@ -1023,6 +1038,62 @@ class ProjectContractTests(unittest.TestCase):
                 "'Microsoft.Resources/deployments', 'mlw'" in dependency
                 for dependency in compute_deployment["dependsOn"]
             )
+        )
+        self.assertTrue(
+            any(
+                "'Microsoft.Resources/deployments', 'mlw-network-approvers'"
+                in dependency
+                for dependency in compute_deployment["dependsOn"]
+            )
+        )
+        approver_resources = [
+            resource
+            for resource in approver_deployment["properties"]["template"]["resources"]
+            if resource["type"] == "Microsoft.Authorization/roleAssignments"
+        ]
+        self.assertEqual(5, len(approver_resources))
+        approver_scopes = [resource["scope"] for resource in approver_resources]
+        self.assertTrue(
+            any(
+                "Microsoft.Storage/storageAccounts" in scope
+                for scope in approver_scopes
+            )
+        )
+        self.assertTrue(
+            any("Microsoft.KeyVault/vaults" in scope for scope in approver_scopes)
+        )
+        self.assertEqual(
+            2,
+            sum(
+                "Microsoft.ContainerRegistry/registries" in scope
+                for scope in approver_scopes
+            ),
+        )
+        self.assertTrue(
+            any(
+                "Microsoft.MachineLearningServices/workspaces" in scope
+                for scope in approver_scopes
+            )
+        )
+        approver_template = approver_deployment["properties"]["template"]
+        self.assertIn(
+            "b556d68e-0be0-4f35-a333-ad7ee1ce17ea",
+            approver_template["variables"]["networkConnectionApproverRoleId"],
+        )
+        role_definitions = [
+            resource["properties"]["roleDefinitionId"]
+            for resource in approver_resources
+        ]
+        self.assertEqual(
+            4,
+            sum("networkConnectionApproverRoleId" in role for role in role_definitions),
+        )
+        self.assertEqual(
+            1,
+            sum(
+                "acdd72a7-3385-48ef-bd42-f606fba81ae7" in role
+                for role in role_definitions
+            ),
         )
         self.assertFalse(
             any(
@@ -1081,6 +1152,100 @@ class ProjectContractTests(unittest.TestCase):
             endpoint_deployment["condition"],
             "[parameters('enableVNet')]",
         )
+
+    def test_workspace_network_approvers_are_narrow_and_compute_is_two_phase(self):
+        approvers = (
+            ROOT / "infrastructure/bicep/modules/aml_network_approvers.bicep"
+        ).read_text()
+        github = (
+            PATTERN_ROOT / "mlops/github-actions/deploy-infrastructure.yml"
+        ).read_text()
+        ado = (
+            PATTERN_ROOT / "mlops/devops-pipelines/deploy-infrastructure-pipeline.yml"
+        ).read_text()
+
+        self.assertIn("Azure AI Enterprise Network Connection Approver", approvers)
+        self.assertIn("scope: storageAccount", approvers)
+        self.assertIn("scope: keyVault", approvers)
+        self.assertEqual(2, approvers.count("scope: containerRegistry"))
+        self.assertIn("scope: workspace", approvers)
+        self.assertIn("acdd72a7-3385-48ef-bd42-f606fba81ae7", approvers)
+        self.assertNotIn("Contributor", approvers)
+        self.assertNotIn("Owner", approvers)
+        self.assertNotIn("Network Contributor", approvers)
+        for workflow in (github, ado):
+            self.assertIn("enableComputeCluster=false", workflow)
+            self.assertIn("provision_workspace_network.py", workflow)
+            self.assertIn("az extension add --name ml --version 2.44.1", workflow)
+            self.assertIn("enable_compute_cluster", workflow)
+            self.assertIn("enable_vnet", workflow)
+            self.assertGreaterEqual(
+                workflow.count("az deployment sub create"),
+                2,
+            )
+
+    def test_workspace_network_provisioning_retries_only_permission_propagation(self):
+        transient = subprocess.CompletedProcess(
+            args=["az"],
+            returncode=1,
+            stdout="",
+            stderr=(
+                "Workspace managed identity don't have required permissions "
+                "to read and approve private endpoint connections. "
+                "If the permissions were recently granted, try again."
+            ),
+        )
+        success = subprocess.CompletedProcess(
+            args=["az"],
+            returncode=0,
+            stdout="",
+            stderr="",
+        )
+        with (
+            patch.object(
+                provision_workspace_network.subprocess,
+                "run",
+                side_effect=[transient, success],
+            ) as run,
+            patch.object(provision_workspace_network.time, "sleep") as sleep,
+        ):
+            provision_workspace_network.provision_network(
+                "rg-demo",
+                "mlw-demo",
+                attempts=3,
+                interval_seconds=1,
+            )
+        self.assertEqual(2, run.call_count)
+        sleep.assert_called_once_with(1)
+        command = run.call_args_list[0].args[0]
+        self.assertIn("provision-network", command)
+        self.assertEqual("false", command[command.index("--include-spark") + 1])
+
+        permanent = subprocess.CompletedProcess(
+            args=["az"],
+            returncode=1,
+            stdout="",
+            stderr=(
+                "AuthorizationFailed: the deployment identity is not authorized "
+                "to provision this workspace"
+            ),
+        )
+        with (
+            patch.object(
+                provision_workspace_network.subprocess,
+                "run",
+                return_value=permanent,
+            ),
+            patch.object(provision_workspace_network.time, "sleep") as sleep,
+            self.assertRaisesRegex(RuntimeError, "after 1 attempt"),
+        ):
+            provision_workspace_network.provision_network(
+                "rg-demo",
+                "mlw-demo",
+                attempts=3,
+                interval_seconds=1,
+            )
+        sleep.assert_not_called()
 
     def test_key_vault_name_stays_within_exact_azure_boundary(self):
         main = (ROOT / "infrastructure/bicep/main.bicep").read_text()

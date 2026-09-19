@@ -110,6 +110,7 @@ def generated_paths() -> list[Path]:
         "ai_foundry_project.bicep",
         "aml_computecluster.bicep",
         "aml_online_endpoint_identity.bicep",
+        "aml_network_approvers.bicep",
         "aml_registry.bicep",
         "aml_workspace.bicep",
         "apim.bicep",
@@ -147,6 +148,7 @@ def generated_paths() -> list[Path]:
         PATTERN_ROOT / "mlops" / "azureml" / "deploy" / "online" / "code" / "score.py",
         PATTERN_ROOT / "mlops" / "scripts" / "check_legacy_bastion.py",
         PATTERN_ROOT / "mlops" / "scripts" / "check_shared_private_dns.py",
+        PATTERN_ROOT / "mlops" / "scripts" / "provision_workspace_network.py",
         PATTERN_ROOT / "mlops" / "azureml" / "train" / "job.yml",
         *[
             CONFIG_ROOT / f"config-infra-{environment}.yml"

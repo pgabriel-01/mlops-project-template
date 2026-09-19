@@ -4,6 +4,9 @@ param workspaceName string
 param vmSku string = 'STANDARD_D16S_V3'
 param managedIdentityId string
 param subnetId string = ''
+param workspaceManagedNetworkEnabled bool = false
+
+var effectiveSubnetId = workspaceManagedNetworkEnabled ? '' : subnetId
 
 resource amlci 'Microsoft.MachineLearningServices/workspaces/computes@2025-09-01' = {
   name: '${workspaceName}/${computeClusterName}'
@@ -16,17 +19,18 @@ resource amlci 'Microsoft.MachineLearningServices/workspaces/computes@2025-09-01
   }
   properties: {
     computeType: 'AmlCompute'
-    properties: {
+    properties: union({
       vmSize: vmSku
       osType: 'Linux'
-      enableNodePublicIp: empty(subnetId)
+      enableNodePublicIp: workspaceManagedNetworkEnabled ? false : empty(effectiveSubnetId)
       scaleSettings: {
         maxNodeCount: 4
         minNodeCount: 0
       }
-      subnet: !empty(subnetId) ? {
-        id: subnetId
-      } : null
-    }
+    }, !empty(effectiveSubnetId) ? {
+      subnet: {
+        id: effectiveSubnetId
+      }
+    } : {})
   }
 }

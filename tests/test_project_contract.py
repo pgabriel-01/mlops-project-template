@@ -281,9 +281,7 @@ class ProjectContractTests(unittest.TestCase):
         self.assertIn("mlops/scripts/render_bicep_parameters.py", infrastructure)
         self.assertEqual(
             2,
-            infrastructure.count(
-                "python3 mlops/scripts/check_shared_private_dns.py"
-            ),
+            infrastructure.count("python3 mlops/scripts/check_shared_private_dns.py"),
         )
         self.assertIn("infrastructure/main.bicep", infrastructure)
         self.assertNotIn("infrastructure/bicep/", infrastructure)
@@ -848,6 +846,30 @@ class ProjectContractTests(unittest.TestCase):
         ).read_text()
 
         self.assertIn("allowSharedKeyAccess: false", storage)
+        self.assertIn("minimumTlsVersion: 'TLS1_2'", storage)
+        completed = subprocess.run(
+            [
+                "az",
+                "bicep",
+                "build",
+                "--stdout",
+                "--file",
+                str(ROOT / "infrastructure/bicep/modules/storage_account.bicep"),
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        storage_template = json.loads(completed.stdout)
+        storage_account = next(
+            resource
+            for resource in storage_template["resources"]
+            if resource["type"] == "Microsoft.Storage/storageAccounts"
+        )
+        self.assertEqual(
+            "TLS1_2",
+            storage_account["properties"]["minimumTlsVersion"],
+        )
         self.assertIn("systemDatastoresAuthMode: 'identity'", workspace)
         self.assertIn("managedNetwork:", workspace)
         self.assertIn("isolationMode: 'AllowOnlyApprovedOutbound'", workspace)
@@ -1170,8 +1192,7 @@ class ProjectContractTests(unittest.TestCase):
 
     def test_runner_hub_dns_preflight_batches_resource_graph_subscriptions(self):
         subscriptions = [
-            {"id": f"subscription-{index}", "state": "Enabled"}
-            for index in range(1001)
+            {"id": f"subscription-{index}", "state": "Enabled"} for index in range(1001)
         ]
         responses = [
             subscriptions,
@@ -1195,9 +1216,9 @@ class ProjectContractTests(unittest.TestCase):
             json.loads(call.args[call.args.index("--body") + 1])
             for call in az_json.call_args_list[1:]
         ]
-        self.assertEqual([1000, 1000, 1], [
-            len(body["subscriptions"]) for body in request_bodies
-        ])
+        self.assertEqual(
+            [1000, 1000, 1], [len(body["subscriptions"]) for body in request_bodies]
+        )
         self.assertNotIn("$skipToken", request_bodies[0]["options"])
         self.assertEqual("next", request_bodies[1]["options"]["$skipToken"])
 
@@ -1246,8 +1267,7 @@ class ProjectContractTests(unittest.TestCase):
         self.assertEqual(
             2,
             github.count(
-                "DEV_JUMPBOX_LOGIN_GROUP_ID: "
-                "${{ vars.DEV_JUMPBOX_LOGIN_GROUP_ID }}"
+                "DEV_JUMPBOX_LOGIN_GROUP_ID: " "${{ vars.DEV_JUMPBOX_LOGIN_GROUP_ID }}"
             ),
         )
 

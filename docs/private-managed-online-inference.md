@@ -59,7 +59,8 @@ The online workflow uses pinned Azure ML Python SDK v2 tooling and performs thes
 steps synchronously:
 
 1. Provision the workspace managed network with
-   `az ml workspace provision-network --include-spark false`.
+   `az ml workspace provision-network`. Omit the presence-only `--include-spark`
+   flag when Spark provisioning is not required.
 2. Verify the workspace still disables public access, has
    `v1_legacy_mode=false`, and uses `AllowOnlyApprovedOutbound`.
 3. Create or reconcile the managed endpoint with its fixed UAMI and no invalid

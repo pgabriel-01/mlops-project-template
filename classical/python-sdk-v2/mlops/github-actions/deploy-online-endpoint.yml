@@ -71,8 +71,7 @@ jobs:
         run: |
           az ml workspace provision-network \
             --resource-group "${{ needs.config.outputs.resource_group }}" \
-            --name "${{ needs.config.outputs.workspace_name }}" \
-            --include-spark false
+            --name "${{ needs.config.outputs.workspace_name }}"
       - name: Deploy and test private managed endpoint
         env:
           MLFLOW_NO_CODE: ${{ needs.config.outputs.mlflow_no_code }}

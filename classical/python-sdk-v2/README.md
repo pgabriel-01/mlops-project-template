@@ -526,10 +526,11 @@ Bicep first creates the workspace and target-scoped Azure AI Enterprise Network
 Connection Approver assignments on Storage, Key Vault, ACR, and the AML
 workspace itself, plus Reader at exactly the ACR scope because the approver role
 does not include the registry read action. The workflow then invokes the supported
-`az ml workspace provision-network --include-spark false` operation with bounded
-retries only for authorization propagation. Compute is deployed only after that
-operation succeeds. This avoids the first-deploy RBAC propagation race without
-granting Contributor, Owner, or resource-group-wide access.
+`az ml workspace provision-network` operation (omitting the presence-only
+`--include-spark` flag) with bounded retries only for authorization propagation.
+Compute is deployed only after that operation succeeds. This avoids the
+first-deploy RBAC propagation race without granting Contributor, Owner, or
+resource-group-wide access.
 
 This propagation was applied directly to the maintained source pattern and its
 assembled-tree contract; it was not produced by a standalone generator.

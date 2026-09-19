@@ -882,7 +882,10 @@ class ProjectContractTests(unittest.TestCase):
             workspace,
         )
         self.assertIn(
-            "enableNodePublicIp: empty(subnetId)",
+            (
+                "enableNodePublicIp: workspaceManagedNetworkEnabled "
+                "? false : empty(effectiveSubnetId)"
+            ),
             (
                 ROOT / "infrastructure/bicep/modules/aml_computecluster.bicep"
             ).read_text(),
@@ -907,11 +910,14 @@ class ProjectContractTests(unittest.TestCase):
             ).read_text(),
         )
 
-    def test_workspace_and_compute_use_custom_vnet_only(self):
+    def test_managed_network_compute_omits_custom_subnet(self):
         workspace = (
             ROOT / "infrastructure/bicep/modules/aml_workspace.bicep"
         ).read_text()
         main = (ROOT / "infrastructure/bicep/main.bicep").read_text()
+        compute = (
+            ROOT / "infrastructure/bicep/modules/aml_computecluster.bicep"
+        ).read_text()
 
         self.assertIn("managedNetwork:", workspace)
         self.assertIn("isolationMode: 'AllowOnlyApprovedOutbound'", workspace)
@@ -929,12 +935,21 @@ class ProjectContractTests(unittest.TestCase):
             "subnetId: enableVNet ? vnet!.outputs.computeSubnetId : ''",
             main,
         )
+        self.assertIn("workspaceManagedNetworkEnabled: enableVNet", main)
         self.assertIn(
-            "enableNodePublicIp: empty(subnetId)",
-            (
-                ROOT / "infrastructure/bicep/modules/aml_computecluster.bicep"
-            ).read_text(),
+            "var effectiveSubnetId = workspaceManagedNetworkEnabled ? '' : subnetId",
+            compute,
         )
+        self.assertIn(
+            (
+                "enableNodePublicIp: workspaceManagedNetworkEnabled "
+                "? false : empty(effectiveSubnetId)"
+            ),
+            compute,
+        )
+        self.assertIn("}, !empty(effectiveSubnetId) ? {", compute)
+        self.assertIn("id: effectiveSubnetId", compute)
+        self.assertNotIn("subnet: !empty(subnetId)", compute)
         self.assertIn("module peMlw './modules/private_endpoint.bicep'", main)
 
     def test_private_compute_compiles_with_workspace_image_build_contract(self):
@@ -1030,6 +1045,33 @@ class ProjectContractTests(unittest.TestCase):
                 "value"
             ],
             "[parameters('imageBuildComputeName')]",
+        )
+        self.assertEqual(
+            compute_deployment["properties"]["parameters"][
+                "workspaceManagedNetworkEnabled"
+            ]["value"],
+            "[parameters('enableVNet')]",
+        )
+        compute_template = compute_deployment["properties"]["template"]
+        compute = next(
+            resource
+            for resource in compute_template["resources"]
+            if resource["type"]
+            == "Microsoft.MachineLearningServices/workspaces/computes"
+        )
+        compute_properties = compute["properties"]["properties"]
+        self.assertIn("union(", compute_properties)
+        self.assertIn(
+            "parameters('workspaceManagedNetworkEnabled')",
+            compute_properties,
+        )
+        self.assertIn("variables('effectiveSubnetId')", compute_properties)
+        self.assertEqual(
+            compute_template["variables"]["effectiveSubnetId"],
+            (
+                "[if(parameters('workspaceManagedNetworkEnabled'), '', "
+                "parameters('subnetId'))]"
+            ),
         )
         self.assertEqual(
             compute_deployment["condition"],

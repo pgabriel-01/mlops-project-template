@@ -514,9 +514,12 @@ Private workspaces also set the ARM `imageBuildCompute` property from
 deterministic compute name on its initial deployment, and the compute deployment
 then depends on the workspace and its private endpoint. This avoids a circular
 ARM dependency while ensuring later workspace-local image builds run on the
-private, no-public-IP cluster and can push through the workspace identity's
-`AcrPush` assignment. No deployment script, registry shared key, or public
-network exception is required.
+managed-network, no-public-IP cluster and can push through the workspace
+identity's `AcrPush` assignment. Azure rejects a custom subnet on AmlCompute when
+the workspace managed network is enabled, so the generated module omits its
+custom subnet in that mode. The module still supports a custom subnet for
+unmanaged-network workspace variants. No deployment script, registry shared key,
+or public network exception is required.
 
 This propagation was applied directly to the maintained source pattern and its
 assembled-tree contract; it was not produced by a standalone generator.
@@ -525,13 +528,13 @@ assembled-tree contract; it was not produced by a standalone generator.
 
 Bicep disables storage shared-key access, configures identity-authenticated system
 datastores, and grants the workspace identity data-plane access. When private
-networking is enabled, the workspace uses the generated custom workload VNet.
-Workspace public access is disabled, the AML compute cluster uses the custom
-compute subnet without public node IPs, and private endpoints plus DNS zones cover
-the workspace, registry, vault, and storage blob, file, queue, table, and DFS
-services. The workspace deliberately emits neither `managedNetwork` nor
-`serverlessComputeCustomSubnet`: Azure rejects custom-subnet AmlCompute when the
-workspace is configured with Managed VNet.
+networking is enabled, workspace public access is disabled and private endpoints
+plus DNS zones connect the generated workload VNet to the workspace, registry,
+vault, and storage blob, file, queue, table, and DFS services. The workspace uses
+Managed Network V1 with `AllowOnlyApprovedOutbound`. Its AML compute cluster has
+public node IPs disabled and no custom subnet, because Azure rejects
+custom-subnet AmlCompute for a managed-network workspace. The workspace also
+omits `serverlessComputeCustomSubnet`.
 
 For private deployments, the AmlCompute module starts only after the conditional
 workspace private endpoint module completes. This prevents no-public-IP compute

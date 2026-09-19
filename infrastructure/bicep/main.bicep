@@ -440,6 +440,7 @@ module mlwcc './modules/aml_computecluster.bicep' = if (enableComputeCluster) {
     vmSku: amlComputeSku
     managedIdentityId: mi.outputs.managedIdentityId
     subnetId: enableVNet ? vnet!.outputs.computeSubnetId : ''
+    workspaceManagedNetworkEnabled: enableVNet
   }
 }
 

@@ -25,8 +25,6 @@ def provision_network(
         resource_group,
         "--name",
         workspace_name,
-        "--include-spark",
-        "false",
         "--only-show-errors",
     ]
     for attempt in range(1, attempts + 1):

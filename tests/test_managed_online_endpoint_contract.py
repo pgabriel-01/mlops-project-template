@@ -434,6 +434,12 @@ class ManagedOnlineEndpointContractTests(unittest.TestCase):
         workflow = (
             PATTERN_ROOT / "mlops" / "github-actions" / "deploy-online-endpoint.yml"
         ).read_text()
+        ado_pipeline = (
+            PATTERN_ROOT
+            / "mlops"
+            / "devops-pipelines"
+            / "deploy-online-endpoint-pipeline.yml"
+        ).read_text()
         infrastructure = (
             PATTERN_ROOT / "mlops" / "github-actions" / "deploy-infrastructure.yml"
         ).read_text()
@@ -442,6 +448,11 @@ class ManagedOnlineEndpointContractTests(unittest.TestCase):
 
         self.assertIn("id-token: write", workflow)
         self.assertIn("az ml workspace provision-network", workflow)
+        self.assertIn("az ml workspace provision-network", ado_pipeline)
+        for pipeline in (workflow, ado_pipeline):
+            self.assertNotIn("--include-spark false", pipeline)
+            self.assertNotIn("--include-spark=false", pipeline)
+            self.assertNotIn("--include-spark", pipeline)
         self.assertIn("mlops/azureml/deploy/online/deploy.py", workflow)
         self.assertIn("check_legacy_bastion.py", infrastructure)
         self.assertIn("az vm image show", infrastructure)

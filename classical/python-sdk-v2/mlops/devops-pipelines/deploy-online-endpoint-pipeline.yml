@@ -78,8 +78,7 @@ stages:
                 az extension add --name ml --version 2.44.1 --upgrade --yes
                 az ml workspace provision-network \
                   --resource-group "$(resource_group)" \
-                  --name "$(workspace_name)" \
-                  --include-spark false
+                  --name "$(workspace_name)"
                 endpoint_identity_id="$(
                   az identity show \
                     --resource-group "$(resource_group)" \

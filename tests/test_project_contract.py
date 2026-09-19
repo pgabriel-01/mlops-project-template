@@ -312,6 +312,7 @@ class ProjectContractTests(unittest.TestCase):
             online,
         )
         self.assertIn("az ml workspace provision-network", online)
+        self.assertNotIn("--include-spark", online)
         self.assertIn("mlops/azureml/deploy/online/deploy.py", online)
         self.assertIn("online_endpoint_identity_name", online)
         self.assertNotIn("tls_ca_key_vault_secret_id", online)
@@ -470,6 +471,7 @@ class ProjectContractTests(unittest.TestCase):
                 "az ml workspace provision-network",
                 online_workflow,
             )
+            self.assertNotIn("--include-spark", online_workflow)
             self.assertNotIn("__MLOPS_TEMPLATES_", online_workflow)
             self.assertIn(
                 f"default: {BATCH_ENVIRONMENT}",
@@ -1219,7 +1221,14 @@ class ProjectContractTests(unittest.TestCase):
         sleep.assert_called_once_with(1)
         command = run.call_args_list[0].args[0]
         self.assertIn("provision-network", command)
-        self.assertEqual("false", command[command.index("--include-spark") + 1])
+        self.assertNotIn(
+            ["--include-spark", "false"],
+            [command[index : index + 2] for index in range(len(command) - 1)],
+        )
+        self.assertFalse(
+            any(argument.startswith("--include-spark=") for argument in command)
+        )
+        self.assertNotIn("--include-spark", command)
 
         permanent = subprocess.CompletedProcess(
             args=["az"],

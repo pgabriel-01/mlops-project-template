@@ -4,9 +4,11 @@ import argparse
 import hashlib
 import json
 import re
+import urllib.request
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from urllib.parse import quote
 
 DEPLOYMENT_FINGERPRINT_TAG = "deployment-fingerprint"
 REQUEST_SETTINGS = {
@@ -57,11 +59,15 @@ def get_field(value: Any, name: str, default: Any = None) -> Any:
     return getattr(value, name, default)
 
 
-def validate_workspace(workspace: Any) -> None:
+def validate_workspace(
+    workspace: Any, authoritative_v1_legacy_mode: Any = None
+) -> None:
     if normalized(get_field(workspace, "public_network_access", "")) != "disabled":
         raise RuntimeError("The Azure ML workspace must disable public network access")
-    legacy_mode = get_field(workspace, "v1_legacy_mode")
-    if legacy_mode is not None and legacy_mode is not False:
+    sdk_v1_legacy_mode = get_field(workspace, "v1_legacy_mode")
+    if sdk_v1_legacy_mode is not False and not (
+        sdk_v1_legacy_mode is None and authoritative_v1_legacy_mode is False
+    ):
         raise RuntimeError("The Azure ML workspace must not enable v1_legacy_mode")
     managed_network = get_field(workspace, "managed_network")
     isolation_mode = get_field(managed_network, "isolation_mode", "")
@@ -70,6 +76,37 @@ def validate_workspace(workspace: Any) -> None:
             "The Azure ML workspace managed network must use "
             "AllowOnlyApprovedOutbound"
         )
+
+
+def read_workspace_v1_legacy_mode(
+    credential: Any,
+    subscription_id: str,
+    resource_group: str,
+    workspace_name: str,
+) -> Any:
+    resource_id = (
+        f"/subscriptions/{quote(subscription_id, safe='')}"
+        f"/resourceGroups/{quote(resource_group, safe='')}"
+        "/providers/Microsoft.MachineLearningServices/workspaces/"
+        f"{quote(workspace_name, safe='')}"
+    )
+    request = urllib.request.Request(
+        "https://management.azure.com" f"{resource_id}?api-version=2024-10-01",
+        headers={
+            "Authorization": (
+                "Bearer "
+                + credential.get_token("https://management.azure.com/.default").token
+            )
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            workspace = json.load(response)
+    except (OSError, ValueError) as exc:
+        raise RuntimeError(
+            "Failed to read the authoritative Azure ML workspace ARM state"
+        ) from exc
+    return get_field(get_field(workspace, "properties", {}), "v1LegacyMode")
 
 
 def validate_environment_args(args: argparse.Namespace) -> None:
@@ -396,7 +433,17 @@ def deploy(args: argparse.Namespace) -> None:
         resource_group_name=args.resource_group,
         workspace_name=args.workspace_name,
     )
-    validate_workspace(client.workspaces.get(args.workspace_name))
+    workspace = client.workspaces.get(args.workspace_name)
+    sdk_v1_legacy_mode = get_field(workspace, "v1_legacy_mode")
+    authoritative_v1_legacy_mode = None
+    if sdk_v1_legacy_mode is None:
+        authoritative_v1_legacy_mode = read_workspace_v1_legacy_mode(
+            credential=credential,
+            subscription_id=args.subscription_id,
+            resource_group=args.resource_group,
+            workspace_name=args.workspace_name,
+        )
+    validate_workspace(workspace, authoritative_v1_legacy_mode)
     sdk = SimpleNamespace(
         CodeConfiguration=CodeConfiguration,
         Environment=Environment,

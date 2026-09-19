@@ -7,6 +7,7 @@ on:
       - "config-infra-*.yml"
       - "infrastructure/**"
       - "mlops/scripts/check_shared_private_dns.py"
+      - "mlops/scripts/provision_workspace_network.py"
       - "mlops/scripts/render_bicep_parameters.py"
   workflow_dispatch:
     inputs:
@@ -33,8 +34,11 @@ jobs:
       environment: ${{ steps.select.outputs.environment }}
       location: ${{ steps.config.outputs.location }}
       runner: ${{ steps.config.outputs.runner }}
+      enable_compute_cluster: ${{ steps.config.outputs.enable_compute_cluster }}
+      enable_vnet: ${{ steps.config.outputs.enable_vnet }}
       enable_dev_jumpbox: ${{ steps.config.outputs.enable_dev_jumpbox }}
       resource_group: ${{ steps.config.outputs.resource_group }}
+      workspace_name: ${{ steps.config.outputs.workspace_name }}
       dev_jumpbox_ubuntu_image_version: ${{ steps.config.outputs.dev_jumpbox_ubuntu_image_version }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -132,7 +136,22 @@ jobs:
           python3 mlops/scripts/render_bicep_parameters.py \
             config-infra-${{ needs.config.outputs.environment }}.yml \
             infrastructure/parameters.json
-      - name: Deploy infrastructure
+      - name: Deploy infrastructure prerequisites
+        if: needs.config.outputs.enable_vnet == 'true' && needs.config.outputs.enable_compute_cluster == 'true'
+        run: |
+          az deployment sub create \
+            --name "mlops-base-${{ needs.config.outputs.environment }}-${{ github.run_id }}" \
+            --location "${{ needs.config.outputs.location }}" \
+            --template-file infrastructure/main.bicep \
+            --parameters @infrastructure/parameters.json enableComputeCluster=false
+      - name: Provision workspace managed network
+        if: needs.config.outputs.enable_vnet == 'true' && needs.config.outputs.enable_compute_cluster == 'true'
+        run: |
+          az extension add --name ml --version 2.44.1 --upgrade --yes
+          python3 mlops/scripts/provision_workspace_network.py \
+            --resource-group "${{ needs.config.outputs.resource_group }}" \
+            --workspace-name "${{ needs.config.outputs.workspace_name }}"
+      - name: Deploy infrastructure compute
         run: |
           az deployment sub create \
             --name "mlops-${{ needs.config.outputs.environment }}-${{ github.run_id }}" \

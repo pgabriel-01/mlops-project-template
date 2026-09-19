@@ -426,11 +426,24 @@ module onlineEndpointIdentity './modules/aml_online_endpoint_identity.bicep' = i
   }
 }
 
+module mlwNetworkApprovers './modules/aml_network_approvers.bicep' = if (enableVNet) {
+  name: 'mlw-network-approvers'
+  scope: resourceGroup(rg.name)
+  params: {
+    managedIdentityPrincipalId: mi.outputs.managedIdentityPrincipalId
+    storageAccountId: st.outputs.stoacctOut
+    keyVaultId: kv.outputs.kvOut
+    containerRegistryId: enableContainerRegistry ? cr!.outputs.crOut : ''
+    workspaceId: mlw.outputs.amlsId
+  }
+}
+
 // AML compute cluster — conditional on enableComputeCluster
 module mlwcc './modules/aml_computecluster.bicep' = if (enableComputeCluster) {
   name: 'mlwcc'
   scope: resourceGroup(rg.name)
   dependsOn: [
+    mlwNetworkApprovers
     peMlw
   ]
   params: {

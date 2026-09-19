@@ -131,6 +131,13 @@ class ManagedOnlineEndpointContractTests(unittest.TestCase):
         workspace = (
             ROOT / "infrastructure" / "bicep" / "modules" / "aml_workspace.bicep"
         ).read_text()
+        network_approvers = (
+            ROOT
+            / "infrastructure"
+            / "bicep"
+            / "modules"
+            / "aml_network_approvers.bicep"
+        ).read_text()
         main = (ROOT / "infrastructure" / "bicep" / "main.bicep").read_text()
         identity = (
             ROOT
@@ -147,7 +154,14 @@ class ManagedOnlineEndpointContractTests(unittest.TestCase):
         self.assertIn("isolationMode: 'AllowOnlyApprovedOutbound'", workspace)
         self.assertIn("managedNetworkKind: 'V1'", workspace)
         self.assertNotIn("workspaces/outboundRules", main + workspace)
-        self.assertIn("Azure AI Enterprise Network Connection Approver", workspace)
+        self.assertIn(
+            "Azure AI Enterprise Network Connection Approver",
+            network_approvers,
+        )
+        self.assertIn("scope: workspace", network_approvers)
+        self.assertIn("acdd72a7-3385-48ef-bd42-f606fba81ae7", network_approvers)
+        self.assertNotIn("Contributor", network_approvers)
+        self.assertNotIn("Owner", network_approvers)
         self.assertIn("Storage Blob Data Reader", identity)
         self.assertIn("AcrPull", identity)
         self.assertIn("f1a07417-d97a-45cb-824c-7a7467783830", identity)

@@ -172,6 +172,23 @@ def validate_environment_args(args: argparse.Namespace) -> None:
             )
 
 
+def validate_model_exists(
+    client: Any,
+    model_name: str,
+    model_version: str,
+    workspace_name: str,
+    resource_not_found_error: type[BaseException],
+) -> None:
+    try:
+        client.models.get(name=model_name, version=model_version)
+    except resource_not_found_error as exc:
+        raise RuntimeError(
+            f"Model '{model_name}:{model_version}' is not registered in Azure ML "
+            f"workspace '{workspace_name}'. Register this exact model version "
+            "before deploying the online endpoint."
+        ) from exc
+
+
 def code_directory_digest(code_directory: Path) -> str:
     digest = hashlib.sha256()
     for path in sorted(code_directory.rglob("*")):
@@ -444,6 +461,13 @@ def deploy(args: argparse.Namespace) -> None:
             workspace_name=args.workspace_name,
         )
     validate_workspace(workspace, authoritative_v1_legacy_mode)
+    validate_model_exists(
+        client=client,
+        model_name=args.model_name,
+        model_version=args.model_version,
+        workspace_name=args.workspace_name,
+        resource_not_found_error=ResourceNotFoundError,
+    )
     sdk = SimpleNamespace(
         CodeConfiguration=CodeConfiguration,
         Environment=Environment,

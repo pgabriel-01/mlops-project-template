@@ -1,12 +1,13 @@
 import importlib.util
 import io
+import inspect
 import json
 import os
 import subprocess
 import sys
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from argparse import Namespace
 from pathlib import Path
 from types import SimpleNamespace
@@ -612,6 +613,49 @@ class ManagedOnlineEndpointContractTests(unittest.TestCase):
                     managed_online_deploy.validate_environment_args(
                         Namespace(**invalid)
                     )
+
+    def test_model_existence_preflight_is_actionable_and_fail_closed(self):
+        class MissingModelError(Exception):
+            pass
+
+        models = SimpleNamespace(get=MagicMock(return_value=SimpleNamespace()))
+        client = SimpleNamespace(models=models)
+        managed_online_deploy.validate_model_exists(
+            client,
+            "taxi-model",
+            "2",
+            "mlw-taxifare-dev",
+            MissingModelError,
+        )
+        models.get.assert_called_once_with(name="taxi-model", version="2")
+        deploy_source = inspect.getsource(managed_online_deploy.deploy)
+        self.assertLess(
+            deploy_source.index("validate_model_exists("),
+            deploy_source.index("with endpoint_deployment_lock("),
+        )
+
+        models.get.side_effect = MissingModelError("404")
+        with self.assertRaisesRegex(
+            RuntimeError,
+            "Model 'taxi-model:2'.*workspace 'mlw-taxifare-dev'.*Register",
+        ):
+            managed_online_deploy.validate_model_exists(
+                client,
+                "taxi-model",
+                "2",
+                "mlw-taxifare-dev",
+                MissingModelError,
+            )
+
+        models.get.side_effect = PermissionError("forbidden")
+        with self.assertRaises(PermissionError):
+            managed_online_deploy.validate_model_exists(
+                client,
+                "taxi-model",
+                "2",
+                "mlw-taxifare-dev",
+                MissingModelError,
+            )
 
     def test_blue_green_candidate_preserves_serving_deployment(self):
         candidate = managed_online_deploy.select_candidate_deployment(

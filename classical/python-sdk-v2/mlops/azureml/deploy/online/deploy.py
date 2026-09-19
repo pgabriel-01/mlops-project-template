@@ -60,8 +60,9 @@ def get_field(value: Any, name: str, default: Any = None) -> Any:
 def validate_workspace(workspace: Any) -> None:
     if normalized(get_field(workspace, "public_network_access", "")) != "disabled":
         raise RuntimeError("The Azure ML workspace must disable public network access")
-    if get_field(workspace, "v1_legacy_mode") is not False:
-        raise RuntimeError("The Azure ML workspace must set v1_legacy_mode to false")
+    legacy_mode = get_field(workspace, "v1_legacy_mode")
+    if legacy_mode is not None and legacy_mode is not False:
+        raise RuntimeError("The Azure ML workspace must not enable v1_legacy_mode")
     managed_network = get_field(workspace, "managed_network")
     isolation_mode = get_field(managed_network, "isolation_mode", "")
     if normalized(isolation_mode) != "allowonlyapprovedoutbound":

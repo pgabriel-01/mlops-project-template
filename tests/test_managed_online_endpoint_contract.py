@@ -488,17 +488,36 @@ class ManagedOnlineEndpointContractTests(unittest.TestCase):
         ):
             self.assertNotIn(retired, workflow + infrastructure + deploy)
 
-    def test_workspace_validation_rejects_legacy_or_public_configuration(self):
+    def test_workspace_validation_accepts_sdk_omission_and_rejects_unsafe_state(self):
         valid = SimpleNamespace(
             public_network_access="Disabled",
             v1_legacy_mode=False,
             managed_network=SimpleNamespace(isolation_mode="AllowOnlyApprovedOutbound"),
         )
         managed_online_deploy.validate_workspace(valid)
+        managed_online_deploy.validate_workspace(
+            SimpleNamespace(
+                public_network_access="Disabled",
+                v1_legacy_mode=None,
+                managed_network=SimpleNamespace(
+                    isolation_mode="AllowOnlyApprovedOutbound"
+                ),
+            )
+        )
+        managed_online_deploy.validate_workspace(
+            {
+                "public_network_access": "Disabled",
+                "managed_network": {
+                    "isolation_mode": "AllowOnlyApprovedOutbound",
+                },
+            }
+        )
 
         for override in (
             {"public_network_access": "Enabled"},
             {"v1_legacy_mode": True},
+            {"v1_legacy_mode": "false"},
+            {"v1_legacy_mode": 0},
             {
                 "managed_network": SimpleNamespace(
                     isolation_mode="AllowInternetOutbound"
